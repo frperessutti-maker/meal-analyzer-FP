@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Meal Analyzer</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;-webkit-font-smoothing:antialiased}
+    .app{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+    h1{font-size:24px;font-weight:600}
+    .sub{font-size:14px;color:#666;margin-top:4px}
+    .nav{display:flex;gap:6px;margin:20px 0 24px;background:#f5f5f5;padding:4px;border-radius:10px}
+    .nav button{flex:1;padding:12px 0;border:none;cursor:pointer;font-size:14px;font-weight:500;border-radius:8px;transition:all .2s;background:transparent;color:#888}
+    .nav button.on{background:#1a1a1a;color:#fff}
+    .tog{display:flex;border:1px solid #e5e5e5;border-radius:8px;overflow:hidden;margin-bottom:16px}
+    .tog button{flex:1;padding:10px 0;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s;background:#fff;color:#666}
+    .tog button.on{background:#1a1a1a;color:#fff}
+    textarea{width:100%;min-height:90px;padding:14px;border:1px solid #e5e5e5;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none}
+    textarea:focus{border-color:#999}
+    .btn{padding:12px 0;background:#1a1a1a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;width:100%;margin-top:8px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-s{padding:6px 14px;font-size:13px;width:auto;margin-top:0}
+    .btn-o{background:#fff;color:#666;border:1px solid #e5e5e5}
+    .btn-d{background:#dc2626;color:#fff;border:none}
+    .btn-do{background:#fff;color:#dc2626;border:1px solid #fca5a5}
+    .btn-x{background:none;border:none;color:#ccc;cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
+    .btn-x:hover{color:#999}
+    .upl{background:#fafafa;border-radius:12px;border:2px dashed #d4d4d4;padding:32px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center}
+    .upl:hover{border-color:#999}
+    .prev{width:100%;max-height:280px;object-fit:cover;border-radius:12px;border:1px solid #e5e5e5}
+    .card{background:#fafafa;border-radius:8px;padding:12px;text-align:center}
+    .card-l{font-size:11px;color:#888;font-weight:500;margin-bottom:4px}
+    .card-v{font-size:20px;font-weight:600}
+    .card-s{font-size:11px;color:#bbb;margin-top:2px}
+    .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:28px}
+    .gm{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:32px}
+    .pbg{width:100%;height:8px;background:#e5e5e5;border-radius:4px;overflow:hidden}
+    .pf{height:100%;border-radius:4px;transition:width .4s ease}
+    .stit{font-size:16px;font-weight:600;margin:0 0 16px}
+    .slab{font-size:13px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px}
+    .mi{background:#fafafa;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #f0f0f0}
+    .mn{font-weight:500;font-size:14px}
+    .mm{font-size:12px;color:#888;margin-top:4px}
+    .err{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#dc2626}
+    .info{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:24px;font-size:13px;color:#92400e;line-height:1.5}
+    .defb{background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px;margin-bottom:24px}
+    .deft{font-size:14px;font-weight:600;color:#dc2626;margin-bottom:8px}
+    .deftags{display:flex;flex-wrap:wrap;gap:8px}
+    .deftag{font-size:13px;background:#fff;border:1px solid #fca5a5;padding:4px 12px;border-radius:6px;color:#dc2626;font-weight:500}
+    .dc{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:16px;margin-bottom:12px}
+    .pill{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500;display:inline-block;margin:2px}
+    .sb{background:#f5f5f5;border-radius:12px;padding:24px;margin-bottom:24px}
+    .si{width:100%;padding:12px;border:1px solid #e5e5e5;border-radius:8px;font-size:14px;font-family:monospace;outline:none;margin:12px 0}
+    .fr{display:flex;gap:8px}
+    .fc{display:flex;flex-direction:column;gap:8px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .sp{display:inline-block;width:20px;height:20px;border:2px solid #e5e5e5;border-top-color:#1a1a1a;border-radius:50%;animation:spin .6s linear infinite}
+  </style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useRef}=React;
+const DT={calories:3050,protein:150,fat:70,carbs:350,fiber:35,iron:8,zinc:11,magnesium:400,potassium:3500,vitaminD:2000,vitaminB6:1.5,vitaminB12:2.4,folate:400,calcium:1000,omega3:1.5};
+const MICROS=[{name:"Iron",key:"iron",unit:"mg"},{name:"Zinc",key:"zinc",unit:"mg"},{name:"Magnesium",key:"magnesium",unit:"mg"},{name:"Potassium",key:"potassium",unit:"mg"},{name:"Vit D",key:"vitaminD",unit:"IU"},{name:"B6",key:"vitaminB6",unit:"mg"},{name:"B12",key:"vitaminB12",unit:"mcg"},{name:"Folate",key:"folate",unit:"mcg"},{name:"Calcium",key:"calcium",unit:"mg"},{name:"Omega-3",key:"omega3",unit:"g"}];
+const MK=["calories","protein","fat","carbs","fiber"];
+const AK=[...MK,...MICROS.map(m=>m.key)];
+const PROMPT=`You are a precise nutrition calculator. Analyze this meal and estimate nutritional content.
+
+CRITICAL portion size references:
+- 1 tablespoon (spoon/cucchiaio) of oil = 13-14g
+- 1 teaspoon of oil = 4-5g
+- 1 tablespoon of butter = 14g
+- 1 tablespoon of honey/jam = 21g
+- 1 egg (medium) = 50g edible
+- 1 cup of rice (cooked) = 180g
+- 1 cup of pasta (cooked) = 140g
+- 1 slice of bread = 30-35g
+- "some" or unspecified = GENEROUS portions for active 77kg male athlete:
+  - "some pasta" = 120-150g dry (250-300g cooked)
+  - "rice" = 150g dry (300g+ cooked)
+  - "salad" = 200g+ vegetables
+  - "chicken/meat/fish" = 200-250g
+  - "potatoes" = 250-300g
+  - "some vegetables" = 200g
+  - When in doubt, estimate HIGHER
+- "spoon" = tablespoon unless specified
+
+SUPPLEMENTS:
+- ALWAYS trust user's stated amounts. "600mg omega-3" = 0.6g. "2 pills of 600mg" = 1.2g.
+- Do NOT override user dosages with generic estimates.
+
+UNIT RULES:
+- omega3 in GRAMS (1000mg = 1g)
+- iron/zinc/magnesium/potassium/calcium in mg
+- vitaminD in IU, vitaminB6 in mg, vitaminB12/folate in mcg
+
+When exact grams given, use precisely. When vague, estimate GENEROUSLY.
+
+Respond ONLY with JSON (no markdown):
+{"mealName":"short description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"omega3":0}`;
+
+function today(){return new Date().toISOString().slice(0,10)}
+function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
+function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>t[k]+=(m[k]||0)));return t}
+function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
+function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+
+async function analyze(text,img,url){
+  const c=[];
+  if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
+  c.push({type:"text",text:text?`${PROMPT}\n\nMeal: ${text}`:PROMPT});
+  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:c}]})});
+  const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
+  return JSON.parse(d.content[0].text.replace(/```json|```/g,"").trim());
+}
+
+function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
+
+function MC({name,value,target,unit}){
+  const p=Math.round((value/target)*100),met=p>=100;
+  return<div style={{background:met?"#f0fdf4":"#fafafa",border:`1px solid ${met?"#86efac":"#e5e5e5"}`,borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
+    <div style={{fontSize:12,color:"#666",fontWeight:500,marginBottom:4}}>{name}</div>
+    <div style={{fontSize:15,fontWeight:600}}>{Math.round(value*10)/10}</div>
+    <div style={{fontSize:11,color:"#999",marginTop:2}}>/ {target} {unit}</div>
+    <div style={{fontSize:11,color:met?"#16a34a":p>=70?"#ca8a04":"#dc2626",marginTop:4,fontWeight:500}}>{p}%</div>
+  </div>
+}
+
+function TodayPage({meals,setMeals,templates,onAdd,url}){
+  const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
+  const tot=sum(meals);
+  const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
+  const doAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await analyze(mode==="text"?txt:null,mode==="photo"?img64:null,url);setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const ml=m=>`${Math.round(m.calories)} cal · P:${Math.round(m.protein)}g · F:${Math.round(m.fat)}g · C:${Math.round(m.carbs)}g · Fi:${Math.round(m.fiber||0)}g`;
+  return<div>
+    <div className="tog">{["text","photo","template"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Text":m==="photo"?"📷 Photo":"⭐ Saved"}</button>)}</div>
+    {mode==="photo"&&<div style={{marginBottom:24}}>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><div style={{fontSize:13,color:"#999",marginTop:4}}>or drag and drop</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="Meal" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn" style={{flex:1}} onClick={doAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null)}}>Cancel</button></div></div>}</div>}
+    {mode==="text"&&<div style={{marginBottom:24}}><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAnalyze()}} placeholder="e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g"/><button className="btn" onClick={doAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button><p style={{fontSize:12,color:"#999",marginTop:6}}>Ctrl+Enter to submit</p></div>}
+    {mode==="template"&&<div style={{marginBottom:24}}>{templates.length===0?<div style={{textAlign:"center",padding:24,color:"#bbb",fontSize:14,background:"#fafafa",borderRadius:12}}>No saved meals yet.</div>:<div className="fc">{templates.map((t,i)=><div key={i} className="mi"><div style={{flex:1}}><div className="mn">{t.mealName}</div><div className="mm">{ml(t)}</div></div><button className="btn btn-s" onClick={()=>onAdd(t)}>+ Add</button></div>)}</div>}</div>}
+    {err&&<div className="err">{err}</div>}
+    {ld&&<div style={{textAlign:"center",padding:20,fontSize:14,color:"#666"}}>Analyzing…</div>}
+    <div style={{marginBottom:28}}><h3 className="slab">Today's meals</h3>{meals.length===0?<div style={{textAlign:"center",padding:20,color:"#bbb",fontSize:14}}>No meals logged yet</div>:<div className="fc">{meals.map((m,i)=><div key={i} className="mi"><div style={{flex:1}}><div className="mn">{m.mealName}</div><div className="mm">{ml(m)}</div></div><button className="btn-x" onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button></div>)}</div>}</div>
+    <div className="g5">{[{l:"Calories",v:tot.calories,t:3050,u:""},{l:"Protein",v:tot.protein,t:150,u:"g"},{l:"Fat",v:tot.fat,t:70,u:"g"},{l:"Carbs",v:tot.carbs,t:350,u:"g"},{l:"Fiber",v:tot.fiber||0,t:35,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l">{m.l}</div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u}</div></div>)}</div>
+    <h3 className="stit">Macros breakdown</h3>
+    <div className="fc" style={{marginBottom:32,gap:14}}>{[{l:"Protein",v:tot.protein,t:150,c:"#3b82f6"},{l:"Fat",v:tot.fat,t:70,c:"#f59e0b"},{l:"Carbs",v:tot.carbs,t:350,c:"#22c55e"},{l:"Fiber",v:tot.fiber||0,t:35,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:500}}>{m.l}</span><span style={{fontSize:13,color:"#888"}}>{Math.round(m.v)}g / {m.t}g ({Math.round((m.v/m.t)*100)}%)</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
+    <h3 className="stit">Key micronutrients</h3>
+    <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit}/>)}</div>
+    <div style={{textAlign:"center",display:"flex",justifyContent:"center",gap:8}}>{!cfm?<button className="btn btn-o btn-s" onClick={()=>setCfm(true)}>Reset today</button>:<><span style={{fontSize:13,color:"#dc2626",alignSelf:"center"}}>Reset all?</span><button className="btn btn-d btn-s" onClick={()=>{setMeals([]);setCfm(false)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCfm(false)}>Cancel</button></>}</div>
+  </div>
+}
+
+function TemplatesPage({templates,setTemplates,onAddToday,url}){
+  const[txt,setTxt]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null),[ei,setEi]=useState(null),[et,setEt]=useState(""),[cd,setCd]=useState(null);
+  const doAdd=async()=>{if(!txt.trim())return;setLd(true);setErr(null);try{const m=await analyze(txt,null,url);setTemplates(p=>[...p,m]);onAddToday(m);setTxt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const doEdit=async i=>{if(!et.trim())return;setLd(true);setErr(null);try{const m=await analyze(et,null,url);setTemplates(p=>p.map((t,j)=>j===i?m:t));setEi(null);setEt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const ml=t=>`${Math.round(t.calories)} cal · P:${Math.round(t.protein)}g · F:${Math.round(t.fat)}g · C:${Math.round(t.carbs)}g · Fi:${Math.round(t.fiber||0)}g`;
+  return<div>
+    <div className="info"><strong>Saved meals</strong> are your recurring meals. When you save a new meal, it's also added to today's dashboard.</div>
+    <div style={{marginBottom:24}}><h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Add a recurring meal</h3><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAdd()}} placeholder="e.g., Greek yogurt 200g with honey 15g, walnuts 20g"/><button className="btn" onClick={doAdd} disabled={ld||!txt.trim()}>{ld&&ei===null?"Analyzing…":"Save meal"}</button></div>
+    {err&&<div className="err">{err}</div>}
+    <h3 className="slab">Your saved meals ({templates.length})</h3>
+    {templates.length===0?<div style={{textAlign:"center",padding:32,color:"#bbb",fontSize:14,background:"#fafafa",borderRadius:12}}>No saved meals yet.</div>:
+    <div className="fc" style={{gap:10}}>{templates.map((t,i)=><div key={i} style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:10,padding:16}}>
+      {ei===i?<div><textarea value={et} onChange={e=>setEt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-s" onClick={()=>doEdit(i)} disabled={ld}>{ld?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEi(null);setEt("")}}>Cancel</button></div></div>:
+      <div><div style={{fontWeight:600,fontSize:15,marginBottom:6}}>{t.mealName}</div><div style={{fontSize:13,color:"#666",marginBottom:8}}>{ml(t)}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{MICROS.filter(m=>(t[m.key]||0)>0).map(m=><span key={m.key} style={{fontSize:11,background:"#f5f5f5",padding:"3px 8px",borderRadius:4,color:"#666"}}>{m.name}: {Math.round((t[m.key]||0)*10)/10} {m.unit}</span>)}</div>
+      <div className="fr" style={{marginTop:12,borderTop:"1px solid #f0f0f0",paddingTop:12}}><button className="btn btn-o btn-s" onClick={()=>{setEi(i);setEt(t.mealName)}}>Edit</button>
+      {cd===i?<div className="fr" style={{alignItems:"center"}}><span style={{fontSize:12,color:"#dc2626"}}>Delete?</span><button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==i));setCd(null)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCd(null)}>No</button></div>:
+      <button className="btn btn-do btn-s" onClick={()=>setCd(i)}>Delete</button>}</div></div>}
+    </div>)}</div>}
+  </div>
+}
+
+function HistoryPage({history,onAdd,onDel,url}){
+  const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
+  const days=last10();
+  const allN=[{label:"Calories",key:"calories",target:3050,unit:""},{label:"Protein",key:"protein",target:150,unit:"g"},{label:"Fat",key:"fat",target:70,unit:"g"},{label:"Carbs",key:"carbs",target:350,unit:"g"},{label:"Fiber",key:"fiber",target:35,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
+  const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
+  const wd=dd.filter(d=>d.totals);
+  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+(d.totals[n.key]||0),0)/wd.length:0});
+  const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
+  const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
+  const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
+  return<div>
+    {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on your {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
+    {wd.length>=2&&<div style={{marginBottom:24}}><h3 className="stit">{wd.length}-day averages</h3><div className="gm">{allN.map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div></div>}
+    <h3 className="slab">Daily breakdown</h3>
+    {dd.map(d=><div key={d.date} className="dc">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:d.totals?12:0}}>
+        <div><div style={{fontWeight:600,fontSize:14}}>{fmt(d.date)}</div><div style={{fontSize:12,color:"#999"}}>{d.date}</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{textAlign:"right"}}>{d.totals?<div style={{fontWeight:600,fontSize:15}}>{Math.round(d.totals.calories)} cal</div>:<div style={{fontSize:13,color:"#bbb"}}>No data</div>}</div>
+          {ad!==d.date&&<button className="btn btn-o btn-s" onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+</button>}
+        </div>
+      </div>
+      {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice 150g" style={{minHeight:60,marginBottom:8}}/>{err&&ad===d.date&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await analyze(di,null,url);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
+      {d.totals&&<div>
+        <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""} logged</button>
+        {ex===d.date&&(history[d.date]||[]).length>0&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=><div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{fontSize:13,fontWeight:500}}>{m.mealName}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g · F:{Math.round(m.fat)}g · C:{Math.round(m.carbs)}g · Fi:{Math.round(m.fiber||0)}g</div></div><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div>)}</div>}
+        <div style={{display:"flex",gap:12,marginBottom:10}}>{[{l:"P",v:d.totals.protein,t:150,c:"#3b82f6"},{l:"F",v:d.totals.fat,t:70,c:"#f59e0b"},{l:"C",v:d.totals.carbs,t:350,c:"#22c55e"},{l:"Fi",v:d.totals.fiber||0,t:35,c:"#8b5cf6"}].map(m=><div key={m.l} style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const p=Math.round(((d.totals[m.key]||0)/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
+      </div>}
+    </div>)}
+  </div>
+}
+
+function Setup({url,setUrl}){
+  const[v,setV]=useState(url);
+  return<div className="sb"><h3 style={{fontSize:16,fontWeight:600,marginBottom:8}}>API Setup</h3><p style={{fontSize:13,color:"#666",lineHeight:1.5,marginBottom:12}}>Enter your Cloudflare Worker URL that proxies to the Claude API.</p><input className="si" value={v} onChange={e=>setV(e.target.value)} placeholder="https://your-worker.workers.dev"/><button className="btn" onClick={()=>{setUrl(v);lss("nt-api-url",v)}}>Save</button>{url&&<p style={{fontSize:12,color:"#16a34a",marginTop:8}}>✓ Connected</p>}</div>
+}
+
+function App(){
+  const[page,setPage]=useState("today");
+  const[url,setUrl]=useState(()=>ls("nt-api-url",""));
+  const[meals,setMeals]=useState(()=>{const d=ls("nt-meals",{});return d.date===today()?(d.meals||[]):[]});
+  const[templates,setTemplates]=useState(()=>ls("nt-templates",[]));
+  const[history,setHistory]=useState(()=>ls("nt-history",{}));
+
+  const update=(nm)=>{const t=today();setMeals(nm);lss("nt-meals",{meals:nm,date:t});setHistory(p=>{const u={...p,[t]:nm};const k=last10();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);return tr})};
+  const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
+  useEffect(()=>{lss("nt-templates",templates)},[templates]);
+  const addToday=m=>update([...meals,{...m}]);
+  const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);return u})}};
+  const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);return u})}};
+
+  if(!url)return<div><h1>Meal Analyzer</h1><p className="sub" style={{marginBottom:24}}>32y, 77kg, 2h training/day</p><Setup url={url} setUrl={setUrl}/></div>;
+
+  const nc=p=>page===p?"on":"";
+  return<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div><h1>Meal Analyzer</h1><p className="sub">32y, 77kg, 2h training/day</p></div><button onClick={()=>setPage("setup")} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>⚙️</button></div>
+    <div className="nav"><button className={nc("today")} onClick={()=>setPage("today")}>Today</button><button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button><button className={nc("history")} onClick={()=>setPage("history")}>History</button></div>
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} templates={templates} onAdd={t=>{addToday(t);setPage("today")}} url={url}/>}
+    {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} onAddToday={addToday} url={url}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url}/>}
+    {page==="setup"&&<Setup url={url} setUrl={setUrl}/>}
+  </div>
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App/>);
+</script>
+</body>
+</html>
