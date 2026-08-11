@@ -92,16 +92,20 @@ CRITICAL portion size references:
   - When in doubt, estimate HIGHER
 - "spoon" = tablespoon unless specified
 
-SUPPLEMENTS — THINK CAREFULLY about dosing:
-- ALWAYS trust user's stated amounts when they specify per-capsule dose. "600mg omega-3" = 0.6g. "2 pills of 600mg" = 1.2g.
-- Do NOT override user dosages with generic estimates.
-- When a product name includes packaging info, DO THE MATH to find per-capsule dose:
-  - Example: "150mg daily dose, 90 capsules for 30 days" → 90/30 = 3 capsules/day → 150mg/3 = 50mg per capsule
-  - Example: "1000mg daily dose, 60 capsules for 30 days" → 60/30 = 2 capsules/day → 1000mg/2 = 500mg per capsule
-  - The "daily dose" or "dose giornaliera" is NOT the per-capsule amount — divide by capsules per day
-- When user says "1 capsule" of a product, calculate the PER-CAPSULE amount, not the daily dose
-- For branded supplements (Magtein, fish oil brands, etc.), use your knowledge of typical per-capsule dosing
-- Common supplements: Magnesium L-Threonate (Magtein) capsules are typically 48-50mg elemental Mg each
+SUPPLEMENTS — CRITICAL, READ CAREFULLY:
+- When user specifies an explicit per-capsule amount (e.g. "600mg omega-3 capsule"), trust it directly.
+- When a product description mentions a DAILY DOSE and total capsule count, you MUST calculate per-capsule:
+  STEP 1: capsules_per_day = total_capsules / days_supply
+  STEP 2: per_capsule = daily_dose / capsules_per_day
+  WORKED EXAMPLE: "1 capsule of Magtein 150mg daily dose, 90 capsules for 30 days"
+    → 90 capsules / 30 days = 3 capsules/day
+    → 150mg / 3 = 50mg per capsule
+    → User took 1 capsule = 50mg magnesium (NOT 150mg!)
+  ANOTHER EXAMPLE: "1 capsule of Vitamin D 2000 IU daily, 120 capsules for 60 days"
+    → 120/60 = 2 capsules/day → 2000/2 = 1000 IU per capsule → 1 capsule = 1000 IU
+- "daily dose" or "dose giornaliera" is the TOTAL for the day, NOT per capsule
+- The number in the product name is almost always the DAILY dose, never assume it's per capsule
+- For branded supplements (Magtein, etc.), Magtein capsules typically contain ~48-50mg elemental magnesium each
 
 UNIT RULES:
 - omega3 in GRAMS (1000mg = 1g)
