@@ -148,8 +148,9 @@ function MC({name,value,target,unit}){
   </div>
 }
 
-function TodayPage({meals,setMeals,url,sun,toggleSun}){
+function TodayPage({meals,setMeals,url,sun,toggleSun,history,sunlight}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
+  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false);
   const tot=sum(meals);
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
   const doAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await analyze(mode==="text"?txt:null,mode==="photo"?img64:null,url);setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
@@ -172,6 +173,56 @@ function TodayPage({meals,setMeals,url,sun,toggleSun}){
     </div>
     <div className="gm">{MICROS.map(m=>{const v=sun&&m.key==="vitaminD"?sunVitD(today())+(tot[m.key]||0):(tot[m.key]||0);return<MC key={m.key} name={m.name} value={v} target={DT[m.key]} unit={m.unit}/>})}</div>
     <div style={{textAlign:"center",display:"flex",justifyContent:"center",gap:8}}>{!cfm?<button className="btn btn-o btn-s" onClick={()=>setCfm(true)}>Reset today</button>:<><span style={{fontSize:13,color:"#dc2626",alignSelf:"center"}}>Reset all?</span><button className="btn btn-d btn-s" onClick={()=>{setMeals([]);setCfm(false)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCfm(false)}>Cancel</button></>}</div>
+
+    {(() => {
+      const days=last10();const wd=days.filter(d=>history[d]);
+      if(wd.length<2)return null;
+      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length});
+      const allN=[{l:"Calories",k:"calories",t:3050,u:"kcal"},{l:"Protein",k:"protein",t:150,u:"g"},{l:"Fat",k:"fat",t:70,u:"g"},{l:"Carbs",k:"carbs",t:350,u:"g"},{l:"Fiber",k:"fiber",t:35,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
+      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
+      if(defs.length===0)return <div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies detected over the last {wd.length} days</div>;
+
+      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
+
+      const getSuggestions=async()=>{
+        setSugLd(true);setSugIdx(0);
+        try{
+          const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`Based on these nutrient deficiencies, suggest 3 different single meals that would help address them. The user is a 77kg active male athlete training 2h/day in Italy.
+
+Deficiencies: ${defText}
+
+Respond ONLY with a JSON array of 3 objects (no markdown, no backticks):
+[{"meal":"meal name and description with portions","mainBenefits":"which deficiencies it addresses"},{"meal":"...","mainBenefits":"..."},{"meal":"...","mainBenefits":"..."}]
+
+Make meals practical, tasty, and varied. Include specific portions. Consider Italian food culture.`}]})});
+          const d=await r.json();if(d.error)throw new Error(d.error.message);
+          const raw=d.content[0].text;const match=raw.match(/\[[\s\S]*\]/);
+          if(!match)throw new Error("No suggestions found");
+          setSuggestions(JSON.parse(match[0]));
+        }catch(e){setSuggestions(null)}
+        finally{setSugLd(false)}
+      };
+
+      return <div style={{marginTop:28}}>
+        <h3 className="stit">Suggested meals for your deficiencies</h3>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>
+        {!suggestions&&!sugLd&&<button className="btn" onClick={getSuggestions}>Get meal suggestions</button>}
+        {sugLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Finding meals for you…</div>}
+        {suggestions&&suggestions.length>0&&<div>
+          <div style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:12,padding:20,position:"relative"}}>
+            <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Suggestion {sugIdx+1} of {suggestions.length}</div>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:8,lineHeight:1.4}}>{suggestions[sugIdx].meal}</div>
+            <div style={{fontSize:13,color:"#16a34a",fontWeight:500}}>Helps with: {suggestions[sugIdx].mainBenefits}</div>
+          </div>
+          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:16,marginTop:12}}>
+            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:36,height:36,borderRadius:"50%",border:"1px solid #e5e5e5",background:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===sugIdx?"#1a1a1a":"#e5e5e5"}}/>)}</div>
+            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:36,height:36,borderRadius:"50%",border:"1px solid #e5e5e5",background:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>→</button>
+          </div>
+          <button className="btn btn-o" style={{marginTop:12,width:"100%"}} onClick={getSuggestions}>Refresh suggestions</button>
+        </div>}
+      </div>;
+    })()}
   </div>
 }
 
@@ -270,7 +321,7 @@ function App(){
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div><h1>Meal Analyzer</h1><p className="sub">32y, 77kg, 2h training/day</p></div><button onClick={()=>setPage("setup")} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>⚙️</button></div>
     <div className="nav"><button className={nc("today")} onClick={()=>setPage("today")}>Today</button><button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button><button className={nc("history")} onClick={()=>setPage("history")}>History</button></div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} history={history} sunlight={sunlight}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} url={url}/>}
     {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url} sunlight={sunlight} toggleSun={toggleSun}/>}
     {page==="setup"&&<Setup url={url} setUrl={setUrl}/>}
