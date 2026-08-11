@@ -148,7 +148,7 @@ function MC({name,value,target,unit}){
   </div>
 }
 
-function TodayPage({meals,setMeals,url,sun,toggleSun,history,sunlight}){
+function TodayPage({meals,setMeals,url,sun,toggleSun,history,sunlight,templates}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false);
   const tot=sum(meals);
@@ -177,12 +177,14 @@ function TodayPage({meals,setMeals,url,sun,toggleSun,history,sunlight}){
     {(() => {
       const days=last10();const wd=days.filter(d=>history[d]);
       if(wd.length<2)return null;
+      const baseline=sum(templates);
       const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length});
+      const combined={};AK.forEach(k=>{combined[k]=Math.max(avg[k],baseline[k]||0)});
       const allN=[{l:"Calories",k:"calories",t:3050,u:"kcal"},{l:"Protein",k:"protein",t:150,u:"g"},{l:"Fat",k:"fat",t:70,u:"g"},{l:"Carbs",k:"carbs",t:350,u:"g"},{l:"Fiber",k:"fiber",t:35,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
-      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
+      const defs=allN.filter(n=>Math.round((combined[n.k]/n.t)*100)<70);
       if(defs.length===0)return <div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies detected over the last {wd.length} days</div>;
 
-      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
+      const defText=defs.map(d=>`${d.l}: ${Math.round(combined[d.k])}/${d.t}${d.u} (${Math.round((combined[d.k]/d.t)*100)}%)`).join(", ");
 
       const getSuggestions=async()=>{
         setSugLd(true);setSugIdx(0);
@@ -205,7 +207,7 @@ Make meals practical, tasty, and varied. Include specific portions. Consider Ita
 
       return <div style={{marginTop:28}}>
         <h3 className="stit">Suggested meals for your deficiencies</h3>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((combined[d.k]/d.t)*100)}%</span>)}</div>
         {!suggestions&&!sugLd&&<button className="btn" onClick={getSuggestions}>Get meal suggestions</button>}
         {sugLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Finding meals for you…</div>}
         {suggestions&&suggestions.length>0&&<div>
@@ -321,7 +323,7 @@ function App(){
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div><h1>Meal Analyzer</h1><p className="sub">32y, 77kg, 2h training/day</p></div><button onClick={()=>setPage("setup")} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>⚙️</button></div>
     <div className="nav"><button className={nc("today")} onClick={()=>setPage("today")}>Today</button><button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button><button className={nc("history")} onClick={()=>setPage("history")}>History</button></div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} history={history} sunlight={sunlight}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} history={history} sunlight={sunlight} templates={templates}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} url={url}/>}
     {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url} sunlight={sunlight} toggleSun={toggleSun}/>}
     {page==="setup"&&<Setup url={url} setUrl={setUrl}/>}
