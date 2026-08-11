@@ -133,7 +133,7 @@ function MC({name,value,target,unit}){
   </div>
 }
 
-function TodayPage({meals,setMeals,templates,onAdd,url}){
+function TodayPage({meals,setMeals,templates,onAdd,url,sun,toggleSun}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
   const tot=sum(meals);
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
@@ -151,7 +151,12 @@ function TodayPage({meals,setMeals,templates,onAdd,url}){
     <h3 className="stit">Macros breakdown</h3>
     <div className="fc" style={{marginBottom:32,gap:14}}>{[{l:"Protein",v:tot.protein,t:150,c:"#3b82f6"},{l:"Fat",v:tot.fat,t:70,c:"#f59e0b"},{l:"Carbs",v:tot.carbs,t:350,c:"#22c55e"},{l:"Fiber",v:tot.fiber||0,t:35,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:500}}>{m.l}</span><span style={{fontSize:13,color:"#888"}}>{Math.round(m.v)}g / {m.t}g ({Math.round((m.v/m.t)*100)}%)</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
     <h3 className="stit">Key micronutrients</h3>
-    <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit}/>)}</div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"10px 14px",background:sun?"#fffbeb":"#fafafa",border:`1px solid ${sun?"#fde68a":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleSun}>
+      <input type="checkbox" checked={sun} onChange={toggleSun} style={{width:18,height:18,accentColor:"#f59e0b",cursor:"pointer"}}/>
+      <span style={{fontSize:14,fontWeight:500}}>☀️ Sun exposure today</span>
+      {sun&&<span style={{fontSize:12,color:"#ca8a04",marginLeft:"auto"}}>Vit D → 100%</span>}
+    </div>
+    <div className="gm">{MICROS.map(m=>{const v=sun&&m.key==="vitaminD"?DT.vitaminD:(tot[m.key]||0);return<MC key={m.key} name={m.name} value={v} target={DT[m.key]} unit={m.unit}/>})}</div>
     <div style={{textAlign:"center",display:"flex",justifyContent:"center",gap:8}}>{!cfm?<button className="btn btn-o btn-s" onClick={()=>setCfm(true)}>Reset today</button>:<><span style={{fontSize:13,color:"#dc2626",alignSelf:"center"}}>Reset all?</span><button className="btn btn-d btn-s" onClick={()=>{setMeals([]);setCfm(false)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCfm(false)}>Cancel</button></>}</div>
   </div>
 }
@@ -178,13 +183,13 @@ function TemplatesPage({templates,setTemplates,onAddToday,url}){
   </div>
 }
 
-function HistoryPage({history,onAdd,onDel,url}){
+function HistoryPage({history,onAdd,onDel,url,sunlight,toggleSun}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const days=last10();
   const allN=[{label:"Calories",key:"calories",target:3050,unit:""},{label:"Protein",key:"protein",target:150,unit:"g"},{label:"Fat",key:"fat",target:70,unit:"g"},{label:"Carbs",key:"carbs",target:350,unit:"g"},{label:"Fiber",key:"fiber",target:35,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
   const wd=dd.filter(d=>d.totals);
-  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+(d.totals[n.key]||0),0)/wd.length:0});
+  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?DT.vitaminD:(d.totals[n.key]||0)),0)/wd.length:0});
   const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
@@ -192,7 +197,7 @@ function HistoryPage({history,onAdd,onDel,url}){
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on your {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
     {wd.length>=2&&<div style={{marginBottom:24}}><h3 className="stit">{wd.length}-day averages</h3><div className="gm">{allN.map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div></div>}
     <h3 className="slab">Daily breakdown</h3>
-    {dd.map(d=><div key={d.date} className="dc">
+    {dd.map(d=>{const hasSun=!!sunlight[d.date];return<div key={d.date} className="dc">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:d.totals?12:0}}>
         <div><div style={{fontWeight:600,fontSize:14}}>{fmt(d.date)}</div><div style={{fontSize:12,color:"#999"}}>{d.date}</div></div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -200,14 +205,18 @@ function HistoryPage({history,onAdd,onDel,url}){
           {ad!==d.date&&<button className="btn btn-o btn-s" onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+</button>}
         </div>
       </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}} onClick={()=>toggleSun(d.date)}>
+        <input type="checkbox" checked={hasSun} onChange={()=>toggleSun(d.date)} style={{width:16,height:16,accentColor:"#f59e0b",cursor:"pointer"}}/>
+        <span style={{fontSize:13,color:hasSun?"#ca8a04":"#999"}}>☀️ Sun exposure</span>
+      </div>
       {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice 150g" style={{minHeight:60,marginBottom:8}}/>{err&&ad===d.date&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await analyze(di,null,url);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
       {d.totals&&<div>
         <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""} logged</button>
         {ex===d.date&&(history[d.date]||[]).length>0&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=><div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{fontSize:13,fontWeight:500}}>{m.mealName}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g · F:{Math.round(m.fat)}g · C:{Math.round(m.carbs)}g · Fi:{Math.round(m.fiber||0)}g</div></div><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div>)}</div>}
         <div style={{display:"flex",gap:12,marginBottom:10}}>{[{l:"Proteins",v:d.totals.protein,t:150,c:"#3b82f6"},{l:"Fats",v:d.totals.fat,t:70,c:"#f59e0b"},{l:"Carbs",v:d.totals.carbs,t:350,c:"#22c55e"},{l:"Fibers",v:d.totals.fiber||0,t:35,c:"#8b5cf6"}].map(m=><div key={m.l} style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const p=Math.round(((d.totals[m.key]||0)/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(m.key==="vitaminD"&&hasSun)?DT.vitaminD:(d.totals[m.key]||0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
       </div>}
-    </div>)}
+    </div>})}
   </div>
 }
 
@@ -222,6 +231,9 @@ function App(){
   const[meals,setMeals]=useState(()=>{const d=ls("nt-meals",{});return d.date===today()?(d.meals||[]):[]});
   const[templates,setTemplates]=useState(()=>ls("nt-templates",[]));
   const[history,setHistory]=useState(()=>ls("nt-history",{}));
+  const[sunlight,setSunlight]=useState(()=>ls("nt-sunlight",{}));
+
+  const toggleSun=(date)=>{setSunlight(p=>{const u={...p,[date]:!p[date]};lss("nt-sunlight",u);return u})};
 
   const update=(nm)=>{const t=today();setMeals(nm);lss("nt-meals",{meals:nm,date:t});setHistory(p=>{const u={...p,[t]:nm};const k=last10();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);return tr})};
   const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
@@ -236,9 +248,9 @@ function App(){
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div><h1>Meal Analyzer</h1><p className="sub">32y, 77kg, 2h training/day</p></div><button onClick={()=>setPage("setup")} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>⚙️</button></div>
     <div className="nav"><button className={nc("today")} onClick={()=>setPage("today")}>Today</button><button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button><button className={nc("history")} onClick={()=>setPage("history")}>History</button></div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} templates={templates} onAdd={t=>{addToday(t);setPage("today")}} url={url}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} templates={templates} onAdd={t=>{addToday(t);setPage("today")}} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} onAddToday={addToday} url={url}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url} sunlight={sunlight} toggleSun={toggleSun}/>}
     {page==="setup"&&<Setup url={url} setUrl={setUrl}/>}
   </div>
 }
