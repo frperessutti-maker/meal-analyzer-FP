@@ -130,7 +130,10 @@ async function analyze(text,img,url){
   c.push({type:"text",text:text?`${PROMPT}\n\nMeal: ${text}`:PROMPT});
   const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:c}]})});
   const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
-  return JSON.parse(d.content[0].text.replace(/```json|```/g,"").trim());
+  const raw=d.content[0].text;
+  const match=raw.match(/\{[\s\S]*\}/);
+  if(!match)throw new Error("No JSON found in response");
+  return JSON.parse(match[0]);
 }
 
 function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
@@ -145,7 +148,7 @@ function MC({name,value,target,unit}){
   </div>
 }
 
-function TodayPage({meals,setMeals,templates,onAdd,url,sun,toggleSun}){
+function TodayPage({meals,setMeals,url,sun,toggleSun}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
   const tot=sum(meals);
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
@@ -172,9 +175,9 @@ function TodayPage({meals,setMeals,templates,onAdd,url,sun,toggleSun}){
   </div>
 }
 
-function TemplatesPage({templates,setTemplates,onAddToday,url}){
+function TemplatesPage({templates,setTemplates,url}){
   const[txt,setTxt]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null),[ei,setEi]=useState(null),[et,setEt]=useState(""),[cd,setCd]=useState(null);
-  const doAdd=async()=>{if(!txt.trim())return;setLd(true);setErr(null);try{const m=await analyze(txt,null,url);setTemplates(p=>[...p,m]);onAddToday(m);setTxt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const doAdd=async()=>{if(!txt.trim())return;setLd(true);setErr(null);try{const m=await analyze(txt,null,url);setTemplates(p=>[...p,m]);setTxt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
   const doEdit=async i=>{if(!et.trim())return;setLd(true);setErr(null);try{const m=await analyze(et,null,url);setTemplates(p=>p.map((t,j)=>j===i?m:t));setEi(null);setEt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
   const ml=t=>`${Math.round(t.calories)} cal · P:${Math.round(t.protein)}g · F:${Math.round(t.fat)}g · C:${Math.round(t.carbs)}g · Fi:${Math.round(t.fiber||0)}g`;
   const baseline=sum(templates);
@@ -267,8 +270,8 @@ function App(){
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div><h1>Meal Analyzer</h1><p className="sub">32y, 77kg, 2h training/day</p></div><button onClick={()=>setPage("setup")} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>⚙️</button></div>
     <div className="nav"><button className={nc("today")} onClick={()=>setPage("today")}>Today</button><button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button><button className={nc("history")} onClick={()=>setPage("history")}>History</button></div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} templates={templates} onAdd={t=>{addToday(t);setPage("today")}} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())}/>}
-    {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} onAddToday={addToday} url={url}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())}/>}
+    {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} url={url}/>}
     {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url} sunlight={sunlight} toggleSun={toggleSun}/>}
     {page==="setup"&&<Setup url={url} setUrl={setUrl}/>}
   </div>
