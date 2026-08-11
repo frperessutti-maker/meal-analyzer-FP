@@ -258,14 +258,16 @@ function TemplatesPage({templates,setTemplates,url}){
   </div>
 }
 
-function HistoryPage({history,onAdd,onDel,url,sunlight,toggleSun}){
+function HistoryPage({history,onAdd,onDel,url,sunlight,toggleSun,templates}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const days=last10();
   const allN=[{label:"Calories",key:"calories",target:3050,unit:""},{label:"Protein",key:"protein",target:150,unit:"g"},{label:"Fat",key:"fat",target:70,unit:"g"},{label:"Carbs",key:"carbs",target:350,unit:"g"},{label:"Fiber",key:"fiber",target:35,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
   const wd=dd.filter(d=>d.totals);
+  const baseline=sum(templates);
   const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length:0});
-  const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
+  const combined={};allN.forEach(n=>{combined[n.key]=Math.max(avg[n.key],baseline[n.key]||0)});
+  const def=allN.filter(n=>Math.round((combined[n.key]/n.target)*100)<70&&wd.length>=2);
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
   return<div>
@@ -325,7 +327,7 @@ function App(){
     <div className="nav"><button className={nc("today")} onClick={()=>setPage("today")}>Today</button><button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button><button className={nc("history")} onClick={()=>setPage("history")}>History</button></div>
     {page==="today"&&<TodayPage meals={meals} setMeals={wrap} url={url} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} history={history} sunlight={sunlight} templates={templates}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={setTemplates} url={url}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url} sunlight={sunlight} toggleSun={toggleSun}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} url={url} sunlight={sunlight} toggleSun={toggleSun} templates={templates}/>}
     {page==="setup"&&<Setup url={url} setUrl={setUrl}/>}
   </div>
 }
