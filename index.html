@@ -369,7 +369,7 @@ function Setup({url,setUrl}){
 
 /* ── MAIN APP ── */
 function App(){
-  const[url,setUrl]=useState(()=>ls("nt-api-url",""));
+  const[url,setUrl]=useState(()=>ls("nt-api-url","https://lingering-river-d82a.frperessutti.workers.dev"));
   const[profiles,setProfiles]=useState(()=>ls("nt-profiles",[]));
   const[activeId,setActiveId]=useState(()=>ls("nt-active-profile",null));
   const[page,setPage]=useState("today");
