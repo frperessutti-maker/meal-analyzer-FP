@@ -132,15 +132,24 @@ function cleanUrl(text){
   return text.replace(/https?:\/\/www\.amazon\.[a-z.]+\/[^\s]*?(\/dp\/[A-Z0-9]+)[^\s]*/g,"https://www.amazon.it$1");
 }
 
+async function fetchUrlContent(url){
+  try{const r=await fetch(`${API_URL}/fetch-url?url=${encodeURIComponent(url)}`);const d=await r.json();return d.text||null}catch{return null}
+}
+
 async function doAnalyze(text,img,prompt){
   const c=[];
   if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
-  const cleanText=text?cleanUrl(text):text;
-  const hasUrl=cleanText&&/https?:\/\//.test(cleanText);
-  const urlNote=hasUrl?"\n\nIMPORTANT: Use web_search to look up this product and extract EXACT nutritional values from its label/description. Search for the product name from the URL. After searching, respond with the JSON.":"";
-  c.push({type:"text",text:cleanText?`${prompt}${urlNote}\n\nMeal: ${cleanText}`:prompt});
-  const body={model:"claude-sonnet-4-6",max_tokens:4000,messages:[{role:"user",content:c}]};
-  if(hasUrl)body.tools=[{type:"web_search_20250305",name:"web_search"}];
+  let cleanText=text?cleanUrl(text):text;
+  // If URL found, fetch its content and include as context
+  const urlMatch=cleanText&&cleanText.match(/https?:\/\/[^\s]+/);
+  let pageContext="";
+  if(urlMatch){
+    const content=await fetchUrlContent(urlMatch[0]);
+    if(content)pageContext=`\n\nPRODUCT PAGE CONTENT (use this for exact nutritional values):\n${content}`;
+    cleanText=cleanText.replace(urlMatch[0],"").trim();
+  }
+  c.push({type:"text",text:`${prompt}${pageContext}\n\nMeal: ${cleanText}`});
+  const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}]};
   const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
   const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
@@ -148,7 +157,7 @@ async function doAnalyze(text,img,prompt){
   if(match)return JSON.parse(match[0]);
   const broad=allText.match(/\{[\s\S]*\}/);
   if(broad)return JSON.parse(broad[0]);
-  throw new Error("No JSON found. Try: '1 capsule ProductName https://short-url'");
+  throw new Error("Analysis failed. Try describing the product manually.");
 }
 
 function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
