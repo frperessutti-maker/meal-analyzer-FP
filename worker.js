@@ -46,6 +46,34 @@ export default {
       }
     }
 
+    // Fetch URL content (proxy for CORS)
+    if (url.pathname === "/fetch-url" && request.method === "GET") {
+      const targetUrl = url.searchParams.get("url");
+      if (!targetUrl) return new Response(JSON.stringify({ error: "Missing url" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+      try {
+        const r = await fetch(targetUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; MealAnalyzer/1.0)" }
+        });
+        const html = await r.text();
+        // Extract text content, strip tags, limit size
+        const text = html.replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 8000);
+        return new Response(JSON.stringify({ text }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
     // Claude API proxy (existing)
     if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
