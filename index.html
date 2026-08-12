@@ -132,15 +132,21 @@ async function doAnalyze(text,img,prompt){
   const c=[];
   if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
   const hasUrl=text&&/https?:\/\//.test(text);
-  const urlNote=hasUrl?"\n\nIMPORTANT: Use web_search to look up the product URL and extract EXACT nutritional values.":"";
+  const urlNote=hasUrl?"\n\nIMPORTANT: Use web_search to look up the product and extract EXACT nutritional values from its label. After searching, respond with the JSON.":"";
   c.push({type:"text",text:text?`${prompt}${urlNote}\n\nMeal: ${text}`:prompt});
-  const body={model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:c}]};
+  const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}]};
   if(hasUrl)body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
+  // Handle both regular and web search responses - collect all text blocks
   const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
-  const match=allText.match(/\{[\s\S]*\}/);
-  if(!match)throw new Error("No JSON found");
+  const match=allText.match(/\{[^{}]*"mealName"[^{}]*\}/);
+  if(!match){
+    // Try broader match
+    const broad=allText.match(/\{[\s\S]*\}/);
+    if(!broad)throw new Error("No JSON found. Try adding a description before the URL, e.g.: '1 tablet Vitamin C supplement https://...'");
+    return JSON.parse(broad[0]);
+  }
   return JSON.parse(match[0]);
 }
 
@@ -334,7 +340,7 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
       <div className="g5" style={{marginBottom:16}}>{[{l:"Calories",v:baseline.calories,t:DT.calories,u:""},{l:"Protein",v:baseline.protein,t:DT.protein,u:"g"},{l:"Fat",v:baseline.fat,t:DT.fat,u:"g"},{l:"Carbs",v:baseline.carbs,t:DT.carbs,u:"g"},{l:"Fiber",v:baseline.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l">{m.l}</div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u} ({Math.round((m.v/m.t)*100)}%)</div></div>)}</div>
       <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={baseline[m.key]||0} target={DT[m.key]} unit={m.unit}/>)}</div>
     </div>}
-    <div style={{marginBottom:24}}><h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Add a recurring meal</h3><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAdd()}} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements, include the product URL for exact values"}/><button className="btn" onClick={doAdd} disabled={ld||!txt.trim()}>{ld&&ei===null?"Analyzing…":"Save meal"}</button></div>
+    <div style={{marginBottom:24}}><h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Add a recurring meal</h3><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAdd()}} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements: 1 tablet Vitamin C + product URL"}/><button className="btn" onClick={doAdd} disabled={ld||!txt.trim()}>{ld&&ei===null?"Analyzing…":"Save meal"}</button></div>
     {err&&<div className="err">{err}</div>}
     <h3 className="slab">Your saved meals ({templates.length})</h3>
     {templates.length===0?<div style={{textAlign:"center",padding:32,color:"#bbb",fontSize:14,background:"#fafafa",borderRadius:12}}>No saved meals yet.</div>:
