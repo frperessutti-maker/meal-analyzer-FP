@@ -236,7 +236,7 @@ function TodayPage({meals,setMeals,sun,toggleSun,history,sunlight,templates,prof
     {(()=>{
       const days=last10();const wd=days.filter(d=>history[d]);if(wd.length<2)return null;
       const baseline=sum(templates);const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length});
-      const combined={};AK.forEach(k=>{combined[k]=Math.max(avg[k],baseline[k]||0)});
+      const combined={};AK.forEach(k=>{combined[k]=avg[k]+(baseline[k]||0)});
       const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
       const defs=allN.filter(n=>Math.round((combined[n.k]/n.t)*100)<70);
       if(defs.length===0)return<div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies</div>;
@@ -301,7 +301,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,templates,DT,prompt
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
   const wd=dd.filter(d=>d.totals);const baseline=sum(templates);
   const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length:0});
-  const combined={};allN.forEach(n=>{combined[n.key]=Math.max(avg[n.key],baseline[n.key]||0)});
+  const combined={};allN.forEach(n=>{combined[n.key]=avg[n.key]+(baseline[n.key]||0)});
   const def=allN.filter(n=>Math.round((combined[n.key]/n.target)*100)<70&&wd.length>=2);
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
@@ -327,7 +327,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,templates,DT,prompt
         <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""}</button>
         {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=><div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{fontSize:13,fontWeight:500}}>{m.mealName}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g · F:{Math.round(m.fat)}g · C:{Math.round(m.carbs)}g</div></div><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div>)}</div>}
         <div style={{display:"flex",gap:12,marginBottom:10}}>{[{l:"Proteins",v:d.totals.protein,t:DT.protein,c:"#3b82f6"},{l:"Fats",v:d.totals.fat,t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:d.totals.carbs,t:DT.carbs,c:"#22c55e"},{l:"Fibers",v:d.totals.fiber||0,t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l} style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(m.key==="vitaminD"&&hasSun)?sunVitD(d.date)+(d.totals[m.key]||0)+(baseline[m.key]||0):Math.max((d.totals[m.key]||0),(baseline[m.key]||0));const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(baseline[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
       </div>}
     </div>})}
   </div>
