@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Meal Analyzer</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;-webkit-font-smoothing:antialiased}
     .app{max-width:640px;margin:0 auto;padding:20px 16px 40px}
-    h1{font-size:24px;font-weight:600}
-    .sub{font-size:14px;color:#666;margin-top:4px}
+    h1{font-size:24px;font-weight:600} .sub{font-size:14px;color:#666;margin-top:4px}
     .nav{display:flex;gap:6px;margin:20px 0 24px;background:#f5f5f5;padding:4px;border-radius:10px}
     .nav button{flex:1;padding:12px 0;border:none;cursor:pointer;font-size:14px;font-weight:500;border-radius:8px;transition:all .2s;background:transparent;color:#888}
     .nav button.on{background:#1a1a1a;color:#fff}
@@ -29,14 +27,11 @@
     .btn-d{background:#dc2626;color:#fff;border:none}
     .btn-do{background:#fff;color:#dc2626;border:1px solid #fca5a5}
     .btn-x{background:none;border:none;color:#ccc;cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
-    .btn-x:hover{color:#999}
     .upl{background:#fafafa;border-radius:12px;border:2px dashed #d4d4d4;padding:32px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center}
-    .upl:hover{border-color:#999}
     .prev{width:100%;max-height:280px;object-fit:cover;border-radius:12px;border:1px solid #e5e5e5}
     .card{background:#fafafa;border-radius:8px;padding:12px;text-align:center}
     .card-l{font-size:11px;color:#888;font-weight:500;margin-bottom:4px}
-    .card-v{font-size:20px;font-weight:600}
-    .card-s{font-size:11px;color:#bbb;margin-top:2px}
+    .card-v{font-size:20px;font-weight:600} .card-s{font-size:11px;color:#bbb;margin-top:2px}
     .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:28px}
     .gm{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:32px}
     .pbg{width:100%;height:8px;background:#e5e5e5;border-radius:4px;overflow:hidden}
@@ -44,22 +39,20 @@
     .stit{font-size:16px;font-weight:600;margin:0 0 16px}
     .slab{font-size:13px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px}
     .mi{background:#fafafa;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #f0f0f0}
-    .mn{font-weight:500;font-size:14px}
-    .mm{font-size:12px;color:#888;margin-top:4px}
+    .mn{font-weight:500;font-size:14px} .mm{font-size:12px;color:#888;margin-top:4px}
     .err{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#dc2626}
     .info{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:24px;font-size:13px;color:#92400e;line-height:1.5}
     .defb{background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px;margin-bottom:24px}
     .deft{font-size:14px;font-weight:600;color:#dc2626;margin-bottom:8px}
     .deftags{display:flex;flex-wrap:wrap;gap:8px}
-    .deftag{font-size:13px;background:#fff;border:1px solid #fca5a5;padding:4px 12px;borderRadius:6px;color:#dc2626;font-weight:500}
+    .deftag{font-size:13px;background:#fff;border:1px solid #fca5a5;padding:4px 12px;border-radius:6px;color:#dc2626;font-weight:500}
     .dc{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:16px;margin-bottom:12px}
     .pill{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500;display:inline-block;margin:2px}
-    .fr{display:flex;gap:8px}
-    .fc{display:flex;flex-direction:column;gap:8px}
-    .field{margin-bottom:16px}
-    .field label{display:block;font-size:13px;font-weight:500;color:#666;margin-bottom:6px}
+    .fr{display:flex;gap:8px} .fc{display:flex;flex-direction:column;gap:8px}
+    .field{margin-bottom:16px} .field label{display:block;font-size:13px;font-weight:500;color:#666;margin-bottom:6px}
     @keyframes spin{to{transform:rotate(360deg)}}
     .sp{display:inline-block;width:20px;height:20px;border:2px solid #e5e5e5;border-top-color:#1a1a1a;border-radius:50%;animation:spin .6s linear infinite}
+    .collapse-btn{background:none;border:none;cursor:pointer;font-size:13px;color:#888;font-weight:500;padding:0;display:flex;align-items:center;gap:4px}
   </style>
 </head>
 <body>
@@ -74,6 +67,14 @@ const API_URL="https://lingering-river-d82a.frperessutti.workers.dev";
 const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
 const MK=["calories","protein","fat","carbs","fiber"];
 const AK=[...MK,...MICROS.map(m=>m.key)];
+const GOALS=[
+  {id:"maintain",label:"Maintain weight",calAdj:0,protMult:2},
+  {id:"lose_weight",label:"Lose weight",calAdj:-500,protMult:2.2},
+  {id:"lose_fat",label:"Lose fat / body recomp",calAdj:-300,protMult:2.4},
+  {id:"gain_weight",label:"Gain weight",calAdj:400,protMult:2},
+  {id:"gain_muscle",label:"Build muscle",calAdj:300,protMult:2.5},
+];
+const TRACKABLE=[{key:"none",label:"None"},...MK.map(k=>({key:k,label:k.charAt(0).toUpperCase()+k.slice(1)})),...MICROS.map(m=>({key:m.key,label:m.name}))];
 
 function calcTDEE(p){
   let bmr;
@@ -85,12 +86,14 @@ function calcTDEE(p){
 }
 
 function calcTargets(p){
-  const cal=calcTDEE(p);
-  const prot=Math.round(p.weight*2);
+  const goal=GOALS.find(g=>g.id===p.goal)||GOALS[0];
+  const baseCal=calcTDEE(p);
+  const cal=baseCal+goal.calAdj;
+  const prot=Math.round(p.weight*goal.protMult);
   const fat=Math.round(cal*0.25/9);
-  const carbs=Math.round((cal-prot*4-fat*9)/4);
+  const carbs=Math.max(Math.round((cal-prot*4-fat*9)/4),50);
   const fiber=p.gender==="male"?35:28;
-  const t={calories:cal,protein:prot,fat:fat,carbs:carbs,fiber:fiber};
+  const t={calories:cal,protein:prot,fat,carbs,fiber};
   MICROS.forEach(m=>{t[m.key]=m.target});
   if(p.gender==="female")t.iron=18;
   return t;
@@ -107,7 +110,7 @@ Portion references:
 - Unspecified portions: estimate GENEROUSLY for a ${profile.weight}kg active ${profile.gender}:
   pasta=120-150g dry, rice=150g dry, meat/fish=200-250g, potatoes=250-300g, salad=200g+${portionNote}
 
-Supplements: When product says "X mg daily dose, Y capsules for Z days" → per capsule = X/(Y/Z). Trust user-stated amounts.
+Supplements: When product says "X mg daily dose, Y capsules for Z days" -> per capsule = X/(Y/Z). Trust user-stated amounts.
 
 Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/mg/potassium/calcium in mg, vitaminD in IU, B6 in mg, B12/folate in mcg.
 
@@ -122,8 +125,6 @@ function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
 function userKey(fn,ln){return(fn.trim()+"-"+ln.trim()).toLowerCase().replace(/\s+/g,"-")}
-
-// Cloud sync
 async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);return await r.json()}catch{return null}}
 async function cloudPut(key,data){try{await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data})})}catch{}}
 
@@ -131,7 +132,7 @@ async function doAnalyze(text,img,prompt){
   const c=[];
   if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
   const hasUrl=text&&/https?:\/\//.test(text);
-  const urlNote=hasUrl?"\n\nIMPORTANT: The user provided a URL. Use the web_search tool to look up the product page and extract the EXACT nutritional values from the label. Do NOT guess — use the real values from the product page.":"";
+  const urlNote=hasUrl?"\n\nIMPORTANT: Use web_search to look up the product URL and extract EXACT nutritional values.":"";
   c.push({type:"text",text:text?`${prompt}${urlNote}\n\nMeal: ${text}`:prompt});
   const body={model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:c}]};
   if(hasUrl)body.tools=[{type:"web_search_20250305",name:"web_search"}];
@@ -154,20 +155,41 @@ function MC({name,value,target,unit}){
   </div>
 }
 
-/* ── LOGIN SCREEN ── */
+/* ── TRACKING CHART ── */
+function TrackingChart({history,baseline,sunlight,trackKey,DT}){
+  const days=last10().reverse();
+  const info=TRACKABLE.find(t=>t.key===trackKey);
+  const target=DT[trackKey]||0;
+  const unit=MICROS.find(m=>m.key===trackKey)?.unit||(trackKey==="calories"?"kcal":"g");
+  const values=days.map(d=>{const s=history[d]?sum(history[d]):null;const base=baseline[trackKey]||0;const logged=s?s[trackKey]||0:0;const sun=(trackKey==="vitaminD"&&sunlight[d])?sunVitD(d):0;return{date:d,val:s?logged+base+sun:null}});
+  const vals=values.filter(v=>v.val!==null).map(v=>v.val);
+  if(vals.length<2)return null;
+  const maxV=Math.max(...vals,target)*1.1;
+  const W=580,H=200,PX=50,PY=20;
+  const points=values.map((v,i)=>{if(v.val===null)return null;const x=PX+i*((W-PX*2)/(days.length-1));const y=PY+(H-PY*2)*(1-v.val/maxV);return{x,y,val:v.val,date:v.date}}).filter(Boolean);
+  const line=points.map((p,i)=>`${i===0?"M":"L"}${p.x},${p.y}`).join(" ");
+  const targetY=PY+(H-PY*2)*(1-target/maxV);
+  return<div style={{marginBottom:28}}>
+    <h3 className="stit">{info?.label||trackKey} — 10-day tracking</h3>
+    <svg viewBox={`0 0 ${W} ${H+30}`} style={{width:"100%",background:"#fafafa",borderRadius:12,border:"1px solid #e5e5e5"}}>
+      <line x1={PX} y1={targetY} x2={W-PX} y2={targetY} stroke="#22c55e" strokeWidth="1" strokeDasharray="6,4"/>
+      <text x={W-PX+4} y={targetY+4} fontSize="10" fill="#22c55e">target</text>
+      <path d={line} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinejoin="round"/>
+      {points.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r="4" fill="#3b82f6"/><text x={p.x} y={p.y-10} textAnchor="middle" fontSize="10" fill="#1a1a1a" fontWeight="600">{Math.round(p.val)}</text></g>)}
+      {days.map((d,i)=>{const x=PX+i*((W-PX*2)/(days.length-1));return<text key={d} x={x} y={H+16} textAnchor="middle" fontSize="9" fill="#999">{d.slice(5)}</text>})}
+    </svg>
+    <div style={{fontSize:12,color:"#888",marginTop:8,textAlign:"center"}}>Target: {target} {unit}/day</div>
+  </div>
+}
+
+/* ── LOGIN ── */
 function LoginScreen({onLogin,onCreate}){
-  const[fn,setFn]=useState(""),[ln,setLn]=useState(""),[loading,setLoading]=useState(false),[err,setErr]=useState(null);
+  const[fn,setFn]=useState(""),[ln,setLn]=useState(""),[loading,setLoading]=useState(false);
   const handleLogin=async()=>{
-    if(!fn.trim()||!ln.trim())return;
-    setLoading(true);setErr(null);
-    const key=userKey(fn,ln);
-    const data=await cloudGet(key);
-    if(data){
-      lss("nt-user-key",key);lss("nt-profile",data.profile);lss("nt-meals",data.meals||{});lss("nt-templates",data.templates||[]);lss("nt-history",data.history||{});lss("nt-sunlight",data.sunlight||{});
-      onLogin(key,data);
-    }else{
-      onCreate(fn.trim(),ln.trim(),key);
-    }
+    if(!fn.trim()||!ln.trim())return;setLoading(true);
+    const key=userKey(fn,ln);const data=await cloudGet(key);
+    if(data){lss("nt-user-key",key);lss("nt-profile",data.profile);lss("nt-meals",data.meals||{});lss("nt-templates",data.templates||[]);lss("nt-history",data.history||{});lss("nt-sunlight",data.sunlight||{});onLogin(key,data)}
+    else{onCreate(fn.trim(),ln.trim(),key)}
     setLoading(false);
   };
   return<div>
@@ -177,9 +199,8 @@ function LoginScreen({onLogin,onCreate}){
       <div className="field" style={{flex:1,marginBottom:0}}><label>First name</label><input type="text" value={fn} onChange={e=>setFn(e.target.value)} placeholder="Francesco"/></div>
       <div className="field" style={{flex:1,marginBottom:0}}><label>Last name</label><input type="text" value={ln} onChange={e=>setLn(e.target.value)} placeholder="Rossi"/></div>
     </div>
-    {err&&<div className="err">{err}</div>}
     <button className="btn" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()}>{loading?"Loading…":"Continue"}</button>
-    <p style={{fontSize:12,color:"#999",marginTop:12,textAlign:"center"}}>Your data is synced to the cloud — log in from any device</p>
+    <p style={{fontSize:12,color:"#999",marginTop:12,textAlign:"center"}}>Your data syncs to the cloud — log in from any device</p>
   </div>
 }
 
@@ -190,10 +211,12 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   const[weight,setWeight]=useState(initial?.weight||75);
   const[gender,setGender]=useState(initial?.gender||"male");
   const[hours,setHours]=useState(initial?.trainingHours||1);
-  const p={age:+age,height:+height,weight:+weight,gender,trainingHours:+hours};
-  const tdee=calcTDEE(p);const targets=calcTargets(p);
+  const[goal,setGoal]=useState(initial?.goal||"maintain");
+  const[track,setTrack]=useState(initial?.trackNutrient||"none");
+  const p={age:+age,height:+height,weight:+weight,gender,trainingHours:+hours,goal};
+  const targets=calcTargets(p);const goalInfo=GOALS.find(g=>g.id===goal);
   return<div>
-    <h2 style={{fontSize:20,fontWeight:600,marginBottom:4}}>{initial?"Edit profile":"Welcome, "+firstName+"!"}</h2>
+    <h2 style={{fontSize:20,fontWeight:600,marginBottom:4}}>{initial?"Edit profile":"Welcome"+(firstName?", "+firstName:"")+"!"}</h2>
     {!initial&&<p className="sub" style={{marginBottom:20}}>Set up your profile to calculate your daily targets</p>}
     <div className="fr" style={{gap:12}}>
       <div className="field" style={{flex:1}}><label>Age</label><input type="number" value={age} onChange={e=>setAge(e.target.value)}/></div>
@@ -204,29 +227,44 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       <div className="field" style={{flex:1}}><label>Gender</label><select value={gender} onChange={e=>setGender(e.target.value)}><option value="male">Male</option><option value="female">Female</option></select></div>
       <div className="field" style={{flex:1}}><label>Training (h/day)</label><input type="number" step="0.5" min="0" max="5" value={hours} onChange={e=>setHours(e.target.value)}/></div>
     </div>
+    <div className="field"><label>Goal</label><select value={goal} onChange={e=>setGoal(e.target.value)}>{GOALS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
+      <p style={{fontSize:12,color:"#888",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance · {goalInfo?.protMult}g protein/kg</p>
+    </div>
+    <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
     <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,padding:16,marginBottom:20}}>
       <div style={{fontSize:14,fontWeight:600,color:"#16a34a",marginBottom:8}}>Calculated daily targets</div>
-      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{tdee} kcal</strong> · Protein: <strong>{targets.protein}g</strong> · Fat: <strong>{targets.fat}g</strong> · Carbs: <strong>{targets.carbs}g</strong> · Fiber: <strong>{targets.fiber}g</strong></div>
+      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{targets.calories} kcal</strong> · Protein: <strong>{targets.protein}g</strong> · Fat: <strong>{targets.fat}g</strong> · Carbs: <strong>{targets.carbs}g</strong> · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
-    <button className="btn" onClick={()=>onSave({...p,multiplier:initial?.multiplier||1,lastCalibration:initial?.lastCalibration||today()})}>{initial?"Save changes":"Create profile"}</button>
+    <button className="btn" onClick={()=>onSave({...p,trackNutrient:track,multiplier:initial?.multiplier||1,lastCalibration:initial?.lastCalibration||today()})}>{initial?"Save changes":"Create profile"}</button>
   </div>
 }
 
 /* ── TODAY ── */
-function TodayPage({meals,setMeals,sun,toggleSun,history,sunlight,templates,profile,DT,prompt}){
+function TodayPage({meals,setMeals,sun,toggleSun,history,sunlight,templates,profile,DT,prompt,onEditGoal}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false);
-  const tot=sum(meals);
+  const[mealsOpen,setMealsOpen]=useState(false);
+  const baseline=sum(templates);
+  const loggedTot=sum(meals);
+  const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
+  if(sun)tot.vitaminD+=sunVitD(today());
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
   const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
   const ml=m=>`${Math.round(m.calories)} cal · P:${Math.round(m.protein)}g · F:${Math.round(m.fat)}g · C:${Math.round(m.carbs)}g · Fi:${Math.round(m.fiber||0)}g`;
   return<div>
     <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Text":"📷 Photo"}</button>)}</div>
     {mode==="photo"&&<div style={{marginBottom:24}}>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null)}}>Cancel</button></div></div>}</div>}
-    {mode==="text"&&<div style={{marginBottom:24}}><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder="e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g&#10;Include a product URL for exact supplement values"/><button className="btn" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button><p style={{fontSize:12,color:"#999",marginTop:6}}>Ctrl+Enter to submit</p></div>}
+    {mode==="text"&&<div style={{marginBottom:24}}><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button><p style={{fontSize:12,color:"#999",marginTop:6}}>Ctrl+Enter to submit</p></div>}
     {err&&<div className="err">{err}</div>}
     {ld&&<div style={{textAlign:"center",padding:20,fontSize:14,color:"#666"}}>Analyzing…</div>}
-    <div style={{marginBottom:28}}><h3 className="slab">Today's meals</h3>{meals.length===0?<div style={{textAlign:"center",padding:20,color:"#bbb",fontSize:14}}>No meals logged yet</div>:<div className="fc">{meals.map((m,i)=><div key={i} className="mi"><div style={{flex:1}}><div className="mn">{m.mealName}</div><div className="mm">{ml(m)}</div></div><button className="btn-x" onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button></div>)}</div>}</div>
+
+    <div style={{marginBottom:28}}>
+      <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?12:0}}>
+        {mealsOpen?"▾":"▸"} TODAY'S MEALS ({meals.length})
+      </button>
+      {mealsOpen&&(meals.length===0?<div style={{textAlign:"center",padding:16,color:"#bbb",fontSize:14}}>No meals logged yet</div>:<div className="fc">{meals.map((m,i)=><div key={i} className="mi"><div style={{flex:1}}><div className="mn">{m.mealName}</div><div className="mm">{ml(m)}</div></div><button className="btn-x" onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button></div>)}</div>)}
+    </div>
+
     <div className="g5">{[{l:"Calories",v:tot.calories,t:DT.calories,u:""},{l:"Protein",v:tot.protein,t:DT.protein,u:"g"},{l:"Fat",v:tot.fat,t:DT.fat,u:"g"},{l:"Carbs",v:tot.carbs,t:DT.carbs,u:"g"},{l:"Fiber",v:tot.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l">{m.l}</div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u}</div></div>)}</div>
     <h3 className="stit">Macros breakdown</h3>
     <div className="fc" style={{marginBottom:32,gap:14}}>{[{l:"Protein",v:tot.protein,t:DT.protein,c:"#3b82f6"},{l:"Fat",v:tot.fat,t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:tot.carbs,t:DT.carbs,c:"#22c55e"},{l:"Fiber",v:tot.fiber||0,t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:500}}>{m.l}</span><span style={{fontSize:13,color:"#888"}}>{Math.round(m.v)}g / {m.t}g ({Math.round((m.v/m.t)*100)}%)</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
@@ -236,37 +274,49 @@ function TodayPage({meals,setMeals,sun,toggleSun,history,sunlight,templates,prof
       <span style={{fontSize:14,fontWeight:500}}>☀️ Sun exposure today</span>
       {sun&&<span style={{fontSize:12,color:"#ca8a04",marginLeft:"auto"}}>Vit D → {new Date().getMonth()>=10||new Date().getMonth()<=1?"50%":"100%"}</span>}
     </div>
-    <div className="gm">{MICROS.map(m=>{const v=sun&&m.key==="vitaminD"?sunVitD(today())+(tot[m.key]||0):(tot[m.key]||0);return<MC key={m.key} name={m.name} value={v} target={DT[m.key]} unit={m.unit}/>})}</div>
+    <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit}/>)}</div>
+
     <div style={{textAlign:"center",display:"flex",justifyContent:"center",gap:8,marginBottom:8}}>{!cfm?<button className="btn btn-o btn-s" onClick={()=>setCfm(true)}>Reset today</button>:<><span style={{fontSize:13,color:"#dc2626",alignSelf:"center"}}>Reset all?</span><button className="btn btn-d btn-s" onClick={()=>{setMeals([]);setCfm(false)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCfm(false)}>Cancel</button></>}</div>
+
+    {/* LIFESTYLE SUGGESTIONS */}
     {(()=>{
       const days=last10();const wd=days.filter(d=>history[d]);if(wd.length<2)return null;
-      const baseline=sum(templates);const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length});
-      const combined={};AK.forEach(k=>{combined[k]=avg[k]+(baseline[k]||0)});
+      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
       const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
-      const defs=allN.filter(n=>Math.round((combined[n.k]/n.t)*100)<70);
-      if(defs.length===0)return<div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies</div>;
-      const defText=defs.map(d=>`${d.l}: ${Math.round(combined[d.k])}/${d.t}${d.u} (${Math.round((combined[d.k]/d.t)*100)}%)`).join(", ");
-      const getSug=async()=>{setSugLd(true);setSugIdx(0);try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`Suggest 3 meals for these deficiencies. User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day.\nDeficiencies: ${defText}\nRespond ONLY with JSON array:\n[{"meal":"meal with portions","mainBenefits":"deficiencies addressed"},...]\nPractical, tasty, Italian-friendly.`}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);const raw=d.content[0].text;const match=raw.match(/\[[\s\S]*\]/);if(!match)throw new Error("No suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null)}finally{setSugLd(false)}};
+      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
+      const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
+      if(defs.length===0&&excesses.length===0)return<div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
+      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
+      const getSug=async()=>{setSugLd(true);setSugIdx(0);try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine. User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day, goal: ${profile.goal}.
+${defs.length>0?`\nDeficiencies: ${defText}`:""}
+${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
+Respond ONLY with JSON array:
+[{"tip":"simple habit description","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);const raw=d.content[0].text;const match=raw.match(/\[[\s\S]*\]/);if(!match)throw new Error("err");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null)}finally{setSugLd(false)}};
       return<div style={{marginTop:28}}>
-        <h3 className="stit">Suggested meals for your deficiencies</h3>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((combined[d.k]/d.t)*100)}%</span>)}</div>
-        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get meal suggestions</button>}
-        {sugLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Finding meals…</div>}
+        <h3 className="stit">Lifestyle suggestions</h3>
+        {defs.length>0&&<><p style={{fontSize:13,color:"#666",marginBottom:8}}>Deficiencies:</p><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div></>}
+        {excesses.length>0&&<><p style={{fontSize:13,color:"#666",marginBottom:8}}>Excesses:</p><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"#fffbeb",border:"1px solid #fde68a",padding:"3px 10px",borderRadius:6,color:"#ca8a04",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div></>}
+        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestions</button>}
+        {sugLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Thinking…</div>}
         {suggestions&&<div>
           <div style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:12,padding:20}}>
-            <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Suggestion {sugIdx+1}/{suggestions.length}</div>
-            <div style={{fontSize:16,fontWeight:600,marginBottom:8,lineHeight:1.4}}>{suggestions[sugIdx].meal}</div>
-            <div style={{fontSize:13,color:"#16a34a",fontWeight:500}}>Helps with: {suggestions[sugIdx].mainBenefits}</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Tip {sugIdx+1}/{suggestions.length}</div>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:8,lineHeight:1.4}}>{suggestions[sugIdx].tip}</div>
+            <div style={{fontSize:13,color:"#16a34a",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
           </div>
           <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:16,marginTop:12}}>
             <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:36,height:36,borderRadius:"50%",border:"1px solid #e5e5e5",background:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
             <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===sugIdx?"#1a1a1a":"#e5e5e5"}}/>)}</div>
             <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:36,height:36,borderRadius:"50%",border:"1px solid #e5e5e5",background:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>→</button>
           </div>
-          <button className="btn btn-o" style={{marginTop:12,width:"100%"}} onClick={getSug}>Refresh suggestions</button>
+          <button className="btn btn-o" style={{marginTop:12,width:"100%"}} onClick={getSug}>Refresh</button>
         </div>}
       </div>;
     })()}
+
+    <div style={{marginTop:32,textAlign:"center"}}>
+      <button className="btn btn-o" style={{width:"auto",padding:"10px 24px"}} onClick={onEditGoal}>🎯 Change goal: {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain"}</button>
+    </div>
   </div>
 }
 
@@ -278,13 +328,13 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
   const ml=t=>`${Math.round(t.calories)} cal · P:${Math.round(t.protein)}g · F:${Math.round(t.fat)}g · C:${Math.round(t.carbs)}g · Fi:${Math.round(t.fiber||0)}g`;
   const baseline=sum(templates);
   return<div>
-    <div className="info"><strong>Saved meals</strong> — supplements, breakfast staples, daily snacks.</div>
+    <div className="info"><strong>Saved meals</strong> — supplements, breakfast staples, daily snacks. These are added to every day's totals.</div>
     {templates.length>0&&<div style={{marginBottom:28}}>
       <h3 className="stit">Daily baseline from saved meals</h3>
       <div className="g5" style={{marginBottom:16}}>{[{l:"Calories",v:baseline.calories,t:DT.calories,u:""},{l:"Protein",v:baseline.protein,t:DT.protein,u:"g"},{l:"Fat",v:baseline.fat,t:DT.fat,u:"g"},{l:"Carbs",v:baseline.carbs,t:DT.carbs,u:"g"},{l:"Fiber",v:baseline.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l">{m.l}</div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u} ({Math.round((m.v/m.t)*100)}%)</div></div>)}</div>
       <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={baseline[m.key]||0} target={DT[m.key]} unit={m.unit}/>)}</div>
     </div>}
-    <div style={{marginBottom:24}}><h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Add a recurring meal</h3><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAdd()}} placeholder="e.g., Greek yogurt 200g with honey 15g, walnuts 20g&#10;For supplements, include the product URL for exact values"/><button className="btn" onClick={doAdd} disabled={ld||!txt.trim()}>{ld&&ei===null?"Analyzing…":"Save meal"}</button></div>
+    <div style={{marginBottom:24}}><h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Add a recurring meal</h3><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAdd()}} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements, include the product URL for exact values"}/><button className="btn" onClick={doAdd} disabled={ld||!txt.trim()}>{ld&&ei===null?"Analyzing…":"Save meal"}</button></div>
     {err&&<div className="err">{err}</div>}
     <h3 className="slab">Your saved meals ({templates.length})</h3>
     {templates.length===0?<div style={{textAlign:"center",padding:32,color:"#bbb",fontSize:14,background:"#fafafa",borderRadius:12}}>No saved meals yet.</div>:
@@ -299,19 +349,21 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,templates,DT,prompt}){
+function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,templates,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
-  const days=last10();
+  const days=last10();const baseline=sum(templates);
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
-  const wd=dd.filter(d=>d.totals);const baseline=sum(templates);
-  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length:0});
-  const combined={};allN.forEach(n=>{combined[n.key]=avg[n.key]+(baseline[n.key]||0)});
-  const def=allN.filter(n=>Math.round((combined[n.key]/n.target)*100)<70&&wd.length>=2);
+  const wd=dd.filter(d=>d.totals);
+  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
+  const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
   return<div>
-    {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((combined[n.key]/n.target)*100)}% avg</span>)}</div></div>}
+    {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
+
+    {profile.trackNutrient&&profile.trackNutrient!=="none"&&<TrackingChart history={history} baseline={baseline} sunlight={sunlight} trackKey={profile.trackNutrient} DT={DT}/>}
+
     {wd.length>=2&&<div style={{marginBottom:24}}><h3 className="stit">{wd.length}-day averages</h3><div className="gm">{allN.map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div></div>}
     <h3 className="slab">Daily breakdown</h3>
     {dd.map(d=>{const hasSun=!!sunlight[d.date];return<div key={d.date} className="dc">
@@ -330,7 +382,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,templates,DT,prompt
       {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
       {d.totals&&<div>
         <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""}</button>
-        {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=><div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{fontSize:13,fontWeight:500}}>{m.mealName}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g · F:{Math.round(m.fat)}g · C:{Math.round(m.carbs)}g</div></div><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div>)}</div>}
+        {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=><div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{fontSize:13,fontWeight:500}}>{m.mealName}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g</div></div><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div>)}</div>}
         <div style={{display:"flex",gap:12,marginBottom:10}}>{[{l:"Proteins",v:(d.totals.protein||0)+(baseline.protein||0),t:DT.protein,c:"#3b82f6"},{l:"Fats",v:(d.totals.fat||0)+(baseline.fat||0),t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:(d.totals.carbs||0)+(baseline.carbs||0),t:DT.carbs,c:"#22c55e"},{l:"Fibers",v:(d.totals.fiber||0)+(baseline.fiber||0),t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l} style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(baseline[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
       </div>}
@@ -344,10 +396,10 @@ function App(){
   const[profile,setProfile]=useState(()=>ls("nt-profile",null));
   const[page,setPage]=useState("today");
   const[editProfile,setEditProfile]=useState(false);
+  const[editGoal,setEditGoal]=useState(false);
   const[newFirstName,setNewFirstName]=useState("");
   const[newLastName,setNewLastName]=useState("");
   const[newKey,setNewKey]=useState("");
-
   const[meals,setMeals_]=useState(()=>{const d=ls("nt-meals",{});return d.date===today()?(d.meals||[]):[]});
   const[templates,setTemplates_]=useState(()=>ls("nt-templates",[]));
   const[history,setHistory_]=useState(()=>ls("nt-history",{}));
@@ -357,71 +409,47 @@ function App(){
   const DT=profile?calcTargets(profile):{calories:2500,protein:120,fat:70,carbs:300,fiber:30,iron:8,zinc:11,magnesium:400,potassium:3500,vitaminD:2000,vitaminB6:1.5,vitaminB12:2.4,folate:400,calcium:1000,omega3:1.5};
   const prompt=profile?buildPrompt(profile):"";
 
-  // Sync to cloud periodically
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback(()=>{
-    if(!userKey_)return;
-    cloudPut(userKey_,{profile,meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{})});
-  },[userKey_,profile]);
-
+  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{})})},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
-  const setMeals=(fn)=>{setMeals_(prev=>{const nm=typeof fn==="function"?fn(prev):fn;return nm})};
-  const setTemplates=(fn)=>{setTemplates_(prev=>{const nm=typeof fn==="function"?fn(prev):fn;return nm})};
-
-  // Save to localStorage + schedule cloud sync
   const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last10();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
   const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
-
   useEffect(()=>{lss("nt-templates",templates);scheduleSync()},[templates]);
   useEffect(()=>{if(profile){lss("nt-profile",profile);scheduleSync()}},[profile]);
-
   const toggleSun=(date)=>{setSunlight_(p=>{const u={...p,[date]:!p[date]};lss("nt-sunlight",u);scheduleSync();return u})};
   const addToday=m=>update([...meals,{...m}]);
   const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory_(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);scheduleSync();return u})}};
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
 
-  // Check calibration
-  useEffect(()=>{
-    if(profile&&profile.lastCalibration){
-      const diff=Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24));
-      if(diff>=10)setShowCalib(true);
-    }
-  },[profile]);
+  useEffect(()=>{if(profile?.lastCalibration){const diff=Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24));if(diff>=10)setShowCalib(true)}},[profile]);
 
   const handleCalibration=(result)=>{
-    if(!profile)return;
-    let mult=profile.multiplier||1;let msg="";
-    if(result==="same"){
-      const days=last10();const wd=days.filter(d=>history[d]);
-      if(wd.length>=2){const avgCal=wd.reduce((s,d)=>s+sum(history[d]).calories,0)/wd.length;
-        if(avgCal<DT.calories*0.85){mult=Math.min(mult*1.15,2.0);msg=`Portions increased by 15% (${mult.toFixed(2)}x). You're eating more than the app estimated.`}
-        else msg="Tracking looks accurate!"}
-    }else if(result==="lost"){msg="Deficit is real. Consider eating more if unintended."}
+    if(!profile)return;let mult=profile.multiplier||1;let msg="";
+    if(result==="same"){const days=last10();const wd=days.filter(d=>history[d]);if(wd.length>=2){const avgCal=wd.reduce((s,d)=>s+sum(history[d]).calories,0)/wd.length;if(avgCal<DT.calories*0.85){mult=Math.min(mult*1.15,2.0);msg=`Portions increased by 15% (${mult.toFixed(2)}x).`}else msg="Tracking looks accurate!"}}
+    else if(result==="lost")msg="Deficit is real. Consider eating more if unintended.";
     else if(result==="gained"){mult=Math.max(mult*0.9,0.7);msg=`Portions decreased by 10% (${mult.toFixed(2)}x).`}
-    setProfile({...profile,multiplier:mult,lastCalibration:today()});setShowCalib(false);
-    if(msg)alert(msg);
+    setProfile({...profile,multiplier:mult,lastCalibration:today()});setShowCalib(false);if(msg)alert(msg);
   };
 
-  // Login screen
   if(!userKey_||!profile){
     if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{}})}}/>;
     return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{})}} onCreate={(fn,ln,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}}/>;
   }
 
-  if(editProfile)return<div><button className="btn btn-o btn-s" onClick={()=>setEditProfile(false)} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false)}} initial={profile}/></div>;
+  if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
 
-  const nc=p=>page===p?"on":"";
+  const nc=p=>page===p?"on":"";const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
       <h1>Meal Analyzer</h1>
       <div className="fr" style={{gap:4}}>
-        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",color:"#888"}} title="Switch user">🚪</button>
+        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",color:"#888"}} title="Log out">🚪</button>
         <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",color:"#888"}} title="Edit profile">✏️</button>
       </div>
     </div>
-    <p className="sub" style={{marginBottom:4}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day</p>
-    <p style={{fontSize:12,color:"#16a34a",marginBottom:20}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · Portions: ${profile.multiplier.toFixed(2)}x`:""}</p>
+    <p className="sub" style={{marginBottom:4}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel}</p>
+    <p style={{fontSize:12,color:"#16a34a",marginBottom:20}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
 
     {showCalib&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:12,padding:20,marginBottom:24}}>
       <div style={{fontSize:16,fontWeight:600,color:"#1d4ed8",marginBottom:8}}>10-day calibration check</div>
@@ -439,9 +467,9 @@ function App(){
       <button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button>
       <button className={nc("history")} onClick={()=>setPage("history")}>History</button>
     </div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} history={history} sunlight={sunlight} templates={templates} profile={profile} DT={DT} prompt={prompt}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} history={history} sunlight={sunlight} templates={templates} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} toggleSun={toggleSun} templates={templates} DT={DT} prompt={prompt}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} toggleSun={toggleSun} templates={templates} DT={DT} prompt={prompt} profile={profile}/>}
   </div>
 }
 
