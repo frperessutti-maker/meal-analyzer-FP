@@ -128,26 +128,27 @@ function userKey(fn,ln){return(fn.trim()+"-"+ln.trim()).toLowerCase().replace(/\
 async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);return await r.json()}catch{return null}}
 async function cloudPut(key,data){try{await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data})})}catch{}}
 
+function cleanUrl(text){
+  return text.replace(/https?:\/\/www\.amazon\.[a-z.]+\/[^\s]*?(\/dp\/[A-Z0-9]+)[^\s]*/g,"https://www.amazon.it$1");
+}
+
 async function doAnalyze(text,img,prompt){
   const c=[];
   if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
-  const hasUrl=text&&/https?:\/\//.test(text);
-  const urlNote=hasUrl?"\n\nIMPORTANT: Use web_search to look up the product and extract EXACT nutritional values from its label. After searching, respond with the JSON.":"";
-  c.push({type:"text",text:text?`${prompt}${urlNote}\n\nMeal: ${text}`:prompt});
-  const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}]};
+  const cleanText=text?cleanUrl(text):text;
+  const hasUrl=cleanText&&/https?:\/\//.test(cleanText);
+  const urlNote=hasUrl?"\n\nIMPORTANT: Use web_search to look up this product and extract EXACT nutritional values from its label/description. Search for the product name from the URL. After searching, respond with the JSON.":"";
+  c.push({type:"text",text:cleanText?`${prompt}${urlNote}\n\nMeal: ${cleanText}`:prompt});
+  const body={model:"claude-sonnet-4-6",max_tokens:4000,messages:[{role:"user",content:c}]};
   if(hasUrl)body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
-  // Handle both regular and web search responses - collect all text blocks
   const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
   const match=allText.match(/\{[^{}]*"mealName"[^{}]*\}/);
-  if(!match){
-    // Try broader match
-    const broad=allText.match(/\{[\s\S]*\}/);
-    if(!broad)throw new Error("No JSON found. Try adding a description before the URL, e.g.: '1 tablet Vitamin C supplement https://...'");
-    return JSON.parse(broad[0]);
-  }
-  return JSON.parse(match[0]);
+  if(match)return JSON.parse(match[0]);
+  const broad=allText.match(/\{[\s\S]*\}/);
+  if(broad)return JSON.parse(broad[0]);
+  throw new Error("No JSON found. Try: '1 capsule ProductName https://short-url'");
 }
 
 function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
