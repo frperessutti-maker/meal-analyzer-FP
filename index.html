@@ -64,7 +64,7 @@
 const{useState,useEffect,useRef,useCallback}=React;
 const API_URL="https://lingering-river-d82a.frperessutti.workers.dev";
 
-const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
+const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"Vit C",key:"vitaminC",unit:"mg",target:90},{name:"Vit A",key:"vitaminA",unit:"mcg",target:900},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Iodine",key:"iodine",unit:"mcg",target:150},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
 const MK=["calories","protein","fat","carbs","fiber"];
 const AK=[...MK,...MICROS.map(m=>m.key)];
 const GOALS=[
@@ -95,7 +95,7 @@ function calcTargets(p){
   const fiber=p.gender==="male"?35:28;
   const t={calories:cal,protein:prot,fat,carbs,fiber};
   MICROS.forEach(m=>{t[m.key]=m.target});
-  if(p.gender==="female")t.iron=18;
+  if(p.gender==="female"){t.iron=18;t.vitaminA=700;t.vitaminC=75}
   return t;
 }
 
@@ -112,10 +112,10 @@ Portion references:
 
 Supplements: When product says "X mg daily dose, Y capsules for Z days" -> per capsule = X/(Y/Z). Trust user-stated amounts.
 
-Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/mg/potassium/calcium in mg, vitaminD in IU, B6 in mg, B12/folate in mcg.
+Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/magnesium/potassium/calcium in mg, vitaminC in mg, vitaminA in mcg RAE, vitaminD in IU, B6 in mg, B12/folate/iodine in mcg.
 
 Respond ONLY with JSON:
-{"mealName":"description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"omega3":0}`;
+{"mealName":"description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0}`;
 }
 
 function today(){return new Date().toISOString().slice(0,10)}
