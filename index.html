@@ -120,7 +120,7 @@ Respond ONLY with JSON:
 
 function today(){return new Date().toISOString().slice(0,10)}
 function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
-function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>t[k]+=(m[k]||0)));return t}
+function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>{const v=Number(m[k]);t[k]+=isNaN(v)?0:v}));return t}
 function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m<=1)?1000:2000}
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
