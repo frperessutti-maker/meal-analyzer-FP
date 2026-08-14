@@ -421,6 +421,24 @@ function App(){
   const[history,setHistory_]=useState(()=>ls("nt-history",{}));
   const[sunlight,setSunlight_]=useState(()=>ls("nt-sunlight",{}));
   const[showCalib,setShowCalib]=useState(false);
+  const[syncing,setSyncing]=useState(false);
+
+  // Fetch from cloud on load if user is already logged in
+  useEffect(()=>{
+    if(!userKey_)return;
+    setSyncing(true);
+    cloudGet(userKey_).then(data=>{
+      if(data&&data.profile){
+        setProfile(data.profile);lss("nt-profile",data.profile);
+        const m=data.meals||{};const todayMeals=m.date===today()?(m.meals||[]):[];
+        setMeals_(todayMeals);lss("nt-meals",m);
+        setTemplates_(data.templates||[]);lss("nt-templates",data.templates||[]);
+        setHistory_(data.history||{});lss("nt-history",data.history||{});
+        setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
+      }
+      setSyncing(false);
+    }).catch(()=>setSyncing(false));
+  },[]);
 
   const DT=profile?calcTargets(profile):{calories:2500,protein:120,fat:70,carbs:300,fiber:30,iron:8,zinc:11,magnesium:400,potassium:3500,vitaminD:2000,vitaminB6:1.5,vitaminB12:2.4,folate:400,calcium:1000,omega3:1.5};
   const prompt=profile?buildPrompt(profile):"";
@@ -466,6 +484,8 @@ function App(){
     </div>
     <p className="sub" style={{marginBottom:4}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel}</p>
     <p style={{fontSize:12,color:"#16a34a",marginBottom:20}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
+
+    {syncing&&<div style={{textAlign:"center",padding:12,marginBottom:16,fontSize:13,color:"#888"}}>☁️ Syncing data…</div>}
 
     {showCalib&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:12,padding:20,marginBottom:24}}>
       <div style={{fontSize:16,fontWeight:600,color:"#1d4ed8",marginBottom:8}}>10-day calibration check</div>
