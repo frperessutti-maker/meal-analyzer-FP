@@ -124,7 +124,7 @@ function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.f
 function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m<=1)?1000:2000}
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
-function userKey(fn,ln){return(fn.trim()+"-"+ln.trim()).toLowerCase().replace(/\s+/g,"-")}
+function userKey(fn,ln,pin){return(fn.trim()+"-"+ln.trim()+"-"+(pin||"0000")).toLowerCase().replace(/\s+/g,"-")}
 async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);return await r.json()}catch{return null}}
 async function cloudPut(key,data){try{await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data})})}catch{}}
 
@@ -200,22 +200,24 @@ function TrackingChart({history,baseline,sunlight,trackKey,DT}){
 
 /* ── LOGIN ── */
 function LoginScreen({onLogin,onCreate}){
-  const[fn,setFn]=useState(""),[ln,setLn]=useState(""),[loading,setLoading]=useState(false);
+  const[fn,setFn]=useState(""),[ln,setLn]=useState(""),[pin,setPin]=useState(""),[loading,setLoading]=useState(false),[err,setErr]=useState(null);
   const handleLogin=async()=>{
-    if(!fn.trim()||!ln.trim())return;setLoading(true);
-    const key=userKey(fn,ln);const data=await cloudGet(key);
+    if(!fn.trim()||!ln.trim()||pin.length!==4)return;setLoading(true);setErr(null);
+    const key=userKey(fn,ln,pin);const data=await cloudGet(key);
     if(data){lss("nt-user-key",key);lss("nt-profile",data.profile);lss("nt-meals",data.meals||{});lss("nt-templates",data.templates||[]);lss("nt-history",data.history||{});lss("nt-sunlight",data.sunlight||{});onLogin(key,data)}
-    else{onCreate(fn.trim(),ln.trim(),key)}
+    else{onCreate(fn.trim(),ln.trim(),pin,key)}
     setLoading(false);
   };
   return<div>
     <h1 style={{marginBottom:8}}>Meal Analyzer</h1>
-    <p className="sub" style={{marginBottom:32}}>Enter your name to log in or create a new profile</p>
+    <p className="sub" style={{marginBottom:32}}>Enter your name and PIN to log in or create a new profile</p>
     <div className="fr" style={{gap:12,marginBottom:16}}>
       <div className="field" style={{flex:1,marginBottom:0}}><label>First name</label><input type="text" value={fn} onChange={e=>setFn(e.target.value)} placeholder="Francesco"/></div>
       <div className="field" style={{flex:1,marginBottom:0}}><label>Last name</label><input type="text" value={ln} onChange={e=>setLn(e.target.value)} placeholder="Rossi"/></div>
     </div>
-    <button className="btn" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()}>{loading?"Loading…":"Continue"}</button>
+    <div className="field"><label>4-digit PIN</label><input type="text" inputMode="numeric" maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="0000" style={{letterSpacing:8,textAlign:"center",fontSize:20,fontWeight:600}}/><p style={{fontSize:12,color:"#888",marginTop:4}}>Choose any 4 numbers — this identifies your account</p></div>
+    {err&&<div className="err">{err}</div>}
+    <button className="btn" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()||pin.length!==4}>{loading?"Loading…":"Continue"}</button>
     <p style={{fontSize:12,color:"#999",marginTop:12,textAlign:"center"}}>Your data syncs to the cloud — log in from any device</p>
   </div>
 }
@@ -427,7 +429,16 @@ function App(){
   useEffect(()=>{
     if(!userKey_)return;
     setSyncing(true);
-    cloudGet(userKey_).then(data=>{
+    // Try current key first, then try migrating old key (without PIN) to new format
+    const tryKey=async(key)=>{
+      const data=await cloudGet(key);
+      if(data&&data.profile)return data;
+      // Migration: if key has PIN format but no data, try old format without PIN
+      const oldKey=key.replace(/-\d{4}$/,"");
+      if(oldKey!==key){const old=await cloudGet(oldKey);if(old&&old.profile){await cloudPut(key,old);return old}}
+      return null;
+    };
+    tryKey(userKey_).then(data=>{
       if(data&&data.profile){
         setProfile(data.profile);lss("nt-profile",data.profile);
         const m=data.meals||{};const todayMeals=m.date===today()?(m.meals||[]):[];
@@ -468,7 +479,7 @@ function App(){
 
   if(!userKey_||!profile){
     if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{}})}}/>;
-    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{})}} onCreate={(fn,ln,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}}/>;
+    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{})}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}}/>;
   }
 
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
