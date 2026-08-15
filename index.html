@@ -222,6 +222,9 @@ function LoginScreen({onLogin,onCreate}){
   </div>
 }
 
+const DIETS=[{id:"omnivore",label:"Omnivore"},{id:"vegetarian",label:"Vegetarian"},{id:"vegan",label:"Vegan"},{id:"pescatarian",label:"Pescatarian"},{id:"keto",label:"Keto"},{id:"paleo",label:"Paleo"}];
+const INTOLERANCES=[{id:"lactose",label:"Lactose"},{id:"gluten",label:"Gluten"},{id:"nuts",label:"Nuts"},{id:"eggs",label:"Eggs"},{id:"shellfish",label:"Shellfish"},{id:"soy",label:"Soy"},{id:"fish",label:"Fish"},{id:"fodmap",label:"FODMAPs"}];
+
 /* ── PROFILE SETUP ── */
 function ProfileSetup({onSave,initial,firstName,lastName}){
   const[age,setAge]=useState(initial?.age||30);
@@ -231,6 +234,9 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   const[hours,setHours]=useState(initial?.trainingHours||1);
   const[goal,setGoal]=useState(initial?.goal||"maintain");
   const[track,setTrack]=useState(initial?.trackNutrient||"none");
+  const[diet,setDiet]=useState(initial?.diet||"omnivore");
+  const[intol,setIntol]=useState(initial?.intolerances||[]);
+  const toggleIntol=(id)=>setIntol(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const p={age:+age,height:+height,weight:+weight,gender,trainingHours:+hours,goal};
   const targets=calcTargets(p);const goalInfo=GOALS.find(g=>g.id===goal);
   return<div>
@@ -248,12 +254,17 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
     <div className="field"><label>Goal</label><select value={goal} onChange={e=>setGoal(e.target.value)}>{GOALS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
       <p style={{fontSize:12,color:"#888",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance · {goalInfo?.protMult}g protein/kg</p>
     </div>
+    <div className="field"><label>Diet</label><select value={diet} onChange={e=>setDiet(e.target.value)}>{DIETS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></div>
+    <div className="field"><label>Intolerances / allergies</label>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>{INTOLERANCES.map(i=><button key={i.id} onClick={()=>toggleIntol(i.id)} style={{padding:"6px 14px",borderRadius:20,border:`1px solid ${intol.includes(i.id)?"#dc2626":"#e5e5e5"}`,background:intol.includes(i.id)?"#fef2f2":"#fff",color:intol.includes(i.id)?"#dc2626":"#666",fontSize:13,fontWeight:500,cursor:"pointer"}}>{intol.includes(i.id)?"✕ ":""}{i.label}</button>)}</div>
+      {intol.length===0&&<p style={{fontSize:12,color:"#888",marginTop:6}}>Tap to select any that apply</p>}
+    </div>
     <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
     <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,padding:16,marginBottom:20}}>
       <div style={{fontSize:14,fontWeight:600,color:"#16a34a",marginBottom:8}}>Calculated daily targets</div>
       <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{targets.calories} kcal</strong> · Protein: <strong>{targets.protein}g</strong> · Fat: <strong>{targets.fat}g</strong> · Carbs: <strong>{targets.carbs}g</strong> · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
-    <button className="btn" onClick={()=>onSave({...p,trackNutrient:track,multiplier:initial?.multiplier||1,lastCalibration:initial?.lastCalibration||today()})}>{initial?"Save changes":"Create profile"}</button>
+    <button className="btn" onClick={()=>onSave({...p,diet,intolerances:intol,trackNutrient:track,multiplier:initial?.multiplier||1,lastCalibration:initial?.lastCalibration||today()})}>{initial?"Save changes":"Create profile"}</button>
   </div>
 }
 
@@ -306,10 +317,14 @@ function TodayPage({meals,setMeals,sun,toggleSun,history,sunlight,templates,prof
       if(defs.length===0&&excesses.length===0)return<div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
       const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
       const[sugErr,setSugErr]=useState(null);
-      const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine. User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day, goal: ${profile.goal||"maintain"}.
+const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
+
+User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
+Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
 ${defs.length>0?`\nDeficiencies: ${defText}`:""}
 ${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
-Respond ONLY with a JSON array (no markdown, no backticks):
+
+IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
 [{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}]})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
       return<div style={{marginTop:28}}>
         <h3 className="stit">Lifestyle suggestions</h3>
@@ -495,7 +510,7 @@ function App(){
         <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",color:"#888"}} title="Edit profile">✏️</button>
       </div>
     </div>
-    <p className="sub" style={{marginBottom:4}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel}</p>
+    <p className="sub" style={{marginBottom:4}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel} · {DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore"}</p>
     <p style={{fontSize:12,color:"#16a34a",marginBottom:20}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
 
     {syncing&&<div style={{textAlign:"center",padding:12,marginBottom:16,fontSize:13,color:"#888"}}>☁️ Syncing data…</div>}
