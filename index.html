@@ -447,7 +447,6 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 /* ── HISTORY ── */
 function HistoryPage({history,onAdd,onDel,sunlight,giDistress,templates,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
-  const[giAnalysis,setGiAnalysis]=useState(null),[giLd,setGiLd]=useState(false),[giErr,setGiErr]=useState(null);
   const days=last10();const baseline=sum(templates);
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
@@ -456,8 +455,80 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,templates,DT,promp
   const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
+
+  // GI CORRELATION ANALYSIS
+  const giCorrelation=(()=>{
+    const daysWithData=days.filter(d=>history[d]&&history[d].length>0);
+    const giDays=daysWithData.filter(d=>giDistress[d]);
+    const okDays=daysWithData.filter(d=>!giDistress[d]);
+    if(giDays.length<1||daysWithData.length<3)return null;
+
+    // Extract food keywords from meal names
+    const extractKeywords=(meals)=>{
+      const words=new Set();
+      (meals||[]).forEach(m=>{
+        const name=(m.mealName||"").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g,"");
+        name.split(/\s+/).filter(w=>w.length>2&&!["with","and","the","for","cup","some","two","one","per","from"].includes(w)).forEach(w=>words.add(w));
+      });
+      return words;
+    };
+
+    // Count keyword frequency on GI vs OK days
+    const giKeywords={};const okKeywords={};
+    giDays.forEach(d=>{extractKeywords(history[d]).forEach(w=>{giKeywords[w]=(giKeywords[w]||0)+1})});
+    okDays.forEach(d=>{extractKeywords(history[d]).forEach(w=>{okKeywords[w]=(okKeywords[w]||0)+1})});
+
+    const baseRate=giDays.length/daysWithData.length;
+    const triggers=[];
+
+    Object.keys(giKeywords).forEach(word=>{
+      const giCount=giKeywords[word];
+      const okCount=okKeywords[word]||0;
+      const totalAppearances=giCount+okCount;
+      if(totalAppearances<2)return; // need at least 2 appearances
+      const giRate=giCount/totalAppearances; // P(GI|food)
+      const lift=giRate/baseRate;
+      // Confidence: combines lift strength with sample size
+      const sampleFactor=Math.min(totalAppearances/5,1); // peaks at 5 samples
+      const liftScore=Math.min((lift-1)/3,1); // normalized lift (1=no lift, 4+=max)
+      const confidence=Math.round(sampleFactor*liftScore*100);
+      if(lift>1.5&&confidence>15){
+        triggers.push({word,giCount,okCount,totalAppearances,giRate:Math.round(giRate*100),lift:Math.round(lift*10)/10,confidence});
+      }
+    });
+
+    triggers.sort((a,b)=>b.confidence-a.confidence);
+    return{giDays:giDays.length,okDays:okDays.length,totalDays:daysWithData.length,baseRate:Math.round(baseRate*100),triggers:triggers.slice(0,5)};
+  })();
+
   return<div>
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
+
+    {/* GI CORRELATION ALERT */}
+    {giCorrelation&&giCorrelation.triggers.length>0&&<div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:12,padding:16,marginBottom:24}}>
+      <div style={{fontSize:14,fontWeight:600,color:"#dc2626",marginBottom:4}}>🤢 GI distress pattern detected</div>
+      <p style={{fontSize:12,color:"#991b1b",marginBottom:12}}>{giCorrelation.giDays} of {giCorrelation.totalDays} tracked days had GI distress (baseline: {giCorrelation.baseRate}%)</p>
+      <div className="fc" style={{gap:8}}>
+        {giCorrelation.triggers.map((t,i)=><div key={i} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:8,padding:"10px 14px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+            <span style={{fontSize:14,fontWeight:600,color:"#1a1a1a",textTransform:"capitalize"}}>{t.word}</span>
+            <span style={{fontSize:12,fontWeight:600,color:t.confidence>=60?"#dc2626":t.confidence>=30?"#ca8a04":"#888"}}>{t.confidence}% confidence</span>
+          </div>
+          <div style={{fontSize:12,color:"#666"}}>
+            Present on {t.giCount}/{t.giCount+t.okCount} days → GI {t.giRate}% of the time (lift: {t.lift}x)
+          </div>
+          <div style={{marginTop:6}}>
+            <div style={{height:4,background:"#fee2e2",borderRadius:2,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${Math.min(t.confidence,100)}%`,background:t.confidence>=60?"#dc2626":t.confidence>=30?"#f59e0b":"#d4d4d4",borderRadius:2}}/>
+            </div>
+          </div>
+        </div>)}
+      </div>
+      <p style={{fontSize:11,color:"#999",marginTop:12}}>Confidence = sample size × correlation strength. More days of tracking improves accuracy.</p>
+    </div>}
+    {giCorrelation&&giCorrelation.triggers.length===0&&giCorrelation.giDays>=2&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:16,marginBottom:24}}>
+      <div style={{fontSize:14,fontWeight:500,color:"#92400e"}}>🤢 GI distress logged on {giCorrelation.giDays} days but no clear food pattern found yet. Keep tracking for more accurate correlations.</div>
+    </div>}
 
     {profile.trackNutrient&&profile.trackNutrient!=="none"&&<TrackingChart history={history} baseline={baseline} sunlight={sunlight} trackKey={profile.trackNutrient} DT={DT}/>}
 
