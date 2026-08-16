@@ -445,8 +445,9 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,giDistress,toggleGi,templates,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,sunlight,giDistress,templates,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
+  const[giAnalysis,setGiAnalysis]=useState(null),[giLd,setGiLd]=useState(false),[giErr,setGiErr]=useState(null);
   const days=last10();const baseline=sum(templates);
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
@@ -471,13 +472,9 @@ function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,giDistress,toggleGi
           {ad!==d.date&&<button className="btn btn-o btn-s" onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+</button>}
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}} onClick={()=>toggleSun(d.date)}>
-        <input type="checkbox" checked={hasSun} readOnly style={{width:16,height:16,accentColor:"#f59e0b",pointerEvents:"none"}}/>
-        <span style={{fontSize:13,color:hasSun?"#ca8a04":"#999"}}>☀️ Sun exposure{hasSun&&(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}} onClick={()=>toggleGi(d.date)}>
-        <input type="checkbox" checked={hasGi} readOnly style={{width:16,height:16,accentColor:"#dc2626",pointerEvents:"none"}}/>
-        <span style={{fontSize:13,color:hasGi?"#dc2626":"#999"}}>🤢 GI distress</span>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,flexWrap:"wrap"}}>
+        {hasSun&&<span style={{fontSize:13,color:"#ca8a04"}}>☀️ Sun exposure{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
+        {hasGi&&<span style={{fontSize:13,color:"#dc2626"}}>🤢 GI distress</span>}
       </div>
       {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
       {d.totals&&<div>
@@ -487,6 +484,73 @@ function HistoryPage({history,onAdd,onDel,sunlight,toggleSun,giDistress,toggleGi
         <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(baseline[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
       </div>}
     </div>})}
+
+    {/* GI CORRELATION ANALYSIS */}
+    {(()=>{
+      const giDays=days.filter(d=>giDistress[d]&&history[d]);
+      const okDays=days.filter(d=>!giDistress[d]&&history[d]);
+      if(giDays.length===0)return null;
+      const giMeals=giDays.flatMap(d=>(history[d]||[]).map(m=>m.mealName)).join("; ");
+      const okMeals=okDays.flatMap(d=>(history[d]||[]).map(m=>m.mealName)).join("; ");
+      const analyzeGi=async()=>{
+        setGiLd(true);setGiErr(null);
+        try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`Analyze GI distress correlation from meal data. Find patterns: which foods appear on distress days but not on normal days.
+
+DISTRESS DAYS (${giDays.length} days): ${giMeals}
+NORMAL DAYS (${okDays.length} days): ${okMeals}
+
+User profile: ${profile.diet||"omnivore"} diet${(profile.intolerances||[]).length>0?`, known intolerances: ${profile.intolerances.join(", ")}`:""}
+
+Respond ONLY with JSON (no markdown):
+{"triggers":[{"food":"suspected trigger","confidence":0.0,"reason":"brief explanation"}],"overallConfidence":0.0,"note":"brief summary"}
+
+Rules for confidence (0.0-1.0):
+- 0.0-0.3: weak/insufficient data
+- 0.3-0.6: possible pattern, needs more data
+- 0.6-0.8: likely trigger
+- 0.8-1.0: strong correlation
+Set overallConfidence based on data quality (${giDays.length} GI days, ${okDays.length} normal days — need 3+ GI days for meaningful analysis).`}]})});
+        const d=await r.json();if(d.error)throw new Error(d.error.message);
+        const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
+        const match=allText.match(/\{[\s\S]*\}/);if(!match)throw new Error("Analysis failed");
+        setGiAnalysis(JSON.parse(match[0]));
+        }catch(e){setGiErr(e.message)}finally{setGiLd(false)}
+      };
+      const confColor=c=>c>=0.8?"#dc2626":c>=0.6?"#ea580c":c>=0.3?"#ca8a04":"#888";
+      const confLabel=c=>c>=0.8?"Strong":c>=0.6?"Likely":c>=0.3?"Possible":"Weak";
+      return<div style={{marginTop:28}}>
+        <h3 className="stit">🤢 GI distress analysis</h3>
+        <p style={{fontSize:13,color:"#666",marginBottom:12}}>{giDays.length} distress day{giDays.length!==1?"s":""} vs {okDays.length} normal day{okDays.length!==1?"s":""} in the last 10 days</p>
+        {!giAnalysis&&!giLd&&<button className="btn" onClick={analyzeGi}>Analyze triggers</button>}
+        {giLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Analyzing patterns…</div>}
+        {giErr&&<div className="err">{giErr}</div>}
+        {giAnalysis&&<div>
+          <div style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:12,padding:20,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <span style={{fontSize:14,fontWeight:600}}>Analysis confidence</span>
+              <span style={{fontSize:14,fontWeight:600,color:confColor(giAnalysis.overallConfidence)}}>{Math.round(giAnalysis.overallConfidence*100)}% — {confLabel(giAnalysis.overallConfidence)}</span>
+            </div>
+            <div className="pbg" style={{marginBottom:16,height:10}}>
+              <div className="pf" style={{width:`${Math.round(giAnalysis.overallConfidence*100)}%`,background:confColor(giAnalysis.overallConfidence)}}/>
+            </div>
+            {giAnalysis.triggers&&giAnalysis.triggers.length>0&&<div>
+              <div style={{fontSize:13,fontWeight:600,color:"#666",marginBottom:10}}>Suspected triggers:</div>
+              <div className="fc" style={{gap:10}}>
+                {giAnalysis.triggers.map((t,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:"12px 14px",borderLeft:`4px solid ${confColor(t.confidence)}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:14,fontWeight:600}}>{t.food}</span>
+                    <span style={{fontSize:12,fontWeight:500,color:confColor(t.confidence)}}>{Math.round(t.confidence*100)}% {confLabel(t.confidence)}</span>
+                  </div>
+                  <p style={{fontSize:13,color:"#666",margin:0}}>{t.reason}</p>
+                </div>)}
+              </div>
+            </div>}
+            {giAnalysis.note&&<p style={{fontSize:13,color:"#888",marginTop:12,fontStyle:"italic"}}>{giAnalysis.note}</p>}
+          </div>
+          <button className="btn btn-o" style={{width:"100%"}} onClick={analyzeGi}>Re-analyze</button>
+        </div>}
+      </div>;
+    })()}
   </div>
 }
 
@@ -601,7 +665,7 @@ function App(){
     </div>
     {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} history={history} sunlight={sunlight} templates={templates} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} toggleSun={toggleSun} giDistress={giDistress} toggleGi={toggleGi} templates={templates} DT={DT} prompt={prompt} profile={profile}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} templates={templates} DT={DT} prompt={prompt} profile={profile}/>}
   </div>
 }
 
