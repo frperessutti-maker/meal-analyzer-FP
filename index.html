@@ -613,7 +613,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,temp
       days.forEach(d=>{
         const r=rpp[d];const score=typeof r==="object"?r.score:r||0;const tTime=typeof r==="object"?r.trainingTime:"";
         if(score>0&&history[d]){
-          const trainingDT=new Date(d+"T"+(tTime||"18:00")+":00");
+          const trainingDT=new Date(d+"T"+(tTime||"17:00")+":00");
           const window24=new Date(trainingDT.getTime()-24*60*60*1000);
           // Collect meals in 24h window (same day + previous day)
           const mealsInWindow=[];
