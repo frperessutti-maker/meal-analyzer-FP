@@ -319,11 +319,17 @@ function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
   if(sun)tot.vitaminD+=sunVitD(today());
+  const nowTime=()=>{const d=new Date();return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")};
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
-  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
-  const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false);
-  const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditMealLd(false)}};
+  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=nowTime();m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealTime,setEditMealTime]=useState("");
+  const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setMeals(p=>p.map((x,j)=>j===idx?{...x,time:editMealTime||x.time}:x));setEditMealIdx(null);setEditMealTxt("");setEditMealTime("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=editMealTime||orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("");setEditMealTime("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditMealLd(false)}};
+  const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x))};
   const ml=m=>`${Math.round(m.calories)} cal · P:${Math.round(m.protein)}g · F:${Math.round(m.fat)}g · C:${Math.round(m.carbs)}g · Fi:${Math.round(m.fiber||0)}g`;
+  const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
+  const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
+  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime});
+  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v});
   return<div>
     <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Text":"📷 Photo"}</button>)}</div>
     {mode==="photo"&&<div style={{marginBottom:24}}>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
@@ -335,7 +341,7 @@ function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,
       <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?12:0}}>
         {mealsOpen?"▾":"▸"} TODAY'S MEALS ({meals.length})
       </button>
-      {mealsOpen&&(meals.length===0?<div style={{textAlign:"center",padding:16,color:"#bbb",fontSize:14}}>No meals logged yet</div>:<div className="fc">{meals.map((m,i)=>editMealIdx===i?<div key={i} style={{background:"#fafafa",borderRadius:8,padding:12,border:"1px solid #e5e5e5"}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>:<div key={i} className="mi"><div style={{flex:1}}><div className="mn">{m.mealName}</div><div className="mm">{ml(m)}</div></div><div className="fr" style={{gap:2}}><button style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:14,padding:"0 4px"}} onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}}>✏️</button><button className="btn-x" onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button></div></div>)}</div>)}
+      {mealsOpen&&(meals.length===0?<div style={{textAlign:"center",padding:16,color:"#bbb",fontSize:14}}>No meals logged yet</div>:<div className="fc">{meals.map((m,i)=>editMealIdx===i?<div key={i} style={{background:"#fafafa",borderRadius:8,padding:12,border:"1px solid #e5e5e5"}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr" style={{alignItems:"center",marginBottom:8}}><label style={{fontSize:12,color:"#666"}}>Time:</label><input type="time" value={editMealTime} onChange={e=>setEditMealTime(e.target.value)} style={{padding:"6px 10px",border:"1px solid #e5e5e5",borderRadius:6,fontSize:13}}/></div><div className="fr"><button className="btn btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("");setEditMealTime("")}}>Cancel</button></div></div>:<div key={i} className="mi"><div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6}}><span className="mn">{m.mealName}</span>{m.time&&<span style={{fontSize:11,color:"#999",background:"#f5f5f5",padding:"2px 6px",borderRadius:4}}>{m.time}</span>}</div><div className="mm">{ml(m)}</div></div><div className="fr" style={{gap:2}}><button style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:14,padding:"0 4px"}} onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName);setEditMealTime(m.time||nowTime())}}>✏️</button><button className="btn-x" onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button></div></div>)}</div>)}
     </div>
 
     <div className="g5">{[{l:"Calories",k:"calories",v:tot.calories,t:DT.calories,u:""},{l:"Protein",k:"protein",v:tot.protein,t:DT.protein,u:"g"},{l:"Fat",k:"fat",v:tot.fat,t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",v:tot.carbs,t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",v:tot.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>{m.l}<InfoBtn id={m.k}/></div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u}</div></div>)}</div>
@@ -366,12 +372,17 @@ function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,
       <span style={{fontSize:14,fontWeight:500}}>🤢 GI distress today</span>
       {gi&&<span style={{fontSize:12,color:"#dc2626",marginLeft:"auto"}}>Check meals for triggers</span>}
     </div>
-    <div style={{marginBottom:16,padding:"12px 14px",background:rpp?"#f0f9ff":"#fafafa",border:`1px solid ${rpp?"#93c5fd":"#e5e5e5"}`,borderRadius:8}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:rpp?10:0}}>
-        <span style={{fontSize:14,fontWeight:500}}>💪 RPP <span style={{fontSize:11,color:"#888",fontWeight:400}}>Rate of Perceived Performance</span></span>
-        {rpp>0&&<span style={{fontSize:16,fontWeight:700,color:rpp>=8?"#16a34a":rpp>=5?"#ca8a04":"#dc2626"}}>{rpp}/10</span>}
+    <div style={{marginBottom:16,padding:"12px 14px",background:rppScore?"#f0f9ff":"#fafafa",border:`1px solid ${rppScore?"#93c5fd":"#e5e5e5"}`,borderRadius:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <span style={{fontSize:14,fontWeight:500}}>💪 RPP</span>
+        {rppScore>0&&<span style={{fontSize:16,fontWeight:700,color:rppScore>=8?"#16a34a":rppScore>=5?"#ca8a04":"#dc2626"}}>{rppScore}/10</span>}
       </div>
-      {<div style={{display:"flex",gap:4,marginTop:rpp?0:10}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRpp(n===rpp?0:n)} style={{flex:1,height:32,border:`1px solid ${n===rpp?"#3b82f6":n<=rpp?"#bfdbfe":"#e5e5e5"}`,borderRadius:6,background:n===rpp?"#3b82f6":n<=rpp?"#eff6ff":"#fff",color:n===rpp?"#fff":n<=rpp?"#3b82f6":"#999",fontSize:12,fontWeight:n===rpp?700:500,cursor:"pointer"}}>{n}</button>)}</div>}
+      <div style={{display:"flex",gap:4,marginBottom:10}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:32,border:`1px solid ${n===rppScore?"#3b82f6":n<=rppScore?"#bfdbfe":"#e5e5e5"}`,borderRadius:6,background:n===rppScore?"#3b82f6":n<=rppScore?"#eff6ff":"#fff",color:n===rppScore?"#fff":n<=rppScore?"#3b82f6":"#999",fontSize:12,fontWeight:n===rppScore?700:500,cursor:"pointer"}}>{n}</button>)}</div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <label style={{fontSize:13,color:"#666",whiteSpace:"nowrap"}}>Training time:</label>
+        <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)} style={{padding:"6px 10px",border:"1px solid #e5e5e5",borderRadius:6,fontSize:13,flex:1}}/>
+      </div>
+      <p style={{fontSize:11,color:"#999",marginTop:6}}>Meals in the 24h before training will be correlated with this score</p>
     </div>
     <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
 
@@ -457,7 +468,7 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
-  const handleEditHist=async(date,idx)=>{if(!editHistTxt.trim())return;setEditHistLd(true);try{const m=await doAnalyze(editHistTxt,null,prompt);onDel(date,idx);onAdd(date,m);setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditHistLd(false)}};
+  const handleEditHist=async(date,idx)=>{if(!editHistTxt.trim())return;const orig=(history[date]||[])[idx];const textChanged=editHistTxt.trim()!==orig?.mealName;if(!textChanged){setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("");return}setEditHistLd(true);try{const m=await doAnalyze(editHistTxt,null,prompt);m.time=orig?.time||"";m.date=date;onDel(date,idx);onAdd(date,m);setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditHistLd(false)}};
   const days=last10();const baseline=sum(templates);
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
@@ -541,6 +552,64 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,DT,p
       <div style={{fontSize:14,fontWeight:500,color:"#92400e"}}>🤢 GI distress logged on {giCorrelation.giDays} days but no clear food pattern found yet. Keep tracking for more accurate correlations.</div>
     </div>}
 
+    {/* RPP-MEAL CORRELATION (24h window) */}
+    {(()=>{
+      const sessions=[];
+      days.forEach(d=>{
+        const r=rpp[d];const score=typeof r==="object"?r.score:r||0;const tTime=typeof r==="object"?r.trainingTime:"";
+        if(score>0&&history[d]){
+          const trainingDT=new Date(d+"T"+(tTime||"18:00")+":00");
+          const window24=new Date(trainingDT.getTime()-24*60*60*1000);
+          // Collect meals in 24h window (same day + previous day)
+          const mealsInWindow=[];
+          [d,...days.filter(x=>x!==d)].forEach(md=>{
+            (history[md]||[]).forEach(m=>{
+              const mealDT=new Date(md+"T"+(m.time||"12:00")+":00");
+              if(mealDT>=window24&&mealDT<=trainingDT)mealsInWindow.push(m);
+            });
+          });
+          sessions.push({date:d,score,meals:mealsInWindow});
+        }
+      });
+      if(sessions.length<3)return null;
+      // Extract keywords and correlate with RPP
+      const keywordScores={};
+      sessions.forEach(s=>{
+        const words=new Set();
+        s.meals.forEach(m=>{(m.mealName||"").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g,"").split(/\s+/).filter(w=>w.length>2&&!["with","and","the","for","cup","some","two","one","per","from"].includes(w)).forEach(w=>words.add(w))});
+        words.forEach(w=>{if(!keywordScores[w])keywordScores[w]={scores:[],total:0};keywordScores[w].scores.push(s.score);keywordScores[w].total++});
+      });
+      const avgRpp=sessions.reduce((s,x)=>s+x.score,0)/sessions.length;
+      const correlations=[];
+      Object.entries(keywordScores).forEach(([word,data])=>{
+        if(data.total<2)return;
+        const wordAvg=data.scores.reduce((s,x)=>s+x,0)/data.scores.length;
+        const diff=wordAvg-avgRpp;
+        const sampleFactor=Math.min(data.total/4,1);
+        const confidence=Math.round(Math.abs(diff)/3*sampleFactor*100);
+        if(Math.abs(diff)>0.5&&confidence>10)correlations.push({word,avg:Math.round(wordAvg*10)/10,diff:Math.round(diff*10)/10,count:data.total,confidence:Math.min(confidence,99),positive:diff>0});
+      });
+      correlations.sort((a,b)=>b.confidence-a.confidence);
+      const boosters=correlations.filter(c=>c.positive).slice(0,3);
+      const drainers=correlations.filter(c=>!c.positive).slice(0,3);
+      if(boosters.length===0&&drainers.length===0)return null;
+      return<div style={{background:"#f0f9ff",border:"1px solid #93c5fd",borderRadius:12,padding:16,marginBottom:24}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#1d4ed8",marginBottom:4}}>💪 Nutrition → Performance correlation</div>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>{sessions.length} training sessions analyzed · Avg RPP: {Math.round(avgRpp*10)/10}/10</p>
+        {boosters.length>0&&<><p style={{fontSize:12,fontWeight:600,color:"#16a34a",marginBottom:6}}>Performance boosters:</p>
+        <div className="fc" style={{gap:6,marginBottom:12}}>{boosters.map((c,i)=><div key={i} style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><span style={{fontWeight:600,textTransform:"capitalize"}}>{c.word}</span><span style={{fontSize:12,color:"#888",marginLeft:6}}>RPP avg: {c.avg}/10 (+{c.diff})</span></div>
+          <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>{c.confidence}%</span>
+        </div>)}</div></>}
+        {drainers.length>0&&<><p style={{fontSize:12,fontWeight:600,color:"#dc2626",marginBottom:6}}>Performance drainers:</p>
+        <div className="fc" style={{gap:6}}>{drainers.map((c,i)=><div key={i} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><span style={{fontWeight:600,textTransform:"capitalize"}}>{c.word}</span><span style={{fontSize:12,color:"#888",marginLeft:6}}>RPP avg: {c.avg}/10 ({c.diff})</span></div>
+          <span style={{fontSize:12,fontWeight:600,color:"#dc2626"}}>{c.confidence}%</span>
+        </div>)}</div></>}
+        <p style={{fontSize:11,color:"#999",marginTop:10}}>Confidence = deviation from average × sample size. More sessions = better accuracy.</p>
+      </div>;
+    })()}
+
     {profile.trackNutrient&&profile.trackNutrient!=="none"&&<TrackingChart history={history} baseline={baseline} sunlight={sunlight} trackKey={profile.trackNutrient} DT={DT}/>}
 
     {wd.length>=2&&<div style={{marginBottom:24}}><h3 className="stit">{wd.length}-day averages</h3><div className="gm">{allN.map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div></div>}
@@ -557,12 +626,12 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,DT,p
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,flexWrap:"wrap"}}>
         {hasSun&&<span style={{fontSize:13,color:"#ca8a04"}}>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
         {hasGi&&<span style={{fontSize:13,color:"#dc2626"}}>🤢 GI distress</span>}
-        {dayRpp>0&&<span style={{fontSize:13,color:dayRpp>=8?"#16a34a":dayRpp>=5?"#ca8a04":"#dc2626",fontWeight:600}}>💪 RPP: {dayRpp}/10</span>}
+        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";return s>0?<span style={{fontSize:13,color:s>=8?"#16a34a":s>=5?"#ca8a04":"#dc2626",fontWeight:600}}>💪 RPP: {s}/10{t?" @ "+t:""}</span>:null})()}
       </div>
       {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
       {d.totals&&<div>
         <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""}</button>
-        {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} style={{background:"#fafafa",borderRadius:6,padding:10,border:"1px solid #e5e5e5"}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{fontSize:13,fontWeight:500}}>{m.mealName}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g</div></div><div className="fr" style={{gap:2}}><button style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:12,padding:"0 4px"}} onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}}>✏️</button><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div></div>)}</div>}
+        {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} style={{background:"#fafafa",borderRadius:6,padding:10,border:"1px solid #e5e5e5"}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:500}}>{m.mealName}</span>{m.time&&<span style={{fontSize:10,color:"#999",background:"#f0f0f0",padding:"1px 5px",borderRadius:3}}>{m.time}</span>}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g</div></div><div className="fr" style={{gap:2}}><button style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:12,padding:"0 4px"}} onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}}>✏️</button><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div></div>)}</div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px",marginBottom:10}}>{[{l:"Proteins",v:(d.totals.protein||0)+(baseline.protein||0),t:DT.protein,c:"#3b82f6"},{l:"Fats",v:(d.totals.fat||0)+(baseline.fat||0),t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:(d.totals.carbs||0)+(baseline.carbs||0),t:DT.carbs,c:"#22c55e"},{l:"Fibers",v:(d.totals.fiber||0)+(baseline.fiber||0),t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(baseline[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
       </div>}
