@@ -66,8 +66,9 @@ const API_URL="https://lingering-river-d82a.frperessutti.workers.dev";
 
 const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"Vit C",key:"vitaminC",unit:"mg",target:90},{name:"Vit A",key:"vitaminA",unit:"mcg",target:900},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Iodine",key:"iodine",unit:"mcg",target:150},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
 const MK=["calories","protein","fat","carbs","fiber"];
-const AMINOS=[{name:"Leucine",key:"leucine",target:8,unit:"g"},{name:"Glutamine",key:"glutamine",target:8,unit:"g"},{name:"Beta-Alanine",key:"betaAlanine",target:1.5,unit:"g"}];
-const AK=[...MK,...MICROS.map(m=>m.key),...AMINOS.map(a=>a.key)];
+const AMINOS_BASE=[{name:"Leucine",key:"leucine",pctOfProtein:0.065,unit:"g"},{name:"Glutamine",key:"glutamine",pctOfProtein:0.06,unit:"g"},{name:"Beta-Alanine",key:"betaAlanine",fixedTarget:1.2,unit:"g"}];
+function getAminos(protTarget){return AMINOS_BASE.map(a=>({...a,target:a.fixedTarget||Math.round(protTarget*a.pctOfProtein*10)/10}))}
+const AK=[...MK,...MICROS.map(m=>m.key),...AMINOS_BASE.map(a=>a.key)];
 const GOALS=[
   {id:"maintain",label:"Maintain weight",calAdj:0,protMult:2},
   {id:"lose_weight",label:"Lose weight",calAdj:-500,protMult:2.2},
@@ -75,7 +76,7 @@ const GOALS=[
   {id:"gain_weight",label:"Gain weight",calAdj:400,protMult:2},
   {id:"gain_muscle",label:"Build muscle",calAdj:300,protMult:2.5},
 ];
-const TRACKABLE=[{key:"none",label:"None"},...MK.map(k=>({key:k,label:k.charAt(0).toUpperCase()+k.slice(1)})),...MICROS.map(m=>({key:m.key,label:m.name})),...AMINOS.map(a=>({key:a.key,label:a.name}))];
+const TRACKABLE=[{key:"none",label:"None"},...MK.map(k=>({key:k,label:k.charAt(0).toUpperCase()+k.slice(1)})),...MICROS.map(m=>({key:m.key,label:m.name})),...AMINOS_BASE.map(a=>({key:a.key,label:a.name}))];
 
 const NUTRIENT_INFO={
   calories:"Energy fuel for training and daily function. Too low impairs recovery, focus, and hormonal balance. Too high leads to fat gain.",
@@ -152,6 +153,22 @@ Portion references:
   pasta=120-150g dry, rice=150g dry, meat/fish=200-250g, potatoes=250-300g, salad=200g+${portionNote}
 
 Supplements: When product says "X mg daily dose, Y capsules for Z days" -> per capsule = X/(Y/Z). Trust user-stated amounts.
+
+Amino acid estimation references (per 100g of food):
+- Chicken breast: leucine 2.2g, glutamine 1.2g, betaAlanine 0.1g
+- Beef: leucine 1.8g, glutamine 1.1g, betaAlanine 0.13g
+- Salmon/tuna: leucine 1.8g, glutamine 1.0g, betaAlanine 0.05-0.37g (varies by species, red meat tuna is higher)
+- Skipjack tuna red meat: betaAlanine 0.37g per 100g
+- Black skipjack tuna red meat: betaAlanine 0.10g per 100g
+- Yellowfin tuna red meat: betaAlanine 0.04g per 100g
+- Rainbow trout: betaAlanine 0.02g per 100g
+- Turkey: leucine 2.0g, glutamine 1.1g, betaAlanine 0.07-0.23g (leg higher)
+- Eggs: leucine 1.1g, glutamine 0.6g, betaAlanine 0.01g
+- Whey protein 30g scoop: leucine 3.5g, glutamine 1.5g, betaAlanine 0g
+- Greek yogurt 100g: leucine 0.7g, glutamine 0.4g, betaAlanine 0g
+- Legumes/beans 100g cooked: leucine 0.6g, glutamine 0.5g, betaAlanine 0g
+- Pork: leucine 1.7g, glutamine 1.0g, betaAlanine 0.15g
+Always estimate amino acids based on these references. Do NOT return 0 for leucine/glutamine if the meal contains protein.
 
 Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/magnesium/potassium/calcium in mg, vitaminC in mg, vitaminA in mcg RAE, vitaminD in IU, B6 in mg, B12/folate/iodine in mcg. Amino acids (leucine/glutamine/betaAlanine) in grams.
 
@@ -353,7 +370,7 @@ function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,
         {m.l==="Protein"&&<div style={{marginTop:8}}>
           <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)} style={{fontSize:12,color:"#3b82f6"}}>{aminoOpen?"▾":"▸"} Key amino acids</button>
           {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"#f8faff",border:"1px solid #dbeafe",borderRadius:8}}>
-            {AMINOS.map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
+            {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,color:"#333",display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"#888"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
               <PB value={v} max={a.target} color={pct>=90?"#3b82f6":pct>=70?"#f59e0b":"#dc2626"}/>
             </div>})}
