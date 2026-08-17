@@ -384,7 +384,7 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
         {/* Saved meals at bottom */}
         {templates.map((t,i)=>{const isSkipped=skipped.includes(i);return<div key={"t"+i} style={{background:isSkipped?"#fff":"#fffff0",borderRadius:8,padding:"8px 14px",border:`1px solid ${isSkipped?"#e5e5e5":"#fde68a"}`,opacity:isSkipped?0.5:1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}><span style={{fontSize:12}}>⭐</span><span style={{fontSize:13,fontWeight:500,color:isSkipped?"#999":"#1a1a1a",textDecoration:isSkipped?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.mealName}</span></div>
-          <button onClick={()=>toggleSkip(i)} style={{fontSize:12,color:isSkipped?"#16a34a":"#dc2626",background:"none",border:`1px solid ${isSkipped?"#86efac":"#fca5a5"}`,padding:"3px 10px",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap",marginLeft:8}}>{isSkipped?"+ restore":"× skip"}</button>
+          <button onClick={()=>toggleSkip(i)} style={{fontSize:12,color:isSkipped?"#16a34a":"#dc2626",background:"none",border:`1px solid ${isSkipped?"#86efac":"#fca5a5"}`,padding:"3px 10px",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap",marginLeft:8}}>{isSkipped?"+ restore today":"× skip today"}</button>
         </div>})}
       </div>}
     </div>
