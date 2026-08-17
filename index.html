@@ -332,12 +332,13 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── TODAY ── */
-function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,sunlight,templates,profile,DT,prompt,onEditGoal}){
+function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false);
   const[mealsOpen,setMealsOpen]=useState(false);
   const[aminoOpen,setAminoOpen]=useState(false);
-  const baseline=sum(templates);
+  const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
+  const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
   if(sun)tot.vitaminD+=sunVitD(today());
@@ -362,20 +363,33 @@ function TodayPage({meals,setMeals,sun,toggleSun,gi,toggleGi,rpp,setRpp,history,
 
     <div style={{marginBottom:28}}>
       <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?12:0}}>
-        {mealsOpen?"▾":"▸"} TODAY'S MEALS ({meals.length})
+        {mealsOpen?"▾":"▸"} TODAY'S MEALS ({meals.length + activeTemplates.length})
       </button>
-      {mealsOpen&&(meals.length===0?<div style={{textAlign:"center",padding:16,color:"#bbb",fontSize:14}}>No meals logged yet</div>:<div className="fc">{meals.map((m,i)=>editMealIdx===i?<div key={i} style={{background:"#fafafa",borderRadius:8,padding:12,border:"1px solid #e5e5e5"}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>:<div key={i} style={{background:"#fafafa",borderRadius:8,padding:"12px 14px",border:"1px solid #f0f0f0"}}>
-        <div className="mn">{m.mealName}</div>
-        <div className="mm">{ml(m)}</div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"1px solid #eee"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{padding:"2px 6px",border:"1px solid #93c5fd",borderRadius:4,fontSize:12,width:80}}/>:
-            <span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,color:"#999",background:"#eee",padding:"3px 8px",borderRadius:4,cursor:"pointer"}}>{m.time||"set time"}</span>}
-            <button onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{fontSize:12,color:"#888",background:"#eee",border:"none",padding:"3px 10px",borderRadius:4,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>✏️ edit</button>
+      {mealsOpen&&<div className="fc">
+        {/* Saved meals */}
+        {templates.map((t,i)=>{const isSkipped=skipped.includes(i);return<div key={"t"+i} style={{background:isSkipped?"#fff":"#fffff0",borderRadius:8,padding:"10px 14px",border:`1px solid ${isSkipped?"#e5e5e5":"#fde68a"}`,opacity:isSkipped?0.5:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:12}}>⭐</span><span className="mn" style={{color:isSkipped?"#999":"#1a1a1a"}}>{t.mealName}</span></div>
+          <div className="mm" style={{textDecoration:isSkipped?"line-through":"none"}}>{ml(t)}</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6,paddingTop:6,borderTop:"1px solid #f0f0f0"}}>
+            <span style={{fontSize:11,color:"#ca8a04"}}>Saved meal</span>
+            <button onClick={()=>toggleSkip(i)} style={{fontSize:12,color:isSkipped?"#16a34a":"#dc2626",background:"none",border:`1px solid ${isSkipped?"#86efac":"#fca5a5"}`,padding:"3px 10px",borderRadius:4,cursor:"pointer"}}>{isSkipped?"+ restore":"× skip today"}</button>
           </div>
-          <button className="btn-x" style={{color:"#ddd",fontSize:14}} onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button>
-        </div>
-      </div>)}</div>)}
+        </div>})}
+        {/* Logged meals */}
+        {meals.length===0&&templates.length===0&&<div style={{textAlign:"center",padding:16,color:"#bbb",fontSize:14}}>No meals logged yet</div>}
+        {meals.map((m,i)=>editMealIdx===i?<div key={"m"+i} style={{background:"#fafafa",borderRadius:8,padding:12,border:"1px solid #e5e5e5"}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>:<div key={"m"+i} style={{background:"#fafafa",borderRadius:8,padding:"12px 14px",border:"1px solid #f0f0f0"}}>
+          <div className="mn">{m.mealName}</div>
+          <div className="mm">{ml(m)}</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"1px solid #eee"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{padding:"2px 6px",border:"1px solid #93c5fd",borderRadius:4,fontSize:12,width:80}}/>:
+              <span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,color:"#999",background:"#eee",padding:"3px 8px",borderRadius:4,cursor:"pointer"}}>{m.time||"set time"}</span>}
+              <button onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{fontSize:12,color:"#888",background:"#eee",border:"none",padding:"3px 10px",borderRadius:4,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>✏️ edit</button>
+            </div>
+            <button className="btn-x" style={{color:"#ddd",fontSize:14}} onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button>
+          </div>
+        </div>)}
+      </div>}
     </div>
 
     <div className="g5">{[{l:"Calories",k:"calories",v:tot.calories,t:DT.calories,u:""},{l:"Protein",k:"protein",v:tot.protein,t:DT.protein,u:"g"},{l:"Fat",k:"fat",v:tot.fat,t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",v:tot.carbs,t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",v:tot.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>{m.l}<InfoBtn id={m.k}/></div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u}</div></div>)}</div>
@@ -499,13 +513,14 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,skipped,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
   const handleEditHist=async(date,idx)=>{if(!editHistTxt.trim())return;const orig=(history[date]||[])[idx];const textChanged=editHistTxt.trim()!==orig?.mealName;if(!textChanged){setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("");return}setEditHistLd(true);try{const m=await doAnalyze(editHistTxt,null,prompt);m.time=orig?.time||"";m.date=date;onDel(date,idx);onAdd(date,m);setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditHistLd(false)}};
   const days=last10();const baseline=sum(templates);
+  const dayBaseline=(d)=>{const ds=skipped[d]||[];return sum(templates.filter((_,i)=>!ds.includes(i)))};
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
-  const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0}));
+  const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0,base:dayBaseline(d)}));
   const wd=dd.filter(d=>d.totals);
   const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
   const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
@@ -652,7 +667,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,DT,p
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div><div style={{fontWeight:600,fontSize:14}}>{fmt(d.date)}</div><div style={{fontSize:12,color:"#999"}}>{d.date}</div></div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {d.totals&&<div style={{fontWeight:600,fontSize:15}}>{Math.round(d.totals.calories+(baseline.calories||0))} cal</div>}
+          {d.totals&&<div style={{fontWeight:600,fontSize:15}}>{Math.round(d.totals.calories+(d.base.calories||0))} cal</div>}
           {!d.totals&&<div style={{fontSize:13,color:"#bbb"}}>No data</div>}
           {ad!==d.date&&<button className="btn btn-o btn-s" onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+</button>}
         </div>
@@ -666,8 +681,8 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,rpp,templates,DT,p
       {d.totals&&<div>
         <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""}</button>
         {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} style={{background:"#fafafa",borderRadius:6,padding:10,border:"1px solid #e5e5e5"}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:500}}>{m.mealName}</span>{m.time&&<span style={{fontSize:10,color:"#999",background:"#f0f0f0",padding:"1px 5px",borderRadius:3}}>{m.time}</span>}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g</div></div><div className="fr" style={{gap:2}}><button style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:12,padding:"0 4px"}} onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}}>✏️</button><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div></div>)}</div>}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px",marginBottom:10}}>{[{l:"Proteins",v:(d.totals.protein||0)+(baseline.protein||0),t:DT.protein,c:"#3b82f6"},{l:"Fats",v:(d.totals.fat||0)+(baseline.fat||0),t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:(d.totals.carbs||0)+(baseline.carbs||0),t:DT.carbs,c:"#22c55e"},{l:"Fibers",v:(d.totals.fiber||0)+(baseline.fiber||0),t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(baseline[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px",marginBottom:10}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"#3b82f6"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"#22c55e"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return<span key={m.key} className="pill" style={{background:p>=90?"#f0fdf4":p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>})}</div>
       </div>}
     </div>})}
 
@@ -756,6 +771,7 @@ function App(){
   const[sunlight,setSunlight_]=useState(()=>ls("nt-sunlight",{}));
   const[giDistress,setGiDistress_]=useState(()=>ls("nt-gi",{}));
   const[rpp,setRpp_]=useState(()=>ls("nt-rpp",{}));
+  const[skipped,setSkipped_]=useState(()=>ls("nt-skipped",{}));
   const[showCalib,setShowCalib]=useState(false);
   const[syncing,setSyncing]=useState(false);
 
@@ -782,6 +798,7 @@ function App(){
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
         setGiDistress_(data.gi||{});lss("nt-gi",data.gi||{});
         setRpp_(data.rpp||{});lss("nt-rpp",data.rpp||{});
+        setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
       }
       setSyncing(false);
     }).catch(()=>setSyncing(false));
@@ -791,7 +808,7 @@ function App(){
   const prompt=profile?buildPrompt(profile):"";
 
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{})})},[userKey_]);
+  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{})})},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
   const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last10();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
@@ -801,6 +818,8 @@ function App(){
   const toggleSun=(date)=>{setSunlight_(p=>{const u={...p,[date]:!p[date]};lss("nt-sunlight",u);scheduleSync();return u})};
   const toggleGi=(date)=>{setGiDistress_(p=>{const u={...p,[date]:!p[date]};lss("nt-gi",u);scheduleSync();return u})};
   const setRpp=(date,val)=>{setRpp_(p=>{const u={...p,[date]:val};lss("nt-rpp",u);scheduleSync();return u})};
+  const toggleSkip=(date,idx)=>{setSkipped_(p=>{const daySkips=p[date]||[];const u={...p,[date]:daySkips.includes(idx)?daySkips.filter(x=>x!==idx):[...daySkips,idx]};lss("nt-skipped",u);scheduleSync();return u})};
+  const getActiveBaseline=(date)=>{const daySkips=skipped[date]||[];return sum(templates.filter((_,i)=>!daySkips.includes(i)))};
   const addToday=m=>update([...meals,{...m}]);
   const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory_(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);scheduleSync();return u})}};
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
@@ -816,8 +835,8 @@ function App(){
   };
 
   if(!userKey_||!profile){
-    if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{}})}}/>;
-    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{});setGiDistress_(data.gi||{});setRpp_(data.rpp||{})}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}}/>;
+    if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{},skipped:{}})}}/>;
+    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{});setGiDistress_(data.gi||{});setRpp_(data.rpp||{});setSkipped_(data.skipped||{})}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}}/>;
   }
 
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
@@ -852,9 +871,9 @@ function App(){
       <button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button>
       <button className={nc("history")} onClick={()=>setPage("history")}>History</button>
     </div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} history={history} sunlight={sunlight} templates={templates} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} rpp={rpp} templates={templates} DT={DT} prompt={prompt} profile={profile}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} rpp={rpp} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
   </div>
 }
 
