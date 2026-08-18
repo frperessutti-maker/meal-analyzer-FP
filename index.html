@@ -385,7 +385,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 /* ── TODAY ── */
 function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,rpp,setRpp,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
-  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false);
+  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[mealsOpen,setMealsOpen]=useState(false);
   const[aminoOpen,setAminoOpen]=useState(false);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
@@ -497,7 +497,6 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
       const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
       if(defs.length===0&&excesses.length===0)return<div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
       const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
-      const[sugErr,setSugErr]=useState(null);
 const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
 
 User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
