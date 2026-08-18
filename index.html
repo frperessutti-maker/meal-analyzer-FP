@@ -900,7 +900,7 @@ function App(){
       }
       setSyncing(false);
     }).catch(function(){setSyncing(false)});
-  },[]);
+  },[userKey_]);
 
   const DT=profile?calcTargets(profile):{calories:2500,protein:120,fat:70,carbs:300,fiber:30,iron:8,zinc:11,magnesium:400,potassium:3500,vitaminD:2000,vitaminB6:1.5,vitaminB12:2.4,folate:400,calcium:1000,omega3:1.5};
   const prompt=profile?buildPrompt(profile):"";
