@@ -868,13 +868,26 @@ function App(){
         }
         setMeals_(todayMeals);lss("nt-meals",{meals:todayMeals,date:today()});
         setTemplates_(data.templates||[]);lss("nt-templates",data.templates||[]);
-        setHistory_(hist);lss("nt-history",hist);
+        // Clean history - move misplaced meals to their correct date
+        const cleanHist={};
+        Object.entries(hist).forEach(function(entry){
+          const hDate=entry[0];const hMeals=entry[1];
+          (hMeals||[]).forEach(function(meal){
+            const correctDate=meal.date||hDate;
+            if(!cleanHist[correctDate])cleanHist[correctDate]=[];
+            cleanHist[correctDate].push(meal);
+          });
+        });
+        // Keep only last 10 days
+        const keep=last10();const trimmed={};
+        Object.keys(cleanHist).forEach(function(d){if(keep.includes(d))trimmed[d]=cleanHist[d]});
+        setHistory_(trimmed);lss("nt-history",trimmed);
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
         setGiDistress_(data.gi||{});lss("nt-gi",data.gi||{});
         setRpp_(data.rpp||{});lss("nt-rpp",data.rpp||{});
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
-        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:hist,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}})
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}})
       }
       setSyncing(false);
     }).catch(function(){setSyncing(false)});
