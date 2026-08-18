@@ -846,29 +846,23 @@ function App(){
     tryKey(userKey_).then(data=>{
       if(data&&data.profile){
         setProfile(data.profile);lss("nt-profile",data.profile);
-        // Handle meals - check date, move stale meals to history
         const m=data.meals||{};
-        const h=data.history||{};
+        const hist={...(data.history||{})};
         let todayMeals=[];
-        if(m.date===today()){
-          todayMeals=m.meals||[];
-        }else if(m.date&&m.meals&&m.meals.length>0){
-          // Move stale meals to history under their original date
-          h[m.date]=[...(h[m.date]||[]),...m.meals];
-        }
+        if(m.date===today()){todayMeals=m.meals||[]}
+        else if(m.date&&m.meals&&m.meals.length>0){hist[m.date]=[...(hist[m.date]||[]),...m.meals]}
         setMeals_(todayMeals);lss("nt-meals",{meals:todayMeals,date:today()});
         setTemplates_(data.templates||[]);lss("nt-templates",data.templates||[]);
-        setHistory_(h);lss("nt-history",h);
+        setHistory_(hist);lss("nt-history",hist);
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
         setGiDistress_(data.gi||{});lss("nt-gi",data.gi||{});
         setRpp_(data.rpp||{});lss("nt-rpp",data.rpp||{});
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
-        // Push cleaned state back to cloud immediately
-        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:h,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}});
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:hist,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}})
       }
       setSyncing(false);
-    }).catch(()=>setSyncing(false));
+    }).catch(function(){setSyncing(false)});
   },[]);
 
   const DT=profile?calcTargets(profile):{calories:2500,protein:120,fat:70,carbs:300,fiber:30,iron:8,zinc:11,magnesium:400,potassium:3500,vitaminD:2000,vitaminB6:1.5,vitaminB12:2.4,folate:400,calcium:1000,omega3:1.5};
