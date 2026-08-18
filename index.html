@@ -936,7 +936,7 @@ function App(){
   if(!userKey_||!profile){
     if(isAdmin)return<AdminPage onLogout={()=>setIsAdmin(false)}/>;
     if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{},skipped:{},hydration:{}})}}/>;
-    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);lss("nt-user-key",key)}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}} onAdmin={()=>setIsAdmin(true)}/>;
+    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);lss("nt-user-key",key);if(data&&data.profile){setProfile(data.profile);lss("nt-profile",data.profile)}}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}} onAdmin={()=>setIsAdmin(true)}/>;
   }
 
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
