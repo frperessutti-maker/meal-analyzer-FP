@@ -262,11 +262,61 @@ function TrackingChart({history,baseline,sunlight,trackKey,DT}){
   </div>
 }
 
+/* ── ADMIN PAGE ── */
+function AdminPage({onLogout}){
+  const[profiles,setProfiles]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[confirmDel,setConfirmDel]=useState(null);
+  const[msg,setMsg]=useState(null);
+  const load=async()=>{setLoading(true);try{const r=await fetch(`${API_URL}/sync/list`);const d=await r.json();setProfiles(d)}catch(e){setMsg("Failed to load: "+e.message)}finally{setLoading(false)}};
+  useEffect(()=>{load()},[]);
+  const handleDelete=async(key)=>{try{await fetch(`${API_URL}/sync`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});setConfirmDel(null);setMsg("Deleted: "+key);load()}catch(e){setMsg("Delete failed: "+e.message)}};
+  return<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
+      <div><h1>Admin Panel</h1><p className="sub">Manage all user profiles</p></div>
+      <button className="btn btn-o btn-s" onClick={onLogout}>🚪 Logout</button>
+    </div>
+    {msg&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:8,padding:12,marginBottom:16,fontSize:13,color:"#1d4ed8"}}>{msg}<button onClick={()=>setMsg(null)} style={{float:"right",background:"none",border:"none",cursor:"pointer",color:"#93c5fd"}}>×</button></div>}
+    {loading?<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading profiles…</div>:
+    <div>
+      <div style={{marginBottom:16,padding:12,background:"#f5f5f5",borderRadius:8}}>
+        <span style={{fontSize:14,fontWeight:600}}>{profiles.length} profiles</span>
+      </div>
+      <div className="fc" style={{gap:12}}>
+        {profiles.map((p,i)=>{const pr=p.profile||{};return<div key={i} style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:10,padding:16}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:4,wordBreak:"break-all"}}>{p.key}</div>
+            {pr.age?<div style={{fontSize:13,color:"#666",lineHeight:1.6}}>
+              {pr.age}y · {pr.height}cm · {pr.weight}kg · {pr.gender}<br/>
+              Training: {pr.trainingHours}h/day · Goal: {pr.goal||"maintain"} · Diet: {pr.diet||"omnivore"}<br/>
+              Multiplier: {(pr.multiplier||1).toFixed(2)}x · Calibration: {pr.lastCalibration||"—"}<br/>
+              {pr.intolerances&&pr.intolerances.length>0&&<>Intolerances: {pr.intolerances.join(", ")}<br/></>}
+              Tracking: {pr.trackNutrient||"none"}
+            </div>:<div style={{fontSize:13,color:"#bbb"}}>No profile data</div>}
+            <div style={{fontSize:12,color:"#888",marginTop:8}}>📋 {p.templates} saved meals · 📊 {p.historyDays} days tracked</div>
+          </div>
+          <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #f0f0f0",display:"flex",gap:8}}>
+            {confirmDel===p.key?<div className="fr" style={{alignItems:"center"}}>
+              <span style={{fontSize:13,color:"#dc2626"}}>Delete permanently?</span>
+              <button className="btn btn-d btn-s" onClick={()=>handleDelete(p.key)}>Yes, delete</button>
+              <button className="btn btn-o btn-s" onClick={()=>setConfirmDel(null)}>Cancel</button>
+            </div>:<button className="btn btn-do btn-s" onClick={()=>setConfirmDel(p.key)}>Delete profile</button>}
+          </div>
+        </div>})}
+      </div>
+      <button className="btn btn-o" style={{marginTop:24}} onClick={load}>🔄 Refresh</button>
+    </div>}
+  </div>
+}
+
 /* ── LOGIN ── */
-function LoginScreen({onLogin,onCreate}){
+function LoginScreen({onLogin,onCreate,onAdmin}){
   const[fn,setFn]=useState(""),[ln,setLn]=useState(""),[pin,setPin]=useState(""),[loading,setLoading]=useState(false),[err,setErr]=useState(null);
   const handleLogin=async()=>{
-    if(!fn.trim()||!ln.trim()||pin.length!==4)return;setLoading(true);setErr(null);
+    if(!fn.trim()||!ln.trim()||pin.length!==4)return;
+    // Admin check
+    if(fn.trim().toLowerCase()==="admin"&&ln.trim().toLowerCase()==="admin123"&&pin==="0000"){onAdmin();return}
+    setLoading(true);setErr(null);
     const key=userKey(fn,ln,pin);const data=await cloudGet(key);
     if(data){lss("nt-user-key",key);lss("nt-profile",data.profile);lss("nt-meals",data.meals||{});lss("nt-templates",data.templates||[]);lss("nt-history",data.history||{});lss("nt-sunlight",data.sunlight||{});onLogin(key,data)}
     else{onCreate(fn.trim(),ln.trim(),pin,key)}
@@ -765,6 +815,7 @@ function App(){
   const[page,setPage]=useState("today");
   const[editProfile,setEditProfile]=useState(false);
   const[editGoal,setEditGoal]=useState(false);
+  const[isAdmin,setIsAdmin]=useState(false);
   const[newFirstName,setNewFirstName]=useState("");
   const[newLastName,setNewLastName]=useState("");
   const[newKey,setNewKey]=useState("");
@@ -841,8 +892,9 @@ function App(){
   };
 
   if(!userKey_||!profile){
+    if(isAdmin)return<AdminPage onLogout={()=>setIsAdmin(false)}/>;
     if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{},skipped:{},hydration:{}})}}/>;
-    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{});setGiDistress_(data.gi||{});setRpp_(data.rpp||{});setSkipped_(data.skipped||{});setHydration_(data.hydration||{})}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}}/>;
+    return<LoginScreen onLogin={(key,data)=>{setUserKey(key);setProfile(data.profile);const d=data.meals||{};setMeals_(d.date===today()?(d.meals||[]):[]);setTemplates_(data.templates||[]);setHistory_(data.history||{});setSunlight_(data.sunlight||{});setGiDistress_(data.gi||{});setRpp_(data.rpp||{});setSkipped_(data.skipped||{});setHydration_(data.hydration||{})}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}} onAdmin={()=>setIsAdmin(true)}/>;
   }
 
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
