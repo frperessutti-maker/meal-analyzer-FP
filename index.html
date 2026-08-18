@@ -867,7 +867,6 @@ function App(){
         // Push cleaned state back to cloud immediately
         cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:h,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}});
       }
-      }
       setSyncing(false);
     }).catch(()=>setSyncing(false));
   },[]);
