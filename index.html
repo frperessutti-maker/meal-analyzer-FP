@@ -868,7 +868,7 @@ function App(){
         }
         setMeals_(todayMeals);lss("nt-meals",{meals:todayMeals,date:today()});
         setTemplates_(data.templates||[]);lss("nt-templates",data.templates||[]);
-        // Clean history - move misplaced meals to their correct date
+        // Clean history - move misplaced meals to their correct date and deduplicate
         const cleanHist={};
         Object.entries(hist).forEach(function(entry){
           const hDate=entry[0];const hMeals=entry[1];
@@ -877,6 +877,15 @@ function App(){
             if(!cleanHist[correctDate])cleanHist[correctDate]=[];
             cleanHist[correctDate].push(meal);
           });
+        });
+        // Deduplicate meals per day by mealName+time+calories
+        Object.keys(cleanHist).forEach(function(d){
+          const seen={};const unique=[];
+          cleanHist[d].forEach(function(meal){
+            const key=(meal.mealName||"")+"_"+(meal.time||"")+"_"+Math.round(meal.calories||0);
+            if(!seen[key]){seen[key]=true;unique.push(meal)}
+          });
+          cleanHist[d]=unique;
         });
         // Keep only last 10 days
         const keep=last10();const trimmed={};
