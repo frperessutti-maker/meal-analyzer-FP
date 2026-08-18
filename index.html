@@ -796,7 +796,7 @@ function App(){
       if(data&&data.profile){
         setProfile(data.profile);lss("nt-profile",data.profile);
         const m=data.meals||{};const todayMeals=m.date===today()?(m.meals||[]):[];
-        setMeals_(todayMeals);lss("nt-meals",m);
+        setMeals_(todayMeals);lss("nt-meals",{meals:todayMeals,date:today()});
         setTemplates_(data.templates||[]);lss("nt-templates",data.templates||[]);
         setHistory_(data.history||{});lss("nt-history",data.history||{});
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
