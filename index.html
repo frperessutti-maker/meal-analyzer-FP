@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Meal Analyzer</title><!-- v19 -->
+  <title>Meal Analyzer</title><!-- v21 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -77,6 +77,13 @@ const GOALS=[
   {id:"gain_muscle",label:"Build muscle",calAdj:300,protMult:2.5},
 ];
 const TRACKABLE=[{key:"none",label:"None"},...MK.map(k=>({key:k,label:k.charAt(0).toUpperCase()+k.slice(1)})),...MICROS.map(m=>({key:m.key,label:m.name})),...AMINOS_BASE.map(a=>({key:a.key,label:a.name}))];
+const TRAINING_TYPES=[
+  {id:"strength",label:"Strength",short:"Strength",icon:"🏋️",color:"#8b5cf6"},
+  {id:"hiit",label:"HIIT / Conditioning",short:"HIIT",icon:"⚡",color:"#f59e0b"},
+  {id:"endurance",label:"Endurance",short:"Endurance",icon:"🏃",color:"#3b82f6"},
+  {id:"skill",label:"Skill / Technical",short:"Skill",icon:"🎯",color:"#22c55e"},
+  {id:"recovery",label:"Recovery / Mobility",short:"Recovery",icon:"🧘",color:"#6b7280"},
+];
 
 const NUTRIENT_INFO={
   calories:"Energy fuel for training and daily function. Too low impairs recovery, focus, and hormonal balance. Too high leads to fat gain.",
@@ -403,8 +410,10 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
   const ml=m=>`${Math.round(m.calories)} cal · P:${Math.round(m.protein)}g · F:${Math.round(m.fat)}g · C:${Math.round(m.carbs)}g · Fi:${Math.round(m.fiber||0)}g`;
   const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
   const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
-  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime});
-  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v});
+  const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
+  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime,trainingType:rppType});
+  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
+  const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
   return<div>
     <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Text":"📷 Photo"}</button>)}</div>
     {mode==="photo"&&<div style={{marginBottom:24}}>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
@@ -473,15 +482,18 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
     </div>
     <div style={{marginBottom:16,padding:"12px 14px",background:rppScore?"#f0f9ff":"#fafafa",border:`1px solid ${rppScore?"#93c5fd":"#e5e5e5"}`,borderRadius:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <span style={{fontSize:14,fontWeight:500}}>💪 RPP</span>
+        <span style={{fontSize:14,fontWeight:500}}>💪 Rate of Perceived Performance</span>
         {rppScore>0&&<span style={{fontSize:16,fontWeight:700,color:rppScore>=8?"#16a34a":rppScore>=5?"#ca8a04":"#dc2626"}}>{rppScore}/10</span>}
       </div>
       <div style={{display:"flex",gap:4,marginBottom:10}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:32,border:`1px solid ${n===rppScore?"#3b82f6":n<=rppScore?"#bfdbfe":"#e5e5e5"}`,borderRadius:6,background:n===rppScore?"#3b82f6":n<=rppScore?"#eff6ff":"#fff",color:n===rppScore?"#fff":n<=rppScore?"#3b82f6":"#999",fontSize:12,fontWeight:n===rppScore?700:500,cursor:"pointer"}}>{n}</button>)}</div>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
         <label style={{fontSize:13,color:"#666",whiteSpace:"nowrap"}}>Training time:</label>
         <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)} style={{padding:"6px 10px",border:"1px solid #e5e5e5",borderRadius:6,fontSize:13,flex:1}}/>
       </div>
-      <p style={{fontSize:11,color:"#999",marginTop:6}}>Meals in the 24h before training will be correlated with this score</p>
+      <div>
+        <label style={{fontSize:13,color:"#666",display:"block",marginBottom:6}}>Training type:</label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRppType(tt.id)} style={{padding:"6px 12px",borderRadius:6,border:`1px solid ${tt.id===rppType?tt.color:"#e5e5e5"}`,background:tt.id===rppType?tt.color:"#fff",color:tt.id===rppType?"#fff":"#666",fontSize:12,fontWeight:tt.id===rppType?600:500,cursor:"pointer"}}>{tt.icon} {tt.short}</button>)}</div>
+      </div>
     </div>
     <h3 className="stit">Key micronutrients</h3>
     <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
@@ -564,8 +576,9 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,templates,skipped,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,templates,skipped,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
+  const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
   const handleEditHist=async(date,idx)=>{if(!editHistTxt.trim())return;const orig=(history[date]||[])[idx];const textChanged=editHistTxt.trim()!==orig?.mealName;if(!textChanged){setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("");return}setEditHistLd(true);try{const m=await doAnalyze(editHistTxt,null,prompt);m.time=orig?.time||"";m.date=date;onDel(date,idx);onAdd(date,m);setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditHistLd(false)}};
   const days=last10();const baseline=sum(templates);
@@ -652,15 +665,26 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,temp
       <div style={{fontSize:14,fontWeight:500,color:"#92400e"}}>🤢 GI distress logged on {giCorrelation.giDays} days but no clear food pattern found yet. Keep tracking for more accurate correlations.</div>
     </div>}
 
-    {/* RPP-MEAL CORRELATION (24h window) */}
+    {/* RPP-NUTRITION CORRELATION per training type */}
     {(()=>{
+      const KEY_NUTRIENTS=[
+        {key:"calories",label:"Calories",unit:"kcal"},
+        {key:"protein",label:"Protein",unit:"g"},
+        {key:"carbs",label:"Carbs",unit:"g"},
+        {key:"fat",label:"Fat",unit:"g"},
+        {key:"fiber",label:"Fiber",unit:"g"},
+        ...MICROS.map(m=>({key:m.key,label:m.name,unit:m.unit})),
+      ];
+      // Build sessions with full nutrient sums from 24h pre-training window
       const sessions=[];
       days.forEach(d=>{
-        const r=rpp[d];const score=typeof r==="object"?r.score:r||0;const tTime=typeof r==="object"?r.trainingTime:"";
+        const r=rpp[d];
+        const score=typeof r==="object"?r.score:r||0;
+        const tTime=typeof r==="object"?r.trainingTime:"";
+        const tType=typeof r==="object"?r.trainingType:"";
         if(score>0&&history[d]){
           const trainingDT=new Date(d+"T"+(tTime||"17:00")+":00");
           const window24=new Date(trainingDT.getTime()-24*60*60*1000);
-          // Collect meals in 24h window (same day + previous day)
           const mealsInWindow=[];
           [d,...days.filter(x=>x!==d)].forEach(md=>{
             (history[md]||[]).forEach(m=>{
@@ -668,45 +692,88 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,temp
               if(mealDT>=window24&&mealDT<=trainingDT)mealsInWindow.push(m);
             });
           });
-          sessions.push({date:d,score,meals:mealsInWindow});
+          const nut={};KEY_NUTRIENTS.forEach(n=>{nut[n.key]=(baseline[n.key]||0)});
+          mealsInWindow.forEach(m=>{KEY_NUTRIENTS.forEach(n=>{const v=Number(m[n.key]);nut[n.key]+=isNaN(v)?0:v})});
+          sessions.push({date:d,score,trainingType:tType||"none",nutrients:nut});
         }
       });
-      if(sessions.length<3)return null;
-      // Extract keywords and correlate with RPP
-      const keywordScores={};
-      sessions.forEach(s=>{
-        const words=new Set();
-        s.meals.forEach(m=>{(m.mealName||"").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g,"").split(/\s+/).filter(w=>w.length>2&&!["with","and","the","for","cup","some","two","one","per","from"].includes(w)).forEach(w=>words.add(w))});
-        words.forEach(w=>{if(!keywordScores[w])keywordScores[w]={scores:[],total:0};keywordScores[w].scores.push(s.score);keywordScores[w].total++});
+      if(sessions.length<2)return null;
+
+      // Group sessions by training type
+      const byType={};
+      sessions.forEach(s=>{if(!byType[s.trainingType])byType[s.trainingType]=[];byType[s.trainingType].push(s)});
+
+      // Build per-type analyses
+      const analyses=[];
+      const insufficientTypes=[];
+      Object.entries(byType).forEach(([typeId,typeSessions])=>{
+        const typeInfo=TRAINING_TYPES.find(t=>t.id===typeId)||{id:"none",label:"Untagged sessions",short:"Untagged",icon:"❓",color:"#888"};
+        if(typeSessions.length<3){insufficientTypes.push({typeInfo,count:typeSessions.length});return}
+        const sorted=[...typeSessions].sort((a,b)=>b.score-a.score);
+        const mid=Math.ceil(sorted.length/2);
+        const top=sorted.slice(0,mid);
+        const bot=sorted.slice(mid);
+        if(bot.length===0){insufficientTypes.push({typeInfo,count:typeSessions.length});return}
+        const avgScore=typeSessions.reduce((s,x)=>s+x.score,0)/typeSessions.length;
+        const insights=[];
+        KEY_NUTRIENTS.forEach(n=>{
+          const topAvg=top.reduce((s,x)=>s+x.nutrients[n.key],0)/top.length;
+          const botAvg=bot.reduce((s,x)=>s+x.nutrients[n.key],0)/bot.length;
+          if(topAvg<1&&botAvg<1)return;
+          const diff=topAvg-botAvg;
+          const pctDiff=botAvg>0.5?(diff/botAvg)*100:(topAvg>0?200:0);
+          if(Math.abs(pctDiff)<15)return;
+          const sampleFactor=Math.min(typeSessions.length/6,1);
+          const magFactor=Math.min(Math.abs(pctDiff)/60,1);
+          const confidence=Math.round(sampleFactor*magFactor*100);
+          if(confidence<10)return;
+          insights.push({key:n.key,label:n.label,unit:n.unit,topAvg:Math.round(topAvg*10)/10,botAvg:Math.round(botAvg*10)/10,pctDiff:Math.round(pctDiff),confidence:Math.min(confidence,99),positive:diff>0});
+        });
+        insights.sort((a,b)=>b.confidence-a.confidence);
+        const boosters=insights.filter(x=>x.positive).slice(0,4);
+        const drainers=insights.filter(x=>!x.positive).slice(0,4);
+        analyses.push({typeInfo,sessions:typeSessions,avgScore,boosters,drainers});
       });
-      const avgRpp=sessions.reduce((s,x)=>s+x.score,0)/sessions.length;
-      const correlations=[];
-      Object.entries(keywordScores).forEach(([word,data])=>{
-        if(data.total<2)return;
-        const wordAvg=data.scores.reduce((s,x)=>s+x,0)/data.scores.length;
-        const diff=wordAvg-avgRpp;
-        const sampleFactor=Math.min(data.total/4,1);
-        const confidence=Math.round(Math.abs(diff)/3*sampleFactor*100);
-        if(Math.abs(diff)>0.5&&confidence>10)correlations.push({word,avg:Math.round(wordAvg*10)/10,diff:Math.round(diff*10)/10,count:data.total,confidence:Math.min(confidence,99),positive:diff>0});
-      });
-      correlations.sort((a,b)=>b.confidence-a.confidence);
-      const boosters=correlations.filter(c=>c.positive).slice(0,3);
-      const drainers=correlations.filter(c=>!c.positive).slice(0,3);
-      if(boosters.length===0&&drainers.length===0)return null;
-      return<div style={{background:"#f0f9ff",border:"1px solid #93c5fd",borderRadius:12,padding:16,marginBottom:24}}>
-        <div style={{fontSize:14,fontWeight:600,color:"#1d4ed8",marginBottom:4}}>💪 Nutrition → Performance correlation</div>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:12}}>{sessions.length} training sessions analyzed · Avg RPP: {Math.round(avgRpp*10)/10}/10</p>
-        {boosters.length>0&&<><p style={{fontSize:12,fontWeight:600,color:"#16a34a",marginBottom:6}}>Performance boosters:</p>
-        <div className="fc" style={{gap:6,marginBottom:12}}>{boosters.map((c,i)=><div key={i} style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><span style={{fontWeight:600,textTransform:"capitalize"}}>{c.word}</span><span style={{fontSize:12,color:"#888",marginLeft:6}}>RPP avg: {c.avg}/10 (+{c.diff})</span></div>
-          <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>{c.confidence}%</span>
-        </div>)}</div></>}
-        {drainers.length>0&&<><p style={{fontSize:12,fontWeight:600,color:"#dc2626",marginBottom:6}}>Performance drainers:</p>
-        <div className="fc" style={{gap:6}}>{drainers.map((c,i)=><div key={i} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><span style={{fontWeight:600,textTransform:"capitalize"}}>{c.word}</span><span style={{fontSize:12,color:"#888",marginLeft:6}}>RPP avg: {c.avg}/10 ({c.diff})</span></div>
-          <span style={{fontSize:12,fontWeight:600,color:"#dc2626"}}>{c.confidence}%</span>
-        </div>)}</div></>}
-        <p style={{fontSize:11,color:"#999",marginTop:10}}>Confidence = deviation from average × sample size. More sessions = better accuracy.</p>
+
+      if(analyses.length===0&&insufficientTypes.length===0)return null;
+
+      return<div style={{marginBottom:24}}>
+        <div style={{fontSize:14,fontWeight:600,color:"#1d4ed8",marginBottom:4}}>💪 Nutrition → Performance by training type</div>
+        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>Compares what you ate in the 24h before training between your best- and worst-scoring sessions of each type.</p>
+        <div className="fc" style={{gap:12}}>
+          {analyses.map((a,i)=>(a.boosters.length===0&&a.drainers.length===0)?<div key={i} style={{background:"#fafafa",border:`1px solid ${a.typeInfo.color}44`,borderRadius:12,padding:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>{a.typeInfo.icon}</span><span style={{fontSize:14,fontWeight:600,color:a.typeInfo.color}}>{a.typeInfo.label}</span></div>
+              <span style={{fontSize:12,color:"#666"}}>{a.sessions.length} sessions · avg {Math.round(a.avgScore*10)/10}/10</span>
+            </div>
+            <p style={{fontSize:12,color:"#888",marginTop:8,fontStyle:"italic"}}>No significant nutrient differences between your best and worst sessions yet.</p>
+          </div>:<div key={i} style={{background:"#f0f9ff",border:`1px solid ${a.typeInfo.color}`,borderRadius:12,padding:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>{a.typeInfo.icon}</span><span style={{fontSize:14,fontWeight:600,color:a.typeInfo.color}}>{a.typeInfo.label}</span></div>
+              <span style={{fontSize:12,color:"#666"}}>{a.sessions.length} sessions · avg {Math.round(a.avgScore*10)/10}/10</span>
+            </div>
+            {a.boosters.length>0&&<div style={{marginBottom:a.drainers.length>0?10:0}}>
+              <div style={{fontSize:12,fontWeight:600,color:"#16a34a",marginBottom:6}}>▲ More on high-scoring days</div>
+              <div className="fc" style={{gap:5}}>{a.boosters.map((b,j)=><div key={j} style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:6,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <div style={{flex:1,minWidth:0}}><span style={{fontWeight:600,fontSize:13}}>{b.label}</span><span style={{fontSize:11,color:"#888",marginLeft:6}}>{b.topAvg}{b.unit} vs {b.botAvg}{b.unit} (+{b.pctDiff}%)</span></div>
+                <span style={{fontSize:11,fontWeight:600,color:"#16a34a",whiteSpace:"nowrap"}}>{b.confidence}%</span>
+              </div>)}</div>
+            </div>}
+            {a.drainers.length>0&&<div>
+              <div style={{fontSize:12,fontWeight:600,color:"#dc2626",marginBottom:6}}>▼ Less on high-scoring days</div>
+              <div className="fc" style={{gap:5}}>{a.drainers.map((b,j)=><div key={j} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                <div style={{flex:1,minWidth:0}}><span style={{fontWeight:600,fontSize:13}}>{b.label}</span><span style={{fontSize:11,color:"#888",marginLeft:6}}>{b.topAvg}{b.unit} vs {b.botAvg}{b.unit} ({b.pctDiff}%)</span></div>
+                <span style={{fontSize:11,fontWeight:600,color:"#dc2626",whiteSpace:"nowrap"}}>{b.confidence}%</span>
+              </div>)}</div>
+            </div>}
+          </div>)}
+          {insufficientTypes.length>0&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 12px"}}>
+            <div style={{fontSize:12,color:"#92400e"}}>
+              <strong>Need more sessions:</strong> {insufficientTypes.map((s,i)=>`${s.typeInfo.icon} ${s.typeInfo.short} (${s.count}/3)`).join(" · ")}
+            </div>
+          </div>}
+        </div>
+        <p style={{fontSize:11,color:"#999",marginTop:10}}>Need 3+ sessions per type. Confidence combines sample size (more sessions = higher) with effect magnitude (bigger nutrient gap = higher).</p>
       </div>;
     })()}
 
@@ -727,8 +794,22 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,temp
         {hasSun&&<span style={{fontSize:13,color:"#ca8a04"}}>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
         {hasHydration&&<span style={{fontSize:13,color:"#3b82f6"}}>💧 Hydrated</span>}
         {hasGi&&<span style={{fontSize:13,color:"#dc2626"}}>🤢 GI distress</span>}
-        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";return s>0?<span style={{fontSize:13,color:s>=8?"#16a34a":s>=5?"#ca8a04":"#dc2626",fontWeight:600}}>💪 RPP: {s}/10{t?" @ "+t:""}</span>:null})()}
+        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"#16a34a":s>=5?"#ca8a04":s>0?"#dc2626":"#888",fontWeight:s>0?600:400,background:s>0?"transparent":"#f5f5f5",padding:s>0?"0":"3px 10px",borderRadius:4,border:s>0?"none":"1px dashed #ccc"}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
       </div>
+      {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"#f0f9ff",border:"1px solid #93c5fd",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+        <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRpp(d.date,{score:n===s?0:n,trainingTime:t,trainingType:ty})} style={{flex:1,height:28,border:`1px solid ${n===s?"#3b82f6":n<=s?"#bfdbfe":"#e5e5e5"}`,borderRadius:5,background:n===s?"#3b82f6":n<=s?"#eff6ff":"#fff",color:n===s?"#fff":n<=s?"#3b82f6":"#999",fontSize:11,fontWeight:n===s?700:500,cursor:"pointer"}}>{n}</button>)}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <label style={{fontSize:12,color:"#666",whiteSpace:"nowrap"}}>Training time:</label>
+          <input type="time" value={t} onChange={e=>setRpp(d.date,{score:s,trainingTime:e.target.value,trainingType:ty})} style={{padding:"4px 8px",border:"1px solid #e5e5e5",borderRadius:5,fontSize:12,flex:1}}/>
+        </div>
+        <div style={{marginBottom:8}}>
+          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Training type:</label>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRpp(d.date,{score:s,trainingTime:t,trainingType:tt.id===ty?"":tt.id})} style={{padding:"4px 10px",borderRadius:5,border:`1px solid ${tt.id===ty?tt.color:"#e5e5e5"}`,background:tt.id===ty?tt.color:"#fff",color:tt.id===ty?"#fff":"#666",fontSize:11,fontWeight:tt.id===ty?600:500,cursor:"pointer"}}>{tt.icon} {tt.short}</button>)}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <button onClick={()=>setRppEditDate(null)} style={{padding:"4px 12px",background:"#fff",border:"1px solid #e5e5e5",borderRadius:5,fontSize:12,cursor:"pointer",color:"#666"}}>Done</button>
+        </div>
+      </div>})()}
       {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
       {d.totals&&<div>
         <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""}</button>
@@ -972,7 +1053,7 @@ function App(){
     </div>
     {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
   </div>
 }
 
