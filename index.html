@@ -846,15 +846,27 @@ function App(){
     tryKey(userKey_).then(data=>{
       if(data&&data.profile){
         setProfile(data.profile);lss("nt-profile",data.profile);
-        const m=data.meals||{};const todayMeals=m.date===today()?(m.meals||[]):[];
+        // Handle meals - check date, move stale meals to history
+        const m=data.meals||{};
+        const h=data.history||{};
+        let todayMeals=[];
+        if(m.date===today()){
+          todayMeals=m.meals||[];
+        }else if(m.date&&m.meals&&m.meals.length>0){
+          // Move stale meals to history under their original date
+          h[m.date]=[...(h[m.date]||[]),...m.meals];
+        }
         setMeals_(todayMeals);lss("nt-meals",{meals:todayMeals,date:today()});
         setTemplates_(data.templates||[]);lss("nt-templates",data.templates||[]);
-        setHistory_(data.history||{});lss("nt-history",data.history||{});
+        setHistory_(h);lss("nt-history",h);
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
         setGiDistress_(data.gi||{});lss("nt-gi",data.gi||{});
         setRpp_(data.rpp||{});lss("nt-rpp",data.rpp||{});
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
+        // Push cleaned state back to cloud immediately
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:h,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}});
+      }
       }
       setSyncing(false);
     }).catch(()=>setSyncing(false));
