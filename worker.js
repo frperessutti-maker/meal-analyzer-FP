@@ -44,6 +44,45 @@ export default {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
+
+      if (request.method === "DELETE") {
+        const body = await request.json();
+        if (!body.key) return new Response(JSON.stringify({ error: "Missing key" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+        await env.USERDATA.delete(body.key);
+        return new Response(JSON.stringify({ ok: true, deleted: body.key }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // List all profiles
+    if (url.pathname === "/sync/list" && request.method === "GET") {
+      if (!env.USERDATA) {
+        return new Response(JSON.stringify({ error: "KV not configured" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const list = await env.USERDATA.list();
+      const profiles = [];
+      for (const key of list.keys) {
+        try {
+          const raw = await env.USERDATA.get(key.name);
+          const data = raw ? JSON.parse(raw) : null;
+          profiles.push({
+            key: key.name,
+            profile: data?.profile || null,
+            templates: data?.templates?.length || 0,
+            historyDays: data?.history ? Object.keys(data.history).length : 0,
+          });
+        } catch {
+          profiles.push({ key: key.name, profile: null, templates: 0, historyDays: 0 });
+        }
+      }
+      return new Response(JSON.stringify(profiles), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
     // Fetch URL content (proxy for CORS)
