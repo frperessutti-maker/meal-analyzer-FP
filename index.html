@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Meal Analyzer</title><!-- v22 -->
+  <title>Meal Analyzer</title><!-- v23 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -1017,8 +1017,9 @@ function App(){
 
   useEffect(()=>{if(profile?.lastCalibration){const diff=Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24));if(diff>=10)setShowCalib(true)}},[profile]);
 
-  // Prompt "Did you sleep well?" once per day if not yet answered
-  useEffect(()=>{if(userKey_&&profile&&sleep[today()]===undefined)setShowSleepPrompt(true)},[userKey_,profile]);
+  // Prompt "Did you sleep well?" once per day — only after cloud sync finishes,
+  // so a fresh device doesn't ask again for an answer that's already saved in the cloud.
+  useEffect(()=>{if(userKey_&&profile&&!syncing&&sleep[today()]===undefined)setShowSleepPrompt(true);else if(sleep[today()]!==undefined)setShowSleepPrompt(false)},[userKey_,profile,syncing,sleep]);
 
   const handleCalibration=(result)=>{
     if(!profile)return;let mult=profile.multiplier||1;let msg="";
