@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Meal Analyzer</title><!-- v21 -->
+  <title>Meal Analyzer</title><!-- v22 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -390,7 +390,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── TODAY ── */
-function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,rpp,setRpp,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
+function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,rpp,setRpp,sleep,setSleep,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[mealsOpen,setMealsOpen]=useState(false);
@@ -479,6 +479,13 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
       <input type="checkbox" checked={gi} readOnly style={{width:18,height:18,accentColor:"#dc2626",pointerEvents:"none"}}/>
       <span style={{fontSize:14,fontWeight:500}}>🤢 GI distress today</span>
       {gi&&<span style={{fontSize:12,color:"#dc2626",marginLeft:"auto"}}>Check meals for triggers</span>}
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"10px 14px",background:sleep===undefined?"#fafafa":sleep?"#f0fdf4":"#fef2f2",border:`1px solid ${sleep===undefined?"#e5e5e5":sleep?"#86efac":"#fca5a5"}`,borderRadius:8}}>
+      <span style={{fontSize:14,fontWeight:500}}>😴 Slept well last night?</span>
+      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
+        <button onClick={()=>setSleep(true)} style={{padding:"5px 14px",borderRadius:6,border:`1px solid ${sleep===true?"#16a34a":"#e5e5e5"}`,background:sleep===true?"#16a34a":"#fff",color:sleep===true?"#fff":"#666",fontSize:13,fontWeight:600,cursor:"pointer"}}>Yes</button>
+        <button onClick={()=>setSleep(false)} style={{padding:"5px 14px",borderRadius:6,border:`1px solid ${sleep===false?"#dc2626":"#e5e5e5"}`,background:sleep===false?"#dc2626":"#fff",color:sleep===false?"#fff":"#666",fontSize:13,fontWeight:600,cursor:"pointer"}}>No</button>
+      </div>
     </div>
     <div style={{marginBottom:16,padding:"12px 14px",background:rppScore?"#f0f9ff":"#fafafa",border:`1px solid ${rppScore?"#93c5fd":"#e5e5e5"}`,borderRadius:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -576,7 +583,7 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,templates,skipped,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,sleep,setSleep,templates,skipped,DT,prompt,profile}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
@@ -781,7 +788,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
 
     {wd.length>=2&&<div style={{marginBottom:24}}><h3 className="stit">{wd.length}-day averages</h3><div className="gm">{allN.map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div></div>}
     <h3 className="slab">Daily breakdown</h3>
-    {dd.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const dayRpp=rpp[d.date]||0;return<div key={d.date} className="dc">
+    {dd.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const dayRpp=rpp[d.date]||0;return<div key={d.date} className="dc">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div><div style={{fontWeight:600,fontSize:14}}>{fmt(d.date)}</div><div style={{fontSize:12,color:"#999"}}>{d.date}</div></div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -794,6 +801,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
         {hasSun&&<span style={{fontSize:13,color:"#ca8a04"}}>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
         {hasHydration&&<span style={{fontSize:13,color:"#3b82f6"}}>💧 Hydrated</span>}
         {hasGi&&<span style={{fontSize:13,color:"#dc2626"}}>🤢 GI distress</span>}
+        {(()=>{const next=daySleep===undefined?true:daySleep===true?false:undefined;return<span onClick={()=>setSleep(d.date,next)} style={{fontSize:13,cursor:"pointer",color:daySleep===true?"#16a34a":daySleep===false?"#dc2626":"#888",fontWeight:daySleep===undefined?400:500,background:daySleep===undefined?"#f5f5f5":"transparent",padding:daySleep===undefined?"3px 10px":"0",borderRadius:4,border:daySleep===undefined?"1px dashed #ccc":"none"}}>😴 {daySleep===true?"Slept well":daySleep===false?"Poor sleep":"Sleep: tap to set"}</span>})()}
         {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"#16a34a":s>=5?"#ca8a04":s>0?"#dc2626":"#888",fontWeight:s>0?600:400,background:s>0?"transparent":"#f5f5f5",padding:s>0?"0":"3px 10px",borderRadius:4,border:s>0?"none":"1px dashed #ccc"}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
       </div>
       {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"#f0f9ff",border:"1px solid #93c5fd",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
@@ -907,7 +915,9 @@ function App(){
   const[rpp,setRpp_]=useState(()=>ls("nt-rpp",{}));
   const[skipped,setSkipped_]=useState(()=>ls("nt-skipped",{}));
   const[hydration,setHydration_]=useState(()=>ls("nt-hydration",{}));
+  const[sleep,setSleep_]=useState(()=>ls("nt-sleep",{}));
   const[showCalib,setShowCalib]=useState(false);
+  const[showSleepPrompt,setShowSleepPrompt]=useState(false);
   const[syncing,setSyncing]=useState(false);
 
   // Fetch from cloud on load if user is already logged in
@@ -976,7 +986,8 @@ function App(){
         setRpp_(data.rpp||{});lss("nt-rpp",data.rpp||{});
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
-        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{}})
+        setSleep_(data.sleep||{});lss("nt-sleep",data.sleep||{});
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{}})
       }
       setSyncing(false);
     }).catch(function(){setSyncing(false)});
@@ -986,7 +997,7 @@ function App(){
   const prompt=profile?buildPrompt(profile):"";
 
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{})})},[userKey_]);
+  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{})})},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
   const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last10();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
@@ -995,6 +1006,7 @@ function App(){
   useEffect(()=>{if(profile){lss("nt-profile",profile);scheduleSync()}},[profile]);
   const toggleSun=(date)=>{setSunlight_(p=>{const u={...p,[date]:!p[date]};lss("nt-sunlight",u);scheduleSync();return u})};
   const toggleGi=(date)=>{setGiDistress_(p=>{const u={...p,[date]:!p[date]};lss("nt-gi",u);scheduleSync();return u})};
+  const setSleep=(date,val)=>{setSleep_(p=>{const u={...p,[date]:val};lss("nt-sleep",u);scheduleSync();return u})};
   const setRpp=(date,val)=>{setRpp_(p=>{const u={...p,[date]:val};lss("nt-rpp",u);scheduleSync();return u})};
   const toggleSkip=(date,idx)=>{setSkipped_(p=>{const daySkips=p[date]||[];const u={...p,[date]:daySkips.includes(idx)?daySkips.filter(x=>x!==idx):[...daySkips,idx]};lss("nt-skipped",u);scheduleSync();return u})};
   const toggleHydration=(date)=>{setHydration_(p=>{const u={...p,[date]:!p[date]};lss("nt-hydration",u);scheduleSync();return u})};
@@ -1004,6 +1016,9 @@ function App(){
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
 
   useEffect(()=>{if(profile?.lastCalibration){const diff=Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24));if(diff>=10)setShowCalib(true)}},[profile]);
+
+  // Prompt "Did you sleep well?" once per day if not yet answered
+  useEffect(()=>{if(userKey_&&profile&&sleep[today()]===undefined)setShowSleepPrompt(true)},[userKey_,profile]);
 
   const handleCalibration=(result)=>{
     if(!profile)return;let mult=profile.multiplier||1;let msg="";
@@ -1035,6 +1050,19 @@ function App(){
 
     {syncing&&<div style={{textAlign:"center",padding:12,marginBottom:16,fontSize:13,color:"#888"}}>☁️ Syncing data…</div>}
 
+    {showSleepPrompt&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
+        <div style={{fontSize:44,marginBottom:12}}>😴</div>
+        <div style={{fontSize:19,fontWeight:600,marginBottom:6}}>Did you sleep well tonight?</div>
+        <p style={{fontSize:13,color:"#888",marginBottom:24}}>This helps correlate rest with your performance over time.</p>
+        <div style={{display:"flex",gap:12}}>
+          <button onClick={()=>{setSleep(today(),true);setShowSleepPrompt(false)}} style={{flex:1,padding:"14px 0",background:"#16a34a",color:"#fff",border:"none",borderRadius:10,fontSize:15,fontWeight:600,cursor:"pointer"}}>✓ Yes</button>
+          <button onClick={()=>{setSleep(today(),false);setShowSleepPrompt(false)}} style={{flex:1,padding:"14px 0",background:"#dc2626",color:"#fff",border:"none",borderRadius:10,fontSize:15,fontWeight:600,cursor:"pointer"}}>✗ No</button>
+        </div>
+        <button onClick={()=>setShowSleepPrompt(false)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:13,marginTop:16}}>Ask me later</button>
+      </div>
+    </div>}
+
     {showCalib&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:12,padding:20,marginBottom:24}}>
       <div style={{fontSize:16,fontWeight:600,color:"#1d4ed8",marginBottom:8}}>10-day calibration check</div>
       <p style={{fontSize:14,color:"#333",lineHeight:1.5,marginBottom:16}}>Have you noticed any weight change?</p>
@@ -1051,9 +1079,9 @@ function App(){
       <button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button>
       <button className={nc("history")} onClick={()=>setPage("history")}>History</button>
     </div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} setSleep={setSleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
   </div>
 }
 
