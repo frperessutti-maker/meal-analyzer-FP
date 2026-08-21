@@ -73,7 +73,7 @@
    ───────────────────────────────────────────────────────────── */
 (function () {
   const MACROS = ["calories", "protein", "fat", "carbs", "fiber"];
-  const TRAINING_TYPES = ["strength", "hiit", "endurance", "skill", "recovery"];
+  const TRAINING_TYPES = ["strength", "hiit", "endurance", "skill", "recovery", "other"];
   const HABIT_VARS = [
     { key: "sun_freq",       label: "Sun exposure frequency" },
     { key: "hydration_freq", label: "Hydration frequency" },
@@ -426,8 +426,8 @@
   }
 
   /* ─── PDF RENDERER ─── */
-  const TRAINING_LABELS = { strength: "Strength", hiit: "HIIT / Conditioning", endurance: "Endurance", skill: "Skill / Technical", recovery: "Recovery / Mobility" };
-  const TRAINING_ICONS = { strength: "STR", hiit: "HIT", endurance: "END", skill: "SKL", recovery: "REC" };
+  const TRAINING_LABELS = { strength: "Strength", hiit: "HIIT / Conditioning", endurance: "Endurance", skill: "Skill / Technical", recovery: "Recovery / Mobility", other: "Other" };
+  const TRAINING_ICONS = { strength: "STR", hiit: "HIT", endurance: "END", skill: "SKL", recovery: "REC", other: "OTH" };
   const WINDOW_LABELS = { W1: "the 3 hours before training", W2: "the 3-12 hours before training", W3: "the 24-hour recovery window after the previous session" };
   const WINDOW_SHORT = { W1: "before the session", W2: "3-12 hours before the session", W3: "during the previous 24 hours of recovery" };
   const MACRO_LABELS = { calories: "calories", protein: "protein", fat: "fat", carbs: "carbs", fiber: "fiber" };
@@ -717,6 +717,7 @@ const TRAINING_TYPES=[
   {id:"endurance",label:"Endurance",short:"Endurance",icon:"🏃",color:"#3b82f6"},
   {id:"skill",label:"Skill / Technical",short:"Skill",icon:"🎯",color:"#22c55e"},
   {id:"recovery",label:"Recovery / Mobility",short:"Recovery",icon:"🧘",color:"#6b7280"},
+  {id:"other",label:"Other",short:"Other",icon:"🔘",color:"#94a3b8"},
 ];
 
 const NUTRIENT_INFO={
