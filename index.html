@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Meal Analyzer</title><!-- v23 -->
+  <title>Meal Analyzer</title><!-- v24 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -60,6 +60,630 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   PERFORMANCE REPORT BUNDLE — for inline injection into index.html
+
+   Exposes on window:
+     window.buildPerformanceReport(state) → report object
+     window.renderReportPDF(report)       → jsPDF doc
+
+   REQUIRES: jsPDF loaded via CDN as window.jspdf.jsPDF
+   ───────────────────────────────────────────────────────────── */
+(function () {
+  const MACROS = ["calories", "protein", "fat", "carbs", "fiber"];
+  const TRAINING_TYPES = ["strength", "hiit", "endurance", "skill", "recovery"];
+  const HABIT_VARS = [
+    { key: "sun_freq",       label: "Sun exposure frequency" },
+    { key: "hydration_freq", label: "Hydration frequency" },
+    { key: "sleep_quality",  label: "Sleep quality (% well-slept)" },
+    { key: "avg_protein",    label: "Average daily protein" },
+    { key: "avg_carbs",      label: "Average daily carbs" },
+    { key: "avg_calories",   label: "Average daily calories" },
+    { key: "avg_fiber",      label: "Average daily fiber" },
+  ];
+
+  function parseDateTime(dateStr, timeStr) {
+    if (!dateStr || !timeStr) return null;
+    const [h, m] = timeStr.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    const d = new Date(dateStr + "T00:00:00");
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
+  function addHours(date, hours) { return new Date(date.getTime() + hours * 3600 * 1000); }
+  function daysBetween(a, b) { return Math.floor((b - a) / (1000 * 60 * 60 * 24)); }
+  function isoDate(d) { return d.toISOString().slice(0, 10); }
+  function addDays(dateStr, delta) {
+    const d = new Date(dateStr + "T12:00:00");
+    d.setDate(d.getDate() + delta);
+    return isoDate(d);
+  }
+
+  function spearman(xs, ys) {
+    if (!xs || !ys || xs.length !== ys.length || xs.length < 3) return null;
+    const n = xs.length;
+    const rankOf = (arr) => {
+      const indexed = arr.map((v, i) => ({ v, i }));
+      indexed.sort((a, b) => a.v - b.v);
+      const ranks = new Array(n);
+      let i = 0;
+      while (i < n) {
+        let j = i;
+        while (j + 1 < n && indexed[j + 1].v === indexed[i].v) j++;
+        const avgRank = (i + j) / 2 + 1;
+        for (let k = i; k <= j; k++) ranks[indexed[k].i] = avgRank;
+        i = j + 1;
+      }
+      return ranks;
+    };
+    const rx = rankOf(xs); const ry = rankOf(ys);
+    const allSame = (arr) => arr.every((v) => v === arr[0]);
+    if (allSame(rx) || allSame(ry)) return null;
+    const meanX = rx.reduce((a, b) => a + b, 0) / n;
+    const meanY = ry.reduce((a, b) => a + b, 0) / n;
+    let num = 0, denX = 0, denY = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = rx[i] - meanX; const dy = ry[i] - meanY;
+      num += dx * dy; denX += dx * dx; denY += dy * dy;
+    }
+    const den = Math.sqrt(denX * denY);
+    return den === 0 ? null : num / den;
+  }
+
+  function mean(arr) { if (!arr || arr.length === 0) return 0; return arr.reduce((a, b) => a + b, 0) / arr.length; }
+  function correlationConfidence(rho, n) {
+    return Math.round(Math.min(n / 15, 1) * Math.min(Math.abs(rho) / 0.6, 1) * 100);
+  }
+  function meanDiffConfidence(delta, nMin) {
+    return Math.round(Math.min(nMin / 10, 1) * Math.min(Math.abs(delta) / 2, 1) * 100);
+  }
+
+  function extractSessions(history, rpp) {
+    const sessionDates = Object.keys(rpp)
+      .filter((d) => { const r = rpp[d]; if (!r || typeof r !== "object") return false; return r.score > 0 && r.trainingTime && r.trainingType; })
+      .sort();
+    const sessions = [];
+    for (let i = 0; i < sessionDates.length; i++) {
+      const date = sessionDates[i];
+      const r = rpp[date];
+      const trainingDT = parseDateTime(date, r.trainingTime);
+      if (!trainingDT) continue;
+      const W1_start = addHours(trainingDT, -3);
+      const W1_end = trainingDT;
+      const W2_start = addHours(trainingDT, -12);
+      const W2_end = W1_start;
+      let W3_start = null, W3_end = null;
+      if (i > 0) {
+        const prevDate = sessionDates[i - 1];
+        const prevR = rpp[prevDate];
+        const prevDT = parseDateTime(prevDate, prevR.trainingTime);
+        if (prevDT && daysBetween(prevDT, trainingDT) <= 2) {
+          W3_start = prevDT; W3_end = addHours(prevDT, 24);
+        }
+      }
+      const relevantDates = new Set([date, addDays(date, -1)]);
+      if (W3_start) relevantDates.add(isoDate(W3_start));
+      const meals = [];
+      relevantDates.forEach((d) => {
+        (history[d] || []).forEach((m) => {
+          const mealDT = parseDateTime(m.date || d, m.time);
+          if (mealDT) meals.push({ ...m, _dt: mealDT });
+        });
+      });
+      const inRange = (dt, start, end) => dt >= start && dt < end;
+      const sumMacros = (mealSubset) => {
+        const totals = {}; MACROS.forEach((k) => (totals[k] = 0));
+        mealSubset.forEach((m) => { MACROS.forEach((k) => { const v = Number(m[k]); totals[k] += isNaN(v) ? 0 : v; }); });
+        return totals;
+      };
+      const W1_meals = meals.filter((m) => inRange(m._dt, W1_start, W1_end));
+      const W2_meals = meals.filter((m) => inRange(m._dt, W2_start, W2_end));
+      const W3_meals = W3_start ? meals.filter((m) => inRange(m._dt, W3_start, W3_end)) : [];
+      sessions.push({
+        date, score: r.score, trainingTime: r.trainingTime, trainingType: r.trainingType,
+        W1: sumMacros(W1_meals), W2: sumMacros(W2_meals), W3: W3_start ? sumMacros(W3_meals) : null,
+        W1_count: W1_meals.length, W2_count: W2_meals.length, W3_count: W3_meals.length,
+      });
+    }
+    return sessions;
+  }
+
+  function tier1(sessions) {
+    const findings = {};
+    TRAINING_TYPES.forEach((type) => {
+      const typeSessions = sessions.filter((s) => s.trainingType === type);
+      if (typeSessions.length < 5) return;
+      const perType = [];
+      ["W1", "W2", "W3"].forEach((window) => {
+        const valid = typeSessions.filter((s) => s[window] !== null);
+        if (valid.length < 5) return;
+        MACROS.forEach((macro) => {
+          const xs = valid.map((s) => s[window][macro]);
+          const ys = valid.map((s) => s.score);
+          const rho = spearman(xs, ys);
+          if (rho === null) return;
+          const confidence = correlationConfidence(rho, valid.length);
+          if (Math.abs(rho) < 0.3 || confidence < 25) return;
+          const sortedByX = valid.slice().sort((a, b) => a[window][macro] - b[window][macro]);
+          const mid = Math.floor(sortedByX.length / 2);
+          const lowGroup = sortedByX.slice(0, mid);
+          const highGroup = sortedByX.slice(sortedByX.length - mid);
+          perType.push({
+            window, macro,
+            rho: Math.round(rho * 100) / 100, n: valid.length, confidence,
+            direction: rho > 0 ? "positive" : "negative",
+            groups: {
+              low: { rppAvg: Math.round(mean(lowGroup.map((s) => s.score)) * 10) / 10, macroAvg: Math.round(mean(lowGroup.map((s) => s[window][macro]))), n: lowGroup.length },
+              high: { rppAvg: Math.round(mean(highGroup.map((s) => s.score)) * 10) / 10, macroAvg: Math.round(mean(highGroup.map((s) => s[window][macro]))), n: highGroup.length },
+            },
+          });
+        });
+      });
+      perType.sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
+      if (perType.length > 0) findings[type] = { n: typeSessions.length, findings: perType.slice(0, 3) };
+    });
+    return findings;
+  }
+
+  function tier2(sessions, sunlight, sleep, hydration) {
+    const results = {};
+    const check = (name, predicate) => {
+      const withTrue = sessions.filter((s) => predicate(s.date) === true);
+      const withFalse = sessions.filter((s) => predicate(s.date) !== true);
+      if (withTrue.length < 3 || withFalse.length < 3) return null;
+      const meanTrue = mean(withTrue.map((s) => s.score));
+      const meanFalse = mean(withFalse.map((s) => s.score));
+      const delta = meanTrue - meanFalse;
+      if (Math.abs(delta) < 0.5) return null;
+      const confidence = meanDiffConfidence(delta, Math.min(withTrue.length, withFalse.length));
+      return { meanTrue: Math.round(meanTrue * 10) / 10, meanFalse: Math.round(meanFalse * 10) / 10, nTrue: withTrue.length, nFalse: withFalse.length, delta: Math.round(delta * 10) / 10, confidence };
+    };
+    const sun = check("sun", (d) => !!sunlight[d]); if (sun) results.sun = sun;
+    const hyd = check("hydration", (d) => !!hydration[d]); if (hyd) results.hydration = hyd;
+    const slp = check("sleep", (d) => sleep[d] === true); if (slp) results.sleep = slp;
+    return results;
+  }
+
+  function tier3(history, sleep, sunlight, rpp) {
+    const sleepDates = Object.keys(sleep).filter((d) => sleep[d] === true || sleep[d] === false);
+    if (sleepDates.length < 6) return null;
+    const nights = sleepDates.map((d) => {
+      const dayMeals = history[d] || [];
+      const dayR = rpp[d];
+      const trainingDT = dayR && typeof dayR === "object" && dayR.trainingTime ? parseDateTime(d, dayR.trainingTime) : null;
+      const totals = {}; MACROS.forEach((k) => (totals[k] = 0));
+      dayMeals.forEach((m) => { MACROS.forEach((k) => { const v = Number(m[k]); totals[k] += isNaN(v) ? 0 : v; }); });
+      let lastMealHour = null;
+      dayMeals.forEach((m) => {
+        if (m.time) { const [h, mm] = m.time.split(":").map(Number); const total = h + mm / 60; if (lastMealHour === null || total > lastMealHour) lastMealHour = total; }
+      });
+      const lateTraining = trainingDT ? trainingDT.getHours() >= 20 : false;
+      return { date: d, slept_well: sleep[d] === true, carbs: totals.carbs, calories: totals.calories, last_meal_hour: lastMealHour, late_training: lateTraining, sun: !!sunlight[d] };
+    });
+    const well = nights.filter((n) => n.slept_well);
+    const poor = nights.filter((n) => !n.slept_well);
+    if (well.length < 3 || poor.length < 3) return null;
+    const factors = {};
+    const contFactors = [{ key: "carbs", label: "Daily carbs" }, { key: "calories", label: "Daily calories" }];
+    contFactors.forEach(({ key, label }) => {
+      const wellVals = well.map((n) => n[key]).filter((v) => v > 0);
+      const poorVals = poor.map((n) => n[key]).filter((v) => v > 0);
+      if (wellVals.length < 3 || poorVals.length < 3) return;
+      const wellMean = mean(wellVals); const poorMean = mean(poorVals);
+      const relDelta = poorMean === 0 ? 0 : (wellMean - poorMean) / poorMean;
+      if (Math.abs(relDelta) < 0.15) return;
+      factors[key] = { label, wellMean: Math.round(wellMean), poorMean: Math.round(poorMean), nWell: wellVals.length, nPoor: poorVals.length, confidence: Math.round(Math.min(Math.min(wellVals.length, poorVals.length) / 10, 1) * Math.min(Math.abs(relDelta) / 0.5, 1) * 100) };
+    });
+    const lmhWell = well.map((n) => n.last_meal_hour).filter((v) => v !== null);
+    const lmhPoor = poor.map((n) => n.last_meal_hour).filter((v) => v !== null);
+    if (lmhWell.length >= 3 && lmhPoor.length >= 3) {
+      const wm = mean(lmhWell); const pm = mean(lmhPoor);
+      if (Math.abs(wm - pm) >= 0.5) {
+        factors.last_meal_hour = { label: "Last meal time (hour)", wellMean: Math.round(wm * 10) / 10, poorMean: Math.round(pm * 10) / 10, nWell: lmhWell.length, nPoor: lmhPoor.length, confidence: Math.round(Math.min(Math.min(lmhWell.length, lmhPoor.length) / 10, 1) * Math.min(Math.abs(wm - pm) / 2, 1) * 100) };
+      }
+    }
+    const checkBinary = (key, label) => {
+      const wellRate = well.filter((n) => n[key]).length / well.length;
+      const poorRate = poor.filter((n) => n[key]).length / poor.length;
+      if (Math.abs(wellRate - poorRate) < 0.15) return;
+      factors[key] = { label, wellRate: Math.round(wellRate * 100), poorRate: Math.round(poorRate * 100), nWell: well.length, nPoor: poor.length, confidence: Math.round(Math.min(Math.min(well.length, poor.length) / 10, 1) * Math.min(Math.abs(wellRate - poorRate) / 0.4, 1) * 100) };
+    };
+    checkBinary("late_training", "Late training (after 20:00)");
+    checkBinary("sun", "Sun exposure that day");
+    return { nWell: well.length, nPoor: poor.length, factors };
+  }
+
+  function buildDailySeries(history, rpp, sunlight, sleep, hydration) {
+    const dates = new Set();
+    Object.keys(history).forEach((d) => dates.add(d));
+    Object.keys(rpp).forEach((d) => dates.add(d));
+    Object.keys(sunlight).forEach((d) => dates.add(d));
+    Object.keys(sleep).forEach((d) => dates.add(d));
+    Object.keys(hydration).forEach((d) => dates.add(d));
+    if (dates.size === 0) return { dates: [], series: {} };
+    const sorted = [...dates].sort();
+    const first = sorted[0]; const last = sorted[sorted.length - 1];
+    const full = []; let cursor = first;
+    while (cursor <= last) { full.push(cursor); cursor = addDays(cursor, 1); }
+    const series = { sun_freq: [], hydration_freq: [], sleep_quality: [], avg_protein: [], avg_carbs: [], avg_calories: [], avg_fiber: [], rpp: [] };
+    full.forEach((d) => {
+      series.sun_freq.push(sunlight[d] === true ? 1 : 0);
+      series.hydration_freq.push(hydration[d] === true ? 1 : 0);
+      series.sleep_quality.push(sleep[d] === true ? 1 : sleep[d] === false ? 0 : null);
+      const meals = history[d] || [];
+      const dm = { protein: 0, carbs: 0, calories: 0, fiber: 0 };
+      meals.forEach((m) => { dm.protein += Number(m.protein) || 0; dm.carbs += Number(m.carbs) || 0; dm.calories += Number(m.calories) || 0; dm.fiber += Number(m.fiber) || 0; });
+      const hasMeals = meals.length > 0;
+      series.avg_protein.push(hasMeals ? dm.protein : null);
+      series.avg_carbs.push(hasMeals ? dm.carbs : null);
+      series.avg_calories.push(hasMeals ? dm.calories : null);
+      series.avg_fiber.push(hasMeals ? dm.fiber : null);
+      const r = rpp[d]; const score = r && typeof r === "object" ? r.score : (r || 0);
+      series.rpp.push(score > 0 ? score : null);
+    });
+    return { dates: full, series };
+  }
+  function rollingMean(arr, window, endIdx) {
+    const start = Math.max(0, endIdx - window + 1);
+    const slice = arr.slice(start, endIdx + 1).filter((v) => v !== null);
+    if (slice.length === 0) return null;
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  }
+  function tier4(history, rpp, sunlight, sleep, hydration) {
+    const { dates, series } = buildDailySeries(history, rpp, sunlight, sleep, hydration);
+    if (dates.length < 60) return { changes: [], note: "Need at least 60 days of history for habit-change detection." };
+    const WINDOW = 28, MIN_PERSIST = 14, REL_THRESHOLD = 0.20, RPP_THRESHOLD = 0.4;
+    const changes = [];
+    HABIT_VARS.forEach((v) => {
+      const s = series[v.key];
+      const rolling = dates.map((_, i) => rollingMean(s, WINDOW, i));
+      for (let i = WINDOW; i < dates.length - MIN_PERSIST; i++) {
+        const before = rolling[i - WINDOW]; const after = rolling[i];
+        if (before === null || after === null) continue;
+        if (before === 0) continue;
+        const relChange = (after - before) / Math.abs(before);
+        if (Math.abs(relChange) < REL_THRESHOLD) continue;
+        const persistIdx = Math.min(i + MIN_PERSIST, dates.length - 1);
+        const persistVal = rolling[persistIdx];
+        if (persistVal === null) continue;
+        const persistRel = (persistVal - before) / Math.abs(before);
+        if (Math.sign(persistRel) !== Math.sign(relChange)) continue;
+        if (Math.abs(persistRel) < REL_THRESHOLD * 0.7) continue;
+        const rppBefore = rollingMean(series.rpp, WINDOW, i - 1);
+        const rppAfter = rollingMean(series.rpp, WINDOW, persistIdx);
+        if (rppBefore === null || rppAfter === null) continue;
+        const rppDelta = rppAfter - rppBefore;
+        if (Math.abs(rppDelta) < RPP_THRESHOLD) continue;
+        changes.push({ variable: v.key, label: v.label, date: dates[i], before: Math.round(before * 100) / 100, after: Math.round(after * 100) / 100, relChange: Math.round(relChange * 100), rppBefore: Math.round(rppBefore * 10) / 10, rppAfter: Math.round(rppAfter * 10) / 10, rppDelta: Math.round(rppDelta * 10) / 10 });
+        i += WINDOW;
+      }
+    });
+    changes.sort((a, b) => a.date.localeCompare(b.date));
+    const grouped = [];
+    changes.forEach((c) => {
+      const last = grouped[grouped.length - 1];
+      if (last && Math.abs(daysBetween(new Date(last.date + "T12:00:00"), new Date(c.date + "T12:00:00"))) <= 7) {
+        last.coOccurring = last.coOccurring || [last.variable];
+        last.coOccurring.push(c.variable);
+        last.coOccurringLabels = last.coOccurringLabels || [last.label];
+        last.coOccurringLabels.push(c.label);
+      } else { grouped.push({ ...c }); }
+    });
+    return { changes: grouped };
+  }
+
+  function giSection(history, giDistress) {
+    const daysWithData = Object.keys(history).filter((d) => history[d] && history[d].length > 0);
+    const giDays = daysWithData.filter((d) => giDistress[d]);
+    const okDays = daysWithData.filter((d) => !giDistress[d]);
+    if (giDays.length < 1 || daysWithData.length < 3) return null;
+    const stopWords = ["with", "and", "the", "for", "cup", "some", "two", "one", "per", "from"];
+    const extractKeywords = (meals) => {
+      const words = new Set();
+      (meals || []).forEach((m) => {
+        const name = (m.mealName || "").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g, "");
+        name.split(/\s+/).filter((w) => w.length > 2 && !stopWords.includes(w)).forEach((w) => words.add(w));
+      });
+      return words;
+    };
+    const giKeywords = {}, okKeywords = {};
+    giDays.forEach((d) => extractKeywords(history[d]).forEach((w) => { giKeywords[w] = (giKeywords[w] || 0) + 1; }));
+    okDays.forEach((d) => extractKeywords(history[d]).forEach((w) => { okKeywords[w] = (okKeywords[w] || 0) + 1; }));
+    const baseRate = giDays.length / daysWithData.length;
+    const triggers = [];
+    Object.keys(giKeywords).forEach((word) => {
+      const giCount = giKeywords[word]; const okCount = okKeywords[word] || 0;
+      const total = giCount + okCount;
+      if (total < 2) return;
+      const giRate = giCount / total; const lift = giRate / baseRate;
+      const sampleFactor = Math.min(total / 5, 1); const liftScore = Math.min((lift - 1) / 3, 1);
+      const confidence = Math.round(sampleFactor * liftScore * 100);
+      if (lift > 1.5 && confidence > 15) triggers.push({ word, giCount, total, lift: Math.round(lift * 10) / 10, confidence });
+    });
+    triggers.sort((a, b) => b.confidence - a.confidence);
+    return { giDays: giDays.length, totalDays: daysWithData.length, triggers: triggers.slice(0, 5) };
+  }
+
+  function buildReport(state) {
+    const { history = {}, rpp = {}, sunlight = {}, sleep = {}, hydration = {}, giDistress = {} } = state;
+    const sessions = extractSessions(history, rpp);
+    const activeDays = Object.keys(history).filter((d) => history[d] && history[d].length > 0);
+    return {
+      meta: {
+        generatedAt: new Date().toISOString(),
+        totalDaysLogged: activeDays.length,
+        totalSessions: sessions.length,
+        sessionsByType: TRAINING_TYPES.reduce((acc, t) => { acc[t] = sessions.filter((s) => s.trainingType === t).length; return acc; }, {}),
+      },
+      tier1: tier1(sessions),
+      tier2: tier2(sessions, sunlight, sleep, hydration),
+      tier3: tier3(history, sleep, sunlight, rpp),
+      tier4: tier4(history, rpp, sunlight, sleep, hydration),
+      gi: giSection(history, giDistress),
+    };
+  }
+
+  /* ─── PDF RENDERER ─── */
+  const TRAINING_LABELS = { strength: "Strength", hiit: "HIIT / Conditioning", endurance: "Endurance", skill: "Skill / Technical", recovery: "Recovery / Mobility" };
+  const TRAINING_ICONS = { strength: "STR", hiit: "HIT", endurance: "END", skill: "SKL", recovery: "REC" };
+  const WINDOW_LABELS = { W1: "the 3 hours before training", W2: "the 3-12 hours before training", W3: "the 24-hour recovery window after the previous session" };
+  const WINDOW_SHORT = { W1: "before the session", W2: "3-12 hours before the session", W3: "during the previous 24 hours of recovery" };
+  const MACRO_LABELS = { calories: "calories", protein: "protein", fat: "fat", carbs: "carbs", fiber: "fiber" };
+  const MACRO_UNITS = { calories: "kcal", protein: "g", fat: "g", carbs: "g", fiber: "g" };
+  const SLEEP_FACTOR_UNITS = { carbs: "g", calories: "kcal", protein: "g", fiber: "g" };
+
+  function confidenceLabel(c) { if (c >= 75) return "high"; if (c >= 50) return "medium"; if (c >= 25) return "low"; return "preliminary"; }
+  function filledDots(c) { return c >= 75 ? 4 : c >= 50 ? 3 : c >= 25 ? 2 : 1; }
+  function drawDots(doc, x, y, conf, color) {
+    const filled = filledDots(conf); const r = 0.9; const gap = 2.4;
+    for (let i = 0; i < 4; i++) {
+      const cx = x + i * gap;
+      if (i < filled) { doc.setFillColor(...color); doc.circle(cx, y - 1.2, r, "F"); }
+      else { doc.setDrawColor(...color); doc.setLineWidth(0.2); doc.circle(cx, y - 1.2, r, "S"); }
+    }
+    return x + 4 * gap;
+  }
+  function formatDate(iso) { if (!iso) return ""; const d = new Date(iso + (iso.includes("T") ? "" : "T12:00:00")); return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); }
+  function hourToClock(h) { if (h === null || h === undefined) return ""; const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`; }
+
+  const PAGE_W = 210, PAGE_H = 297, MARGIN = 20, CONTENT_W = PAGE_W - MARGIN * 2;
+  const COLORS = { ink: [26,26,26], soft: [90,90,90], faint: [150,150,150], rule: [220,220,220], positive: [22,163,74], negative: [220,38,38], neutral: [100,100,100], accent: [59,130,246] };
+
+  function createWriter(doc) {
+    let y = MARGIN;
+    const ensureSpace = (needed) => { if (y + needed > PAGE_H - MARGIN) { doc.addPage(); y = MARGIN; } };
+    return {
+      get y() { return y; }, set y(v) { y = v; },
+      space(mm) { y += mm; },
+      ensureSpace,
+      hr() { ensureSpace(6); doc.setDrawColor(...COLORS.rule); doc.setLineWidth(0.2); doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 4; },
+      title(text) { ensureSpace(12); doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(...COLORS.ink); doc.text(text, MARGIN, y); y += 8; },
+      section(text) { ensureSpace(14); y += 4; doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(...COLORS.ink); doc.text(text.toUpperCase(), MARGIN, y); y += 2; doc.setDrawColor(...COLORS.ink); doc.setLineWidth(0.4); doc.line(MARGIN, y, MARGIN + 20, y); y += 6; },
+      subheading(text) { ensureSpace(10); y += 2; doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...COLORS.ink); doc.text(text, MARGIN, y); y += 5; },
+      body(text, opts = {}) {
+        const size = opts.size || 10; const color = opts.color || COLORS.ink; const indent = opts.indent || 0;
+        doc.setFont("helvetica", opts.bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...color);
+        const wrapped = doc.splitTextToSize(text, CONTENT_W - indent);
+        wrapped.forEach((line) => { ensureSpace(size * 0.5); doc.text(line, MARGIN + indent, y); y += size * 0.42; });
+        y += 1;
+      },
+      finding(text, confidence, opts = {}) {
+        const indent = opts.indent || 4; const dotColor = opts.dotColor || COLORS.neutral;
+        ensureSpace(10);
+        const afterDotsX = drawDots(doc, MARGIN + indent, y, confidence, dotColor);
+        doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...COLORS.faint);
+        doc.text(`${confidence}% confidence · ${confidenceLabel(confidence)}`, afterDotsX + 2, y);
+        y += 4;
+        doc.setFontSize(10); doc.setTextColor(...COLORS.ink);
+        const wrapped = doc.splitTextToSize(text, CONTENT_W - indent);
+        wrapped.forEach((line) => { ensureSpace(5); doc.text(line, MARGIN + indent, y); y += 4.2; });
+        y += 3;
+      },
+      takeaway(text) {
+        if (!text) return;
+        ensureSpace(10); y += 2;
+        doc.setFillColor(...COLORS.ink);
+        const startY = y;
+        const wrapped = doc.splitTextToSize(text, CONTENT_W - 8);
+        const blockHeight = wrapped.length * 4.2 + 4;
+        doc.rect(MARGIN, startY - 3, 1.2, blockHeight, "F");
+        doc.setFont("helvetica","bold"); doc.setFontSize(9); doc.setTextColor(...COLORS.faint);
+        doc.text("KEY TAKEAWAY", MARGIN + 4, y); y += 4;
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(...COLORS.ink);
+        wrapped.forEach((line) => { ensureSpace(5); doc.text(line, MARGIN + 4, y); y += 4.2; });
+        y += 2;
+      },
+      empty(text) { doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(...COLORS.faint); ensureSpace(6); doc.text(text, MARGIN, y); y += 5; },
+    };
+  }
+
+  function tier1Sentence(f) {
+    const macro = MACRO_LABELS[f.macro]; const unit = MACRO_UNITS[f.macro]; const window = WINDOW_LABELS[f.window];
+    const dir = f.direction === "positive" ? "higher" : "lower";
+    const opp = f.direction === "positive" ? "lower" : "higher";
+    const strong = f.direction === "positive" ? f.groups.high : f.groups.low;
+    const weak = f.direction === "positive" ? f.groups.low : f.groups.high;
+    return `Your best sessions averaged RPP ${strong.rppAvg} and followed ${dir} ${macro} (${strong.macroAvg} ${unit}) in ${window}. Sessions with ${opp} ${macro} (${weak.macroAvg} ${unit}) averaged RPP ${weak.rppAvg}.`;
+  }
+  function tier2Sentence(name, data) {
+    const labels = { sun: { yes: "days you logged sun exposure", no: "days without" }, hydration: { yes: "days you logged hydration", no: "days without" }, sleep: { yes: "sessions after a well-slept night", no: "sessions after poor sleep" } };
+    const l = labels[name] || { yes: `days with ${name}`, no: `days without` };
+    const diff = Math.abs(data.delta); const direction = data.delta > 0 ? "higher" : "lower";
+    return `On the ${data.nTrue} ${l.yes} your average RPP was ${data.meanTrue} — ${diff} points ${direction} than the ${data.nFalse} ${l.no}, for which you averaged ${data.meanFalse}.`;
+  }
+  function tier3Sentence(name, f) {
+    if (f.wellRate !== undefined) return `${f.label} occurred on ${f.wellRate}% of well-slept nights (n=${f.nWell}) and ${f.poorRate}% of poor-sleep nights (n=${f.nPoor}).`;
+    if (name === "last_meal_hour") return `Nights of good sleep followed days for which the average last meal time was ${hourToClock(f.wellMean)}. Poor-sleep nights followed days for which last meal was on average at ${hourToClock(f.poorMean)}.`;
+    const unit = SLEEP_FACTOR_UNITS[name] || ""; const unitStr = unit ? ` ${unit}` : "";
+    return `Nights you slept well followed days averaging ${f.wellMean}${unitStr} for ${f.label.toLowerCase()} (n=${f.nWell}). Poor-sleep nights followed days averaging ${f.poorMean}${unitStr} (n=${f.nPoor}).`;
+  }
+  function tier4Sentence(c) {
+    const direction = c.rppDelta > 0 ? "rose" : "shifted";
+    const isCo = c.coOccurring && c.coOccurring.length > 1;
+    if (isCo) return `Around ${formatDate(c.date)}, several habits changed together: ${c.coOccurringLabels.join(", ")}. In the 28 days after, your average RPP ${direction} from ${c.rppBefore} to ${c.rppAfter}. Because the changes co-occurred, the individual effect of each cannot be separated.`;
+    const relText = `${c.relChange > 0 ? "up" : "down"} ${Math.abs(c.relChange)}%`;
+    return `Around ${formatDate(c.date)}, your ${c.label.toLowerCase()} shifted ${relText} (from ${c.before} to ${c.after}). In the 28 days after, your average RPP ${direction} from ${c.rppBefore} to ${c.rppAfter}.`;
+  }
+
+  function tier1Takeaway(tier1) {
+    const parts = [];
+    Object.entries(tier1 || {}).forEach(([type, data]) => {
+      const s = data.findings[0]; if (!s) return;
+      const macro = MACRO_LABELS[s.macro]; const dir = s.direction === "positive" ? "higher" : "lower";
+      const win = WINDOW_SHORT[s.window]; const verb = s.direction === "positive" ? "improve" : "hurt";
+      parts.push(`for ${type} workouts, ${dir} ${macro} ${win} seems to ${verb} performance`);
+    });
+    if (parts.length === 0) return null;
+    const joined = parts.join("; ");
+    return joined.charAt(0).toUpperCase() + joined.slice(1) + ".";
+  }
+  function tier2Takeaway(t2) {
+    const pos = [], neg = [];
+    const labelFor = (n) => n === "sun" ? "sun exposure" : n === "sleep" ? "a well-slept night" : n === "hydration" ? "hydration" : n;
+    Object.entries(t2 || {}).forEach(([n, d]) => (d.delta > 0 ? pos : neg).push(labelFor(n)));
+    const parts = [];
+    if (pos.length) parts.push(`${pos.join(" and ")} seem${pos.length === 1 ? "s" : ""} to improve performance`);
+    if (neg.length) parts.push(`${neg.join(" and ")} seem${neg.length === 1 ? "s" : ""} to hurt performance`);
+    if (parts.length === 0) return null;
+    const s = parts.join("; ");
+    return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+  }
+  function tier3Takeaway(t3) {
+    if (!t3 || !t3.factors) return null;
+    const factors = Object.entries(t3.factors);
+    if (factors.length === 0) return null;
+    const phrases = factors.map(([name, f]) => {
+      if (name === "last_meal_hour") return f.wellMean < f.poorMean ? "earlier last meal" : "later last meal";
+      if (name === "sun") return f.wellRate > f.poorRate ? "sun exposure during the day" : "less sun exposure during the day";
+      if (name === "late_training") return f.wellRate < f.poorRate ? "avoiding late training" : "late training";
+      if (f.wellRate !== undefined) { const better = f.wellRate > f.poorRate; return `${better ? "more" : "less"} ${f.label.toLowerCase()}`; }
+      const lower = f.wellMean < f.poorMean;
+      return `${lower ? "lower" : "higher"} ${f.label.toLowerCase()}`;
+    });
+    if (phrases.length === 0) return null;
+    let joined;
+    if (phrases.length === 1) joined = phrases[0];
+    else if (phrases.length === 2) joined = `${phrases[0]} and ${phrases[1]}`;
+    else joined = `${phrases.slice(0, -1).join(", ")}, and ${phrases[phrases.length - 1]}`;
+    const verb = phrases.length === 1 ? "seems" : "seem";
+    const s = `${joined} ${verb} to improve your sleep.`;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function tier4Takeaway(t4) {
+    if (!t4 || !t4.changes || t4.changes.length === 0) return null;
+    const parts = t4.changes.map((c) => {
+      const labels = c.coOccurringLabels && c.coOccurringLabels.length > 1 ? c.coOccurringLabels.join(" and ") : c.label;
+      const dirWord = c.rppDelta > 0 ? "a rise in RPP" : "a drop in RPP";
+      return `${labels.toLowerCase()} seems to be linked to ${dirWord}`;
+    });
+    const s = parts.join("; ");
+    return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+  }
+  function giTakeaway(gi) {
+    if (!gi || !gi.triggers || gi.triggers.length === 0) return null;
+    const words = gi.triggers.slice(0, 3).map((t) => `"${t.word}"`);
+    let joined;
+    if (words.length === 1) joined = words[0];
+    else if (words.length === 2) joined = `${words[0]} and ${words[1]}`;
+    else joined = `${words.slice(0, -1).join(", ")}, and ${words[words.length - 1]}`;
+    return `Meals containing ${joined} seem to be linked to GI distress — worth watching.`;
+  }
+
+  function renderPDF(report) {
+    if (!window.jspdf) throw new Error("jsPDF not loaded");
+    const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+    const w = createWriter(doc);
+
+    w.title("Performance Report");
+    w.body(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} · Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
+    w.space(2); w.hr();
+
+    w.section("Diet impact on performance");
+    const t1Keys = Object.keys(report.tier1 || {});
+    if (t1Keys.length === 0) w.empty("Not enough training sessions per type yet. Each training type needs at least 5 logged sessions with a training-type set to surface patterns.");
+    else {
+      t1Keys.forEach((type) => {
+        const data = report.tier1[type];
+        w.subheading(`${TRAINING_ICONS[type]}  ${TRAINING_LABELS[type]} — ${data.n} sessions`);
+        data.findings.forEach((f) => {
+          const color = f.direction === "positive" ? COLORS.positive : COLORS.negative;
+          w.finding(tier1Sentence(f), f.confidence, { dotColor: color });
+        });
+      });
+      w.takeaway(tier1Takeaway(report.tier1));
+    }
+
+    w.section("Lifestyle factors");
+    const t2 = report.tier2 || {}; const t2Keys = Object.keys(t2);
+    if (t2Keys.length === 0) w.empty("No lifestyle factors showed a meaningful difference in RPP yet.");
+    else {
+      t2Keys.forEach((name) => {
+        const d = t2[name]; const color = d.delta > 0 ? COLORS.positive : COLORS.negative;
+        w.finding(tier2Sentence(name, d), d.confidence, { dotColor: color });
+      });
+      w.takeaway(tier2Takeaway(report.tier2));
+    }
+
+    w.section("Sleep data analysis");
+    const t3 = report.tier3;
+    if (!t3 || !t3.factors || Object.keys(t3.factors).length === 0) w.empty("Not enough sleep data yet, or no factors showed a meaningful pattern.");
+    else {
+      w.body(`Across ${t3.nWell} well-slept nights and ${t3.nPoor} poor-sleep nights:`, { color: COLORS.soft, size: 9 });
+      Object.entries(t3.factors).forEach(([name, f]) => {
+        w.finding(tier3Sentence(name, f), f.confidence, { dotColor: COLORS.accent });
+      });
+      w.takeaway(tier3Takeaway(report.tier3));
+    }
+
+    w.section("Habit changes over time");
+    const t4 = report.tier4;
+    if (!t4 || t4.changes.length === 0) { if (t4 && t4.note) w.empty(t4.note); else w.empty("No sustained habit changes detected yet."); }
+    else {
+      t4.changes.forEach((c) => {
+        const color = c.rppDelta > 0 ? COLORS.positive : COLORS.negative;
+        const confProxy = Math.round(Math.min(Math.abs(c.rppDelta) / 1.5, 1) * 100);
+        w.finding(tier4Sentence(c), confProxy, { dotColor: color });
+      });
+      w.takeaway(tier4Takeaway(report.tier4));
+    }
+
+    if (report.gi && report.gi.triggers && report.gi.triggers.length > 0) {
+      w.section("Digestive notes");
+      w.body(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. The following food-name keywords appeared disproportionately on those days:`, { size: 10 });
+      w.space(1);
+      report.gi.triggers.forEach((t) => {
+        const pct = Math.round((t.giCount / t.total) * 100);
+        w.finding(`"${t.word}" — appeared in ${t.total} meals; ${t.giCount} of those (${pct}%) were on days you reported GI distress.`, t.confidence, { dotColor: COLORS.neutral });
+      });
+      w.body("This is a keyword pattern, not a diagnosis. Consider tracking further to confirm.", { color: COLORS.faint, size: 9 });
+      w.takeaway(giTakeaway(report.gi));
+    }
+
+    const pageCount = doc.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      const legendY = PAGE_H - 8;
+      let lx = MARGIN;
+      doc.setFont("helvetica","italic"); doc.setFontSize(8); doc.setTextColor(...COLORS.faint);
+      doc.text("Confidence:", lx, legendY); lx += 17;
+      const legendItems = [{conf:80,label:"high"},{conf:60,label:"medium"},{conf:30,label:"low"},{conf:10,label:"preliminary"}];
+      legendItems.forEach((it, i) => {
+        lx = drawDots(doc, lx, legendY, it.conf, COLORS.neutral) + 1.5;
+        doc.text(it.label, lx, legendY);
+        lx += doc.getTextWidth(it.label) + 4;
+        if (i < legendItems.length - 1) doc.text("·", lx - 2, legendY);
+      });
+      doc.text(`${p} / ${pageCount}`, PAGE_W - MARGIN, legendY, { align: "right" });
+    }
+    return doc;
+  }
+
+  window.buildPerformanceReport = buildReport;
+  window.renderReportPDF = renderPDF;
+})();
+</script>
 <script type="text/babel">
 const{useState,useEffect,useRef,useCallback}=React;
 const API_URL="https://lingering-river-d82a.frperessutti.workers.dev";
@@ -191,6 +815,7 @@ Respond ONLY with JSON:
 
 function today(){return new Date().toISOString().slice(0,10)}
 function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
+function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>{const v=Number(m[k]);t[k]+=isNaN(v)?0:v}));return t}
 function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m<=1)?1000:2000}
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
@@ -390,8 +1015,8 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── TODAY ── */
-function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,rpp,setRpp,sleep,setSleep,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
-  const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null),[cfm,setCfm]=useState(false);
+function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
+  const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[mealsOpen,setMealsOpen]=useState(false);
   const[aminoOpen,setAminoOpen]=useState(false);
@@ -448,11 +1073,10 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
       </div>}
     </div>
 
-    <div className="g5">{[{l:"Calories",k:"calories",v:tot.calories,t:DT.calories,u:""},{l:"Protein",k:"protein",v:tot.protein,t:DT.protein,u:"g"},{l:"Fat",k:"fat",v:tot.fat,t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",v:tot.carbs,t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",v:tot.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>{m.l}<InfoBtn id={m.k}/></div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u}</div></div>)}</div>
-    <h3 className="stit">Macros breakdown</h3>
+    <h3 className="stit">Food intake breakdown</h3>
     <div className="fc" style={{marginBottom:32,gap:14}}>
-      {[{l:"Protein",k:"protein",v:tot.protein,t:DT.protein,c:"#3b82f6"},{l:"Fat",k:"fat",v:tot.fat,t:DT.fat,c:"#f59e0b"},{l:"Carbs",k:"carbs",v:tot.carbs,t:DT.carbs,c:"#22c55e"},{l:"Fiber",k:"fiber",v:tot.fiber||0,t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:500,display:"flex",alignItems:"center"}}>{m.l}<InfoBtn id={m.k}/></span><span style={{fontSize:13,color:"#888"}}>{Math.round(m.v)}g / {m.t}g ({Math.round((m.v/m.t)*100)}%)</span></div>
+      {[{l:"Calories",k:"calories",v:tot.calories,t:DT.calories,c:"#ef4444",u:""},{l:"Protein",k:"protein",v:tot.protein,t:DT.protein,c:"#3b82f6",u:"g"},{l:"Fat",k:"fat",v:tot.fat,t:DT.fat,c:"#f59e0b",u:"g"},{l:"Carbs",k:"carbs",v:tot.carbs,t:DT.carbs,c:"#22c55e",u:"g"},{l:"Fiber",k:"fiber",v:tot.fiber||0,t:DT.fiber,c:"#8b5cf6",u:"g"}].map(m=><div key={m.l}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:500,display:"flex",alignItems:"center"}}>{m.l}<InfoBtn id={m.k}/></span><span style={{fontSize:13,color:"#888"}}>{Math.round(m.v)}{m.u} / {m.t}{m.u} ({Math.round((m.v/m.t)*100)}%)</span></div>
         <PB value={m.v} max={m.t} color={m.c}/>
         {m.l==="Protein"&&<div style={{marginTop:8}}>
           <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)} style={{fontSize:12,color:"#3b82f6"}}>{aminoOpen?"▾":"▸"} Key amino acids</button>
@@ -468,23 +1092,27 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
     <div style={{display:"flex",gap:8,marginBottom:16}}>
       <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:sun?"#fffbeb":"#fafafa",border:`1px solid ${sun?"#fde68a":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleSun}>
         <input type="checkbox" checked={sun} readOnly style={{width:16,height:16,accentColor:"#f59e0b",pointerEvents:"none"}}/>
-        <span style={{fontSize:13,fontWeight:500}}>☀️ Sun</span>
+        <span style={{fontSize:13,fontWeight:500}}>☀️ Sunlight exposure</span>
       </div>
       <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:hydrated?"#f0f9ff":"#fafafa",border:`1px solid ${hydrated?"#93c5fd":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleHydration}>
         <input type="checkbox" checked={hydrated} readOnly style={{width:16,height:16,accentColor:"#3b82f6",pointerEvents:"none"}}/>
         <span style={{fontSize:13,fontWeight:500}}>💧 Water: {profile?calcHydration(profile):2.5}L</span>
       </div>
     </div>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"10px 14px",background:gi?"#fef2f2":"#fafafa",border:`1px solid ${gi?"#fca5a5":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleGi}>
-      <input type="checkbox" checked={gi} readOnly style={{width:18,height:18,accentColor:"#dc2626",pointerEvents:"none"}}/>
-      <span style={{fontSize:14,fontWeight:500}}>🤢 GI distress today</span>
-      {gi&&<span style={{fontSize:12,color:"#dc2626",marginLeft:"auto"}}>Check meals for triggers</span>}
-    </div>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,padding:"10px 14px",background:sleep===undefined?"#fafafa":sleep?"#f0fdf4":"#fef2f2",border:`1px solid ${sleep===undefined?"#e5e5e5":sleep?"#86efac":"#fca5a5"}`,borderRadius:8}}>
-      <span style={{fontSize:14,fontWeight:500}}>😴 Slept well last night?</span>
-      <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-        <button onClick={()=>setSleep(true)} style={{padding:"5px 14px",borderRadius:6,border:`1px solid ${sleep===true?"#16a34a":"#e5e5e5"}`,background:sleep===true?"#16a34a":"#fff",color:sleep===true?"#fff":"#666",fontSize:13,fontWeight:600,cursor:"pointer"}}>Yes</button>
-        <button onClick={()=>setSleep(false)} style={{padding:"5px 14px",borderRadius:6,border:`1px solid ${sleep===false?"#dc2626":"#e5e5e5"}`,background:sleep===false?"#dc2626":"#fff",color:sleep===false?"#fff":"#666",fontSize:13,fontWeight:600,cursor:"pointer"}}>No</button>
+    <div style={{display:"flex",gap:8,marginBottom:16}}>
+      <div style={{flex:1,padding:"10px 12px",background:gi?"#fef2f2":"#fafafa",border:`1px solid ${gi?"#fca5a5":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleGi}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <input type="checkbox" checked={gi} readOnly style={{width:16,height:16,accentColor:"#dc2626",pointerEvents:"none"}}/>
+          <span style={{fontSize:13,fontWeight:500}}>🤢 GI distress</span>
+        </div>
+        {gi&&<div style={{fontSize:11,color:"#dc2626",marginTop:4,marginLeft:24}}>Check meals for triggers</div>}
+      </div>
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 12px",background:sleep===true?"#f0fdf4":sleep===false?"#fef2f2":"#fafafa",border:`1px solid ${sleep===true?"#86efac":sleep===false?"#fca5a5":"#e5e5e5"}`,borderRadius:8}}>
+        <span style={{fontSize:13,fontWeight:500}}>😴 Sleep quality</span>
+        <div style={{display:"flex",gap:4}}>
+          <button onClick={()=>setSleep(sleep===true?undefined:true)} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${sleep===true?"#16a34a":"#e5e5e5"}`,background:sleep===true?"#16a34a":"#fff",color:sleep===true?"#fff":"#666",fontSize:12,fontWeight:sleep===true?600:500,cursor:"pointer"}}>Good</button>
+          <button onClick={()=>setSleep(sleep===false?undefined:false)} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${sleep===false?"#dc2626":"#e5e5e5"}`,background:sleep===false?"#dc2626":"#fff",color:sleep===false?"#fff":"#666",fontSize:12,fontWeight:sleep===false?600:500,cursor:"pointer"}}>Bad</button>
+        </div>
       </div>
     </div>
     <div style={{marginBottom:16,padding:"12px 14px",background:rppScore?"#f0f9ff":"#fafafa",border:`1px solid ${rppScore?"#93c5fd":"#e5e5e5"}`,borderRadius:8}}>
@@ -504,8 +1132,6 @@ function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,tog
     </div>
     <h3 className="stit">Key micronutrients</h3>
     <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
-
-    <div style={{textAlign:"center",display:"flex",justifyContent:"center",gap:8,marginBottom:8}}>{!cfm?<button className="btn btn-o btn-s" onClick={()=>setCfm(true)}>Reset today</button>:<><span style={{fontSize:13,color:"#dc2626",alignSelf:"center"}}>Reset all?</span><button className="btn btn-d btn-s" onClick={()=>{setMeals([]);setCfm(false)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCfm(false)}>Cancel</button></>}</div>
 
     {/* LIFESTYLE SUGGESTIONS */}
     {(()=>{
@@ -583,7 +1209,7 @@ function TemplatesPage({templates,setTemplates,DT,prompt}){
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,sleep,setSleep,templates,skipped,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile,lastReportWindowStart,setLastReportWindowStart}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
@@ -643,7 +1269,29 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
     return{giDays:giDays.length,okDays:okDays.length,totalDays:daysWithData.length,baseRate:Math.round(baseRate*100),triggers:triggers.slice(0,5)};
   })();
 
+  // PERFORMANCE REPORT CADENCE
+  const activeDaysLogged=Object.keys(history).filter(d=>history[d]&&history[d].length>0).length;
+  const reportState=(()=>{
+    if(!lastReportWindowStart){
+      if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`📊 First report available in ${x} day${x!==1?"s":""}`}}
+      return{enabled:true,label:"📊 Report available — download now"};
+    }
+    const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
+    if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`📊 Next report available in ${z} day${z!==1?"s":""}`}}
+    if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`📊 Report available — download now (expires in ${y} day${y!==1?"s":""})`}}
+    return{enabled:true,label:"📊 Report available — download now"};
+  })();
+  const downloadReport=()=>{
+    try{
+      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress});
+      const doc=window.renderReportPDF(report);
+      doc.save(`performance-report-${today()}.pdf`);
+      setLastReportWindowStart(today());
+    }catch(e){alert("Couldn't generate the report: "+e.message)}
+  };
+
   return<div>
+    <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{marginBottom:20}}>{reportState.label}</button>
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
 
     {/* GI CORRELATION ALERT */}
@@ -672,118 +1320,6 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
       <div style={{fontSize:14,fontWeight:500,color:"#92400e"}}>🤢 GI distress logged on {giCorrelation.giDays} days but no clear food pattern found yet. Keep tracking for more accurate correlations.</div>
     </div>}
 
-    {/* RPP-NUTRITION CORRELATION per training type */}
-    {(()=>{
-      const KEY_NUTRIENTS=[
-        {key:"calories",label:"Calories",unit:"kcal"},
-        {key:"protein",label:"Protein",unit:"g"},
-        {key:"carbs",label:"Carbs",unit:"g"},
-        {key:"fat",label:"Fat",unit:"g"},
-        {key:"fiber",label:"Fiber",unit:"g"},
-        ...MICROS.map(m=>({key:m.key,label:m.name,unit:m.unit})),
-      ];
-      // Build sessions with full nutrient sums from 24h pre-training window
-      const sessions=[];
-      days.forEach(d=>{
-        const r=rpp[d];
-        const score=typeof r==="object"?r.score:r||0;
-        const tTime=typeof r==="object"?r.trainingTime:"";
-        const tType=typeof r==="object"?r.trainingType:"";
-        if(score>0&&history[d]){
-          const trainingDT=new Date(d+"T"+(tTime||"17:00")+":00");
-          const window24=new Date(trainingDT.getTime()-24*60*60*1000);
-          const mealsInWindow=[];
-          [d,...days.filter(x=>x!==d)].forEach(md=>{
-            (history[md]||[]).forEach(m=>{
-              const mealDT=new Date(md+"T"+(m.time||"12:00")+":00");
-              if(mealDT>=window24&&mealDT<=trainingDT)mealsInWindow.push(m);
-            });
-          });
-          const nut={};KEY_NUTRIENTS.forEach(n=>{nut[n.key]=(baseline[n.key]||0)});
-          mealsInWindow.forEach(m=>{KEY_NUTRIENTS.forEach(n=>{const v=Number(m[n.key]);nut[n.key]+=isNaN(v)?0:v})});
-          sessions.push({date:d,score,trainingType:tType||"none",nutrients:nut});
-        }
-      });
-      if(sessions.length<2)return null;
-
-      // Group sessions by training type
-      const byType={};
-      sessions.forEach(s=>{if(!byType[s.trainingType])byType[s.trainingType]=[];byType[s.trainingType].push(s)});
-
-      // Build per-type analyses
-      const analyses=[];
-      const insufficientTypes=[];
-      Object.entries(byType).forEach(([typeId,typeSessions])=>{
-        const typeInfo=TRAINING_TYPES.find(t=>t.id===typeId)||{id:"none",label:"Untagged sessions",short:"Untagged",icon:"❓",color:"#888"};
-        if(typeSessions.length<3){insufficientTypes.push({typeInfo,count:typeSessions.length});return}
-        const sorted=[...typeSessions].sort((a,b)=>b.score-a.score);
-        const mid=Math.ceil(sorted.length/2);
-        const top=sorted.slice(0,mid);
-        const bot=sorted.slice(mid);
-        if(bot.length===0){insufficientTypes.push({typeInfo,count:typeSessions.length});return}
-        const avgScore=typeSessions.reduce((s,x)=>s+x.score,0)/typeSessions.length;
-        const insights=[];
-        KEY_NUTRIENTS.forEach(n=>{
-          const topAvg=top.reduce((s,x)=>s+x.nutrients[n.key],0)/top.length;
-          const botAvg=bot.reduce((s,x)=>s+x.nutrients[n.key],0)/bot.length;
-          if(topAvg<1&&botAvg<1)return;
-          const diff=topAvg-botAvg;
-          const pctDiff=botAvg>0.5?(diff/botAvg)*100:(topAvg>0?200:0);
-          if(Math.abs(pctDiff)<15)return;
-          const sampleFactor=Math.min(typeSessions.length/6,1);
-          const magFactor=Math.min(Math.abs(pctDiff)/60,1);
-          const confidence=Math.round(sampleFactor*magFactor*100);
-          if(confidence<10)return;
-          insights.push({key:n.key,label:n.label,unit:n.unit,topAvg:Math.round(topAvg*10)/10,botAvg:Math.round(botAvg*10)/10,pctDiff:Math.round(pctDiff),confidence:Math.min(confidence,99),positive:diff>0});
-        });
-        insights.sort((a,b)=>b.confidence-a.confidence);
-        const boosters=insights.filter(x=>x.positive).slice(0,4);
-        const drainers=insights.filter(x=>!x.positive).slice(0,4);
-        analyses.push({typeInfo,sessions:typeSessions,avgScore,boosters,drainers});
-      });
-
-      if(analyses.length===0&&insufficientTypes.length===0)return null;
-
-      return<div style={{marginBottom:24}}>
-        <div style={{fontSize:14,fontWeight:600,color:"#1d4ed8",marginBottom:4}}>💪 Nutrition → Performance by training type</div>
-        <p style={{fontSize:12,color:"#64748b",marginBottom:16}}>Compares what you ate in the 24h before training between your best- and worst-scoring sessions of each type.</p>
-        <div className="fc" style={{gap:12}}>
-          {analyses.map((a,i)=>(a.boosters.length===0&&a.drainers.length===0)?<div key={i} style={{background:"#fafafa",border:`1px solid ${a.typeInfo.color}44`,borderRadius:12,padding:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>{a.typeInfo.icon}</span><span style={{fontSize:14,fontWeight:600,color:a.typeInfo.color}}>{a.typeInfo.label}</span></div>
-              <span style={{fontSize:12,color:"#666"}}>{a.sessions.length} sessions · avg {Math.round(a.avgScore*10)/10}/10</span>
-            </div>
-            <p style={{fontSize:12,color:"#888",marginTop:8,fontStyle:"italic"}}>No significant nutrient differences between your best and worst sessions yet.</p>
-          </div>:<div key={i} style={{background:"#f0f9ff",border:`1px solid ${a.typeInfo.color}`,borderRadius:12,padding:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:16}}>{a.typeInfo.icon}</span><span style={{fontSize:14,fontWeight:600,color:a.typeInfo.color}}>{a.typeInfo.label}</span></div>
-              <span style={{fontSize:12,color:"#666"}}>{a.sessions.length} sessions · avg {Math.round(a.avgScore*10)/10}/10</span>
-            </div>
-            {a.boosters.length>0&&<div style={{marginBottom:a.drainers.length>0?10:0}}>
-              <div style={{fontSize:12,fontWeight:600,color:"#16a34a",marginBottom:6}}>▲ More on high-scoring days</div>
-              <div className="fc" style={{gap:5}}>{a.boosters.map((b,j)=><div key={j} style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:6,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                <div style={{flex:1,minWidth:0}}><span style={{fontWeight:600,fontSize:13}}>{b.label}</span><span style={{fontSize:11,color:"#888",marginLeft:6}}>{b.topAvg}{b.unit} vs {b.botAvg}{b.unit} (+{b.pctDiff}%)</span></div>
-                <span style={{fontSize:11,fontWeight:600,color:"#16a34a",whiteSpace:"nowrap"}}>{b.confidence}%</span>
-              </div>)}</div>
-            </div>}
-            {a.drainers.length>0&&<div>
-              <div style={{fontSize:12,fontWeight:600,color:"#dc2626",marginBottom:6}}>▼ Less on high-scoring days</div>
-              <div className="fc" style={{gap:5}}>{a.drainers.map((b,j)=><div key={j} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                <div style={{flex:1,minWidth:0}}><span style={{fontWeight:600,fontSize:13}}>{b.label}</span><span style={{fontSize:11,color:"#888",marginLeft:6}}>{b.topAvg}{b.unit} vs {b.botAvg}{b.unit} ({b.pctDiff}%)</span></div>
-                <span style={{fontSize:11,fontWeight:600,color:"#dc2626",whiteSpace:"nowrap"}}>{b.confidence}%</span>
-              </div>)}</div>
-            </div>}
-          </div>)}
-          {insufficientTypes.length>0&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 12px"}}>
-            <div style={{fontSize:12,color:"#92400e"}}>
-              <strong>Need more sessions:</strong> {insufficientTypes.map((s,i)=>`${s.typeInfo.icon} ${s.typeInfo.short} (${s.count}/3)`).join(" · ")}
-            </div>
-          </div>}
-        </div>
-        <p style={{fontSize:11,color:"#999",marginTop:10}}>Need 3+ sessions per type. Confidence combines sample size (more sessions = higher) with effect magnitude (bigger nutrient gap = higher).</p>
-      </div>;
-    })()}
-
     {profile.trackNutrient&&profile.trackNutrient!=="none"&&<TrackingChart history={history} baseline={baseline} sunlight={sunlight} trackKey={profile.trackNutrient} DT={DT}/>}
 
     {wd.length>=2&&<div style={{marginBottom:24}}><h3 className="stit">{wd.length}-day averages</h3><div className="gm">{allN.map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div></div>}
@@ -801,7 +1337,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
         {hasSun&&<span style={{fontSize:13,color:"#ca8a04"}}>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
         {hasHydration&&<span style={{fontSize:13,color:"#3b82f6"}}>💧 Hydrated</span>}
         {hasGi&&<span style={{fontSize:13,color:"#dc2626"}}>🤢 GI distress</span>}
-        {(()=>{const next=daySleep===undefined?true:daySleep===true?false:undefined;return<span onClick={()=>setSleep(d.date,next)} style={{fontSize:13,cursor:"pointer",color:daySleep===true?"#16a34a":daySleep===false?"#dc2626":"#888",fontWeight:daySleep===undefined?400:500,background:daySleep===undefined?"#f5f5f5":"transparent",padding:daySleep===undefined?"3px 10px":"0",borderRadius:4,border:daySleep===undefined?"1px dashed #ccc":"none"}}>😴 {daySleep===true?"Slept well":daySleep===false?"Poor sleep":"Sleep: tap to set"}</span>})()}
+        {daySleep!==undefined&&<span style={{fontSize:13,color:daySleep===true?"#16a34a":"#dc2626",fontWeight:500}}>😴 {daySleep===true?"Slept well":"Poor sleep"}</span>}
         {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"#16a34a":s>=5?"#ca8a04":s>0?"#dc2626":"#888",fontWeight:s>0?600:400,background:s>0?"transparent":"#f5f5f5",padding:s>0?"0":"3px 10px",borderRadius:4,border:s>0?"none":"1px dashed #ccc"}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
       </div>
       {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"#f0f9ff",border:"1px solid #93c5fd",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
@@ -827,72 +1363,6 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
       </div>}
     </div>})}
 
-    {/* GI CORRELATION ANALYSIS */}
-    {(()=>{
-      const giDays=days.filter(d=>giDistress[d]&&history[d]);
-      const okDays=days.filter(d=>!giDistress[d]&&history[d]);
-      if(giDays.length===0)return null;
-      const giMeals=giDays.flatMap(d=>(history[d]||[]).map(m=>m.mealName)).join("; ");
-      const okMeals=okDays.flatMap(d=>(history[d]||[]).map(m=>m.mealName)).join("; ");
-      const analyzeGi=async()=>{
-        setGiLd(true);setGiErr(null);
-        try{const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`Analyze GI distress correlation from meal data. Find patterns: which foods appear on distress days but not on normal days.
-
-DISTRESS DAYS (${giDays.length} days): ${giMeals}
-NORMAL DAYS (${okDays.length} days): ${okMeals}
-
-User profile: ${profile.diet||"omnivore"} diet${(profile.intolerances||[]).length>0?`, known intolerances: ${profile.intolerances.join(", ")}`:""}
-
-Respond ONLY with JSON (no markdown):
-{"triggers":[{"food":"suspected trigger","confidence":0.0,"reason":"brief explanation"}],"overallConfidence":0.0,"note":"brief summary"}
-
-Rules for confidence (0.0-1.0):
-- 0.0-0.3: weak/insufficient data
-- 0.3-0.6: possible pattern, needs more data
-- 0.6-0.8: likely trigger
-- 0.8-1.0: strong correlation
-Set overallConfidence based on data quality (${giDays.length} GI days, ${okDays.length} normal days — need 3+ GI days for meaningful analysis).`}]})});
-        const d=await r.json();if(d.error)throw new Error(d.error.message);
-        const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
-        const match=allText.match(/\{[\s\S]*\}/);if(!match)throw new Error("Analysis failed");
-        setGiAnalysis(JSON.parse(match[0]));
-        }catch(e){setGiErr(e.message)}finally{setGiLd(false)}
-      };
-      const confColor=c=>c>=0.8?"#dc2626":c>=0.6?"#ea580c":c>=0.3?"#ca8a04":"#888";
-      const confLabel=c=>c>=0.8?"Strong":c>=0.6?"Likely":c>=0.3?"Possible":"Weak";
-      return<div style={{marginTop:28}}>
-        <h3 className="stit">🤢 GI distress analysis</h3>
-        <p style={{fontSize:13,color:"#666",marginBottom:12}}>{giDays.length} distress day{giDays.length!==1?"s":""} vs {okDays.length} normal day{okDays.length!==1?"s":""} in the last 10 days</p>
-        {!giAnalysis&&!giLd&&<button className="btn" onClick={analyzeGi}>Analyze triggers</button>}
-        {giLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Analyzing patterns…</div>}
-        {giErr&&<div className="err">{giErr}</div>}
-        {giAnalysis&&<div>
-          <div style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:12,padding:20,marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <span style={{fontSize:14,fontWeight:600}}>Analysis confidence</span>
-              <span style={{fontSize:14,fontWeight:600,color:confColor(giAnalysis.overallConfidence)}}>{Math.round(giAnalysis.overallConfidence*100)}% — {confLabel(giAnalysis.overallConfidence)}</span>
-            </div>
-            <div className="pbg" style={{marginBottom:16,height:10}}>
-              <div className="pf" style={{width:`${Math.round(giAnalysis.overallConfidence*100)}%`,background:confColor(giAnalysis.overallConfidence)}}/>
-            </div>
-            {giAnalysis.triggers&&giAnalysis.triggers.length>0&&<div>
-              <div style={{fontSize:13,fontWeight:600,color:"#666",marginBottom:10}}>Suspected triggers:</div>
-              <div className="fc" style={{gap:10}}>
-                {giAnalysis.triggers.map((t,i)=><div key={i} style={{background:"#fafafa",borderRadius:8,padding:"12px 14px",borderLeft:`4px solid ${confColor(t.confidence)}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                    <span style={{fontSize:14,fontWeight:600}}>{t.food}</span>
-                    <span style={{fontSize:12,fontWeight:500,color:confColor(t.confidence)}}>{Math.round(t.confidence*100)}% {confLabel(t.confidence)}</span>
-                  </div>
-                  <p style={{fontSize:13,color:"#666",margin:0}}>{t.reason}</p>
-                </div>)}
-              </div>
-            </div>}
-            {giAnalysis.note&&<p style={{fontSize:13,color:"#888",marginTop:12,fontStyle:"italic"}}>{giAnalysis.note}</p>}
-          </div>
-          <button className="btn btn-o" style={{width:"100%"}} onClick={analyzeGi}>Re-analyze</button>
-        </div>}
-      </div>;
-    })()}
   </div>
 }
 
@@ -916,6 +1386,7 @@ function App(){
   const[skipped,setSkipped_]=useState(()=>ls("nt-skipped",{}));
   const[hydration,setHydration_]=useState(()=>ls("nt-hydration",{}));
   const[sleep,setSleep_]=useState(()=>ls("nt-sleep",{}));
+  const[lastReportWindowStart,setLastReportWindowStart_]=useState(()=>ls("nt-last-report-window",null));
   const[showCalib,setShowCalib]=useState(false);
   const[showSleepPrompt,setShowSleepPrompt]=useState(false);
   const[syncing,setSyncing]=useState(false);
@@ -977,8 +1448,8 @@ function App(){
           });
           cleanHist[d]=unique;
         });
-        // Keep only last 10 days
-        const keep=last10();const trimmed={};
+        // Keep only last 180 days
+        const keep=last180();const trimmed={};
         Object.keys(cleanHist).forEach(function(d){if(keep.includes(d))trimmed[d]=cleanHist[d]});
         setHistory_(trimmed);lss("nt-history",trimmed);
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
@@ -987,7 +1458,8 @@ function App(){
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
         setSleep_(data.sleep||{});lss("nt-sleep",data.sleep||{});
-        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{}})
+        setLastReportWindowStart_(data.lastReportWindow||null);lss("nt-last-report-window",data.lastReportWindow||null);
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{},lastReportWindow:data.lastReportWindow||null})
       }
       setSyncing(false);
     }).catch(function(){setSyncing(false)});
@@ -997,16 +1469,17 @@ function App(){
   const prompt=profile?buildPrompt(profile):"";
 
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{})})},[userKey_]);
+  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),lastReportWindow:ls("nt-last-report-window",null)})},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
-  const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last10();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
+  const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last180();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
   const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
   useEffect(()=>{lss("nt-templates",templates);scheduleSync()},[templates]);
   useEffect(()=>{if(profile){lss("nt-profile",profile);scheduleSync()}},[profile]);
   const toggleSun=(date)=>{setSunlight_(p=>{const u={...p,[date]:!p[date]};lss("nt-sunlight",u);scheduleSync();return u})};
   const toggleGi=(date)=>{setGiDistress_(p=>{const u={...p,[date]:!p[date]};lss("nt-gi",u);scheduleSync();return u})};
   const setSleep=(date,val)=>{setSleep_(p=>{const u={...p,[date]:val};lss("nt-sleep",u);scheduleSync();return u})};
+  const setLastReportWindowStart=(v)=>{setLastReportWindowStart_(v);lss("nt-last-report-window",v);scheduleSync()};
   const setRpp=(date,val)=>{setRpp_(p=>{const u={...p,[date]:val};lss("nt-rpp",u);scheduleSync();return u})};
   const toggleSkip=(date,idx)=>{setSkipped_(p=>{const daySkips=p[date]||[];const u={...p,[date]:daySkips.includes(idx)?daySkips.filter(x=>x!==idx):[...daySkips,idx]};lss("nt-skipped",u);scheduleSync();return u})};
   const toggleHydration=(date)=>{setHydration_(p=>{const u={...p,[date]:!p[date]};lss("nt-hydration",u);scheduleSync();return u})};
@@ -1080,9 +1553,9 @@ function App(){
       <button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button>
       <button className={nc("history")} onClick={()=>setPage("history")}>History</button>
     </div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
+    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
     {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} setSleep={setSleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
+    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
   </div>
 }
 
