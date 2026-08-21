@@ -495,7 +495,12 @@
         wrapped.forEach((line) => { ensureSpace(5); doc.text(line, MARGIN + 4, y); y += 4.2; });
         y += 2;
       },
-      empty(text) { doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(...COLORS.faint); ensureSpace(6); doc.text(text, MARGIN, y); y += 5; },
+      empty(text) {
+        doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(...COLORS.faint);
+        const wrapped = doc.splitTextToSize(text, CONTENT_W);
+        wrapped.forEach((line) => { ensureSpace(5); doc.text(line, MARGIN, y); y += 4.2; });
+        y += 1;
+      },
     };
   }
 
@@ -649,16 +654,20 @@
       w.takeaway(tier4Takeaway(report.tier4));
     }
 
-    if (report.gi && report.gi.triggers && report.gi.triggers.length > 0) {
+    if (report.gi) {
       w.section("Digestive notes");
-      w.body(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. The following food-name keywords appeared disproportionately on those days:`, { size: 10 });
-      w.space(1);
-      report.gi.triggers.forEach((t) => {
-        const pct = Math.round((t.giCount / t.total) * 100);
-        w.finding(`"${t.word}" — appeared in ${t.total} meals; ${t.giCount} of those (${pct}%) were on days you reported GI distress.`, t.confidence, { dotColor: COLORS.neutral });
-      });
-      w.body("This is a keyword pattern, not a diagnosis. Consider tracking further to confirm.", { color: COLORS.faint, size: 9 });
-      w.takeaway(giTakeaway(report.gi));
+      if (report.gi.triggers && report.gi.triggers.length > 0) {
+        w.body(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. The following food-name keywords appeared disproportionately on those days:`, { size: 10 });
+        w.space(1);
+        report.gi.triggers.forEach((t) => {
+          const pct = Math.round((t.giCount / t.total) * 100);
+          w.finding(`"${t.word}" — appeared in ${t.total} meals; ${t.giCount} of those (${pct}%) were on days you reported GI distress.`, t.confidence, { dotColor: COLORS.neutral });
+        });
+        w.body("This is a keyword pattern, not a diagnosis. Consider tracking further to confirm.", { color: COLORS.faint, size: 9 });
+        w.takeaway(giTakeaway(report.gi));
+      } else {
+        w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days, but no food-name keyword appeared often enough yet to suggest a pattern. Keep tracking for more accurate correlations.`);
+      }
     }
 
     const pageCount = doc.getNumberOfPages();
@@ -687,6 +696,7 @@
 <script type="text/babel">
 const{useState,useEffect,useRef,useCallback}=React;
 const API_URL="https://lingering-river-d82a.frperessutti.workers.dev";
+let currentUserKey=null; // mirrors App()'s userKey_; read by doAnalyze/getSug so the worker can enforce per-user usage limits
 
 const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"Vit C",key:"vitaminC",unit:"mg",target:90},{name:"Vit A",key:"vitaminA",unit:"mcg",target:900},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Iodine",key:"iodine",unit:"mcg",target:150},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
 const MK=["calories","protein","fat","carbs","fiber"];
@@ -845,7 +855,7 @@ async function doAnalyze(text,img,prompt){
     cleanText=cleanText.replace(urlMatch[0],"").trim();
   }
   c.push({type:"text",text:`${prompt}${pageContext}\n\nMeal: ${cleanText}`});
-  const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}]};
+  const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}],userKey:currentUserKey,kind:"meal_analysis"};
   const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
   const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
@@ -1150,7 +1160,7 @@ ${defs.length>0?`\nDeficiencies: ${defText}`:""}
 ${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
 
 IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
-[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}]})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
+[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
       return<div style={{marginTop:28}}>
         <h3 className="stit">Lifestyle suggestions</h3>
         {defs.length>0&&<><p style={{fontSize:13,color:"#666",marginBottom:8}}>Deficiencies:</p><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div></>}
@@ -1369,6 +1379,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
 /* ── MAIN APP ── */
 function App(){
   const[userKey_,setUserKey]=useState(()=>ls("nt-user-key",null));
+  useEffect(()=>{currentUserKey=userKey_},[userKey_]);
   const[profile,setProfile]=useState(()=>ls("nt-profile",null));
   const[page,setPage]=useState("today");
   const[editProfile,setEditProfile]=useState(false);
