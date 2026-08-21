@@ -780,6 +780,15 @@ function calcTargets(p){
   const t={calories:cal,protein:prot,fat,carbs,fiber};
   MICROS.forEach(m=>{t[m.key]=m.target});
   if(p.gender==="female"){t.iron=18;t.vitaminA=700;t.vitaminC=75}
+  // Overlay any user-set macro targets on top of the automatic calculation.
+  // Protein is stored as g/kg so it rescales if weight changes; fat/carbs are stored as grams.
+  // Fiber and micros are never overridden — they always stay automatic.
+  if(p.custom){
+    if(p.custom.protein!=null)t.protein=Math.round(p.custom.protein*p.weight);
+    if(p.custom.fat!=null)t.fat=Math.round(p.custom.fat);
+    if(p.custom.carbs!=null)t.carbs=Math.round(p.custom.carbs);
+    t.calories=Math.round(t.protein*4+t.carbs*4+t.fat*9);
+  }
   return t;
 }
 
@@ -826,6 +835,7 @@ Respond ONLY with JSON:
 function today(){return new Date().toISOString().slice(0,10)}
 function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
+function datesSince(fromISO){const cursor=new Date(fromISO+"T12:00:00");const now=new Date();const out=[];while(cursor<=now){out.push(cursor.toISOString().slice(0,10));cursor.setDate(cursor.getDate()+1)}return out}
 function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>{const v=Number(m[k]);t[k]+=isNaN(v)?0:v}));return t}
 function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m<=1)?1000:2000}
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
@@ -993,8 +1003,16 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   const[diet,setDiet]=useState(initial?.diet||"omnivore");
   const[intol,setIntol]=useState(initial?.intolerances||[]);
   const toggleIntol=(id)=>setIntol(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  const[useCustom,setUseCustom]=useState(!!initial?.custom);
+  const[cProtein,setCProtein]=useState(initial?.custom?.protein!=null?Math.round(initial.custom.protein*(initial.weight||75)):null);
+  const[cFat,setCFat]=useState(initial?.custom?.fat!=null?Math.round(initial.custom.fat):null);
+  const[cCarbs,setCCarbs]=useState(initial?.custom?.carbs!=null?Math.round(initial.custom.carbs):null);
   const p={age:+age,height:+height,weight:+weight,gender,trainingHours:+hours,goal};
   const targets=calcTargets(p);const goalInfo=GOALS.find(g=>g.id===goal);
+  const effProtein=useCustom?(+cProtein||0):targets.protein;
+  const effFat=useCustom?(+cFat||0):targets.fat;
+  const effCarbs=useCustom?(+cCarbs||0):targets.carbs;
+  const effCalories=useCustom?Math.round(effProtein*4+effCarbs*4+effFat*9):targets.calories;
   return<div>
     <h2 style={{fontSize:20,fontWeight:600,marginBottom:4}}>{initial?"Edit profile":"Welcome"+(firstName?", "+firstName:"")+"!"}</h2>
     {!initial&&<p className="sub" style={{marginBottom:20}}>Set up your profile to calculate your daily targets</p>}
@@ -1016,11 +1034,45 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       {intol.length===0&&<p style={{fontSize:12,color:"#888",marginTop:6}}>Tap to select any that apply</p>}
     </div>
     <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
-    <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,padding:16,marginBottom:20}}>
-      <div style={{fontSize:14,fontWeight:600,color:"#16a34a",marginBottom:8}}>Calculated daily targets</div>
-      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{targets.calories} kcal</strong> · Protein: <strong>{targets.protein}g</strong> · Fat: <strong>{targets.fat}g</strong> · Carbs: <strong>{targets.carbs}g</strong> · Fiber: <strong>{targets.fiber}g</strong></div>
+    <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,padding:16,marginBottom:16}}>
+      <div style={{fontSize:14,fontWeight:600,color:"#16a34a",marginBottom:8}}>{useCustom?"Your daily targets":"Calculated daily targets"}</div>
+      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> · Fat: <strong>{effFat}g</strong> · Carbs: <strong>{effCarbs}g</strong> · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
-    <button className="btn" onClick={()=>onSave({...p,diet,intolerances:intol,trackNutrient:track,multiplier:initial?.multiplier||1,lastCalibration:initial?.lastCalibration||today()})}>{initial?"Save changes":"Create profile"}</button>
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:useCustom?"#eff6ff":"#fafafa",border:`1px solid ${useCustom?"#93c5fd":"#e5e5e5"}`,borderRadius:8,cursor:"pointer",marginBottom:useCustom?16:20}} onClick={()=>{
+      if(!useCustom){
+        if(cProtein==null)setCProtein(targets.protein);
+        if(cFat==null)setCFat(targets.fat);
+        if(cCarbs==null)setCCarbs(targets.carbs);
+      }
+      setUseCustom(!useCustom);
+    }}>
+      <input type="checkbox" checked={useCustom} readOnly style={{width:16,height:16,pointerEvents:"none"}}/>
+      <span style={{fontSize:13,fontWeight:500}}>Set my own macro targets</span>
+    </div>
+    {useCustom&&<div className="fr" style={{gap:12,marginBottom:20}}>
+      <div className="field" style={{flex:1,marginBottom:0}}>
+        <label>Protein (g)</label>
+        <input type="number" value={cProtein??""} onChange={e=>setCProtein(e.target.value)}/>
+        <p style={{fontSize:11,color:"#888",marginTop:4}}>{(+weight)>0?((+cProtein||0)/(+weight)).toFixed(2):"—"} g/kg</p>
+      </div>
+      <div className="field" style={{flex:1,marginBottom:0}}>
+        <label>Fat (g)</label>
+        <input type="number" value={cFat??""} onChange={e=>setCFat(e.target.value)}/>
+      </div>
+      <div className="field" style={{flex:1,marginBottom:0}}>
+        <label>Carbs (g)</label>
+        <input type="number" value={cCarbs??""} onChange={e=>setCCarbs(e.target.value)}/>
+      </div>
+    </div>}
+    <button className="btn" onClick={()=>{
+      const weightChanged=initial?+weight!==initial.weight:false;
+      onSave({...p,diet,intolerances:intol,trackNutrient:track,
+        multiplier:initial?.multiplier||1,
+        calibWeight:(!initial||weightChanged)?+weight:(initial.calibWeight??initial.weight),
+        lastCalibration:(!initial||weightChanged)?today():(initial.lastCalibration||today()),
+        custom:useCustom?{protein:(+cProtein||0)/(+weight||1),fat:+cFat||0,carbs:+cCarbs||0}:null
+      });
+    }}>{initial?"Save changes":"Create profile"}</button>
   </div>
 }
 
@@ -1398,7 +1450,9 @@ function App(){
   const[hydration,setHydration_]=useState(()=>ls("nt-hydration",{}));
   const[sleep,setSleep_]=useState(()=>ls("nt-sleep",{}));
   const[lastReportWindowStart,setLastReportWindowStart_]=useState(()=>ls("nt-last-report-window",null));
-  const[showCalib,setShowCalib]=useState(false);
+  const[showWeightModal,setShowWeightModal]=useState(false);
+  const[weightInput,setWeightInput]=useState("");
+  const[weightErr,setWeightErr]=useState(null);
   const[showSleepPrompt,setShowSleepPrompt]=useState(false);
   const[syncing,setSyncing]=useState(false);
 
@@ -1499,18 +1553,48 @@ function App(){
   const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory_(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);scheduleSync();return u})}};
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
 
-  useEffect(()=>{if(profile?.lastCalibration){const diff=Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24));if(diff>=10)setShowCalib(true)}},[profile]);
-
   // Prompt "Did you sleep well?" once per day — only after cloud sync finishes,
   // so a fresh device doesn't ask again for an answer that's already saved in the cloud.
   useEffect(()=>{if(userKey_&&profile&&!syncing&&sleep[today()]===undefined)setShowSleepPrompt(true);else if(sleep[today()]!==undefined)setShowSleepPrompt(false)},[userKey_,profile,syncing,sleep]);
 
-  const handleCalibration=(result)=>{
-    if(!profile)return;let mult=profile.multiplier||1;let msg="";
-    if(result==="same"){const days=last10();const wd=days.filter(d=>history[d]);if(wd.length>=2){const avgCal=wd.reduce((s,d)=>s+sum(history[d]).calories,0)/wd.length;if(avgCal<DT.calories*0.85){mult=Math.min(mult*1.15,2.0);msg=`Portions increased by 15% (${mult.toFixed(2)}x).`}else msg="Tracking looks accurate!"}}
-    else if(result==="lost")msg="Deficit is real. Consider eating more if unintended.";
-    else if(result==="gained"){mult=Math.max(mult*0.9,0.7);msg=`Portions decreased by 10% (${mult.toFixed(2)}x).`}
-    setProfile({...profile,multiplier:mult,lastCalibration:today()});setShowCalib(false);if(msg)alert(msg);
+  // 10-day weight check — sequenced to appear only after the sleep prompt has been
+  // resolved (answered or dismissed), never simultaneously with it.
+  const weightCheckDue=profile?.lastCalibration?Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24))>=10:false;
+  useEffect(()=>{
+    if(!profile?.lastCalibration||showSleepPrompt){setShowWeightModal(false);return}
+    const diff=Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24));
+    setShowWeightModal(diff>=10);
+  },[profile,showSleepPrompt]);
+
+  const submitWeightCheck=(rawWeight)=>{
+    const newWeight=parseFloat(rawWeight);
+    if(!newWeight||newWeight<=0||newWeight>400){setWeightErr("Enter a valid weight in kg.");return}
+    setWeightErr(null);
+    const oldWeight=profile.calibWeight??profile.weight;
+    const diffDays=Math.max(Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24)),1);
+    const loggedDates=datesSince(profile.lastCalibration).filter(d=>history[d]&&history[d].length>0);
+    let mult=profile.multiplier||1,msg;
+    if(loggedDates.length<2){
+      msg="Weight saved. Keep logging meals so the next check can fine-tune your portions.";
+    }else{
+      const baseline=sum(templates);
+      const avgLoggedCalories=loggedDates.reduce((s,d)=>s+sum(history[d]).calories,0)/loggedDates.length+(baseline.calories||0);
+      const maintenance=calcTDEE(profile);
+      const expectedDeltaKg=(avgLoggedCalories-maintenance)*diffDays/7700;
+      const observedDeltaKg=newWeight-oldWeight;
+      const gapKg=observedDeltaKg-expectedDeltaKg;
+      if(Math.abs(gapKg)<0.3){
+        msg="Tracking looks accurate — your weight change matches your logged intake.";
+      }else if(gapKg>0){
+        mult=Math.min(mult*1.15,2.0);
+        msg=`Your weight didn't move as much as your logged intake suggested — meal sizes were likely underestimated. Portions increased to ${mult.toFixed(2)}x for future analyses.`;
+      }else{
+        mult=Math.max(mult*0.9,0.7);
+        msg=`You lost more than your logged intake suggested — meal sizes were likely overestimated. Portions decreased to ${mult.toFixed(2)}x for future analyses.`;
+      }
+    }
+    setProfile({...profile,weight:newWeight,calibWeight:newWeight,multiplier:mult,lastCalibration:today()});
+    setShowWeightModal(false);setWeightInput("");alert(msg);
   };
 
   if(!userKey_||!profile){
@@ -1548,15 +1632,26 @@ function App(){
       </div>
     </div>}
 
-    {showCalib&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:12,padding:20,marginBottom:24}}>
-      <div style={{fontSize:16,fontWeight:600,color:"#1d4ed8",marginBottom:8}}>10-day calibration check</div>
-      <p style={{fontSize:14,color:"#333",lineHeight:1.5,marginBottom:16}}>Have you noticed any weight change?</p>
-      <div className="fc" style={{gap:8}}>
-        <button className="btn" style={{background:"#1d4ed8"}} onClick={()=>handleCalibration("lost")}>I lost weight</button>
-        <button className="btn btn-o" onClick={()=>handleCalibration("same")}>Weight is the same</button>
-        <button className="btn btn-o" onClick={()=>handleCalibration("gained")}>I gained weight</button>
-        <button style={{background:"none",border:"none",color:"#888",cursor:"pointer",fontSize:13,marginTop:4}} onClick={()=>{setProfile({...profile,lastCalibration:today()});setShowCalib(false)}}>Skip</button>
+    {showWeightModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
+        <div style={{fontSize:44,marginBottom:12}}>⚖️</div>
+        <div style={{fontSize:19,fontWeight:600,marginBottom:6}}>10-day weight check</div>
+        <p style={{fontSize:13,color:"#888",marginBottom:20}}>Enter your current weight so the app can fine-tune your portion estimates.</p>
+        <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder={`Weight (kg) — last: ${profile.calibWeight??profile.weight}kg`} style={{marginBottom:weightErr?4:16,textAlign:"center",fontSize:18,fontWeight:600}}/>
+        {weightErr&&<p style={{fontSize:12,color:"#dc2626",marginBottom:12}}>{weightErr}</p>}
+        <button className="btn" style={{background:"#1d4ed8"}} onClick={()=>submitWeightCheck(weightInput)}>Save weight</button>
+        <button style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:13,marginTop:14}} onClick={()=>{setShowWeightModal(false);setWeightErr(null)}}>Skip for now</button>
       </div>
+    </div>}
+
+    {weightCheckDue&&!showWeightModal&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:12,padding:16,marginBottom:24}}>
+      <div style={{fontSize:14,fontWeight:600,color:"#1d4ed8",marginBottom:8}}>⚖️ 10-day weight check pending</div>
+      <p style={{fontSize:13,color:"#333",marginBottom:12}}>Log your current weight to fine-tune future portion estimates.</p>
+      <div className="fr" style={{gap:8}}>
+        <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder="Weight (kg)" style={{flex:1}}/>
+        <button className="btn btn-s" style={{marginTop:0}} onClick={()=>submitWeightCheck(weightInput)}>Save</button>
+      </div>
+      {weightErr&&<p style={{fontSize:12,color:"#dc2626",marginTop:6}}>{weightErr}</p>}
     </div>}
 
     <div className="nav">
