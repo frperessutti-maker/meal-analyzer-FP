@@ -1014,6 +1014,9 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   const effFat=useCustom?(+cFat||0):targets.fat;
   const effCarbs=useCustom?(+cCarbs||0):targets.carbs;
   const effCalories=useCustom?Math.round(effProtein*4+effCarbs*4+effFat*9):targets.calories;
+  const pPct=effCalories>0?Math.round(effProtein*4/effCalories*100):0;
+  const fPct=effCalories>0?Math.round(effFat*9/effCalories*100):0;
+  const cPct=effCalories>0?Math.round(effCarbs*4/effCalories*100):0;
   return<div>
     <h2 style={{fontSize:20,fontWeight:600,marginBottom:4}}>{initial?"Edit profile":"Welcome"+(firstName?", "+firstName:"")+"!"}</h2>
     {!initial&&<p className="sub" style={{marginBottom:20}}>Set up your profile to calculate your daily targets</p>}
@@ -1037,7 +1040,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
     <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
     <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,padding:16,marginBottom:16}}>
       <div style={{fontSize:14,fontWeight:600,color:"#16a34a",marginBottom:8}}>{useCustom?"Your daily targets":"Calculated daily targets"}</div>
-      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> · Fat: <strong>{effFat}g</strong> · Carbs: <strong>{effCarbs}g</strong> · Fiber: <strong>{targets.fiber}g</strong></div>
+      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> ({pPct}%) · Fat: <strong>{effFat}g</strong> ({fPct}%) · Carbs: <strong>{effCarbs}g</strong> ({cPct}%) · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:useCustom?"#eff6ff":"#fafafa",border:`1px solid ${useCustom?"#93c5fd":"#e5e5e5"}`,borderRadius:8,cursor:"pointer",marginBottom:useCustom?16:20}} onClick={()=>{
       if(!useCustom){
@@ -1059,10 +1062,12 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Fat (g)</label>
         <input type="number" value={cFat??""} onChange={e=>setCFat(e.target.value)}/>
+        <p style={{fontSize:11,color:"#888",marginTop:4}}>{(+weight)>0?((+cFat||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Carbs (g)</label>
         <input type="number" value={cCarbs??""} onChange={e=>setCCarbs(e.target.value)}/>
+        <p style={{fontSize:11,color:"#888",marginTop:4}}>{(+weight)>0?((+cCarbs||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
     </div>}
     <button className="btn" onClick={()=>{
