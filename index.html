@@ -842,7 +842,7 @@ function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
 function userKey(fn,ln,pin){return(fn.trim()+"-"+ln.trim()+"-"+(pin||"0000")).toLowerCase().replace(/\s+/g,"-")}
 async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);return await r.json()}catch{return null}}
-async function cloudPut(key,data){try{await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data})})}catch{}}
+async function cloudPut(key,data,opts={}){try{await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data}),...opts})}catch{}}
 
 function cleanUrl(text){
   return text.replace(/https?:\/\/www\.amazon\.[a-z.]+\/[^\s]*?(\/dp\/[A-Z0-9]+)[^\s]*/g,"https://www.amazon.it$1");
@@ -1456,8 +1456,10 @@ function App(){
   const[showSleepPrompt,setShowSleepPrompt]=useState(false);
   const[syncing,setSyncing]=useState(false);
 
-  // Fetch from cloud on load if user is already logged in
-  useEffect(()=>{
+  // Pull the latest data from the cloud and merge it in. Runs on login/mount, and
+  // again whenever the app comes back into view — otherwise a device left open in the
+  // background would never see changes made on another device.
+  const fetchAndMergeCloud=useCallback(()=>{
     if(!userKey_)return;
     setSyncing(true);
     // Try current key first, then try migrating old key (without PIN) to new format
@@ -1530,12 +1532,36 @@ function App(){
     }).catch(function(){setSyncing(false)});
   },[userKey_]);
 
+  useEffect(()=>{fetchAndMergeCloud()},[userKey_]);
+
+  // Re-pull from the cloud whenever the app regains focus (tab switch, unlocking the
+  // phone, reopening a PWA) — not just on a fresh page load.
+  useEffect(()=>{
+    const onVisible=()=>{if(document.visibilityState==="visible")fetchAndMergeCloud()};
+    document.addEventListener("visibilitychange",onVisible);
+    return()=>document.removeEventListener("visibilitychange",onVisible);
+  },[fetchAndMergeCloud]);
+
   const DT=profile?calcTargets(profile):{calories:2500,protein:120,fat:70,carbs:300,fiber:30,iron:8,zinc:11,magnesium:400,potassium:3500,vitaminD:2000,vitaminB6:1.5,vitaminB12:2.4,folate:400,calcium:1000,omega3:1.5};
   const prompt=profile?buildPrompt(profile):"";
 
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback(()=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),lastReportWindow:ls("nt-last-report-window",null)})},[userKey_]);
+  const syncToCloud=useCallback((opts)=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),lastReportWindow:ls("nt-last-report-window",null)},opts)},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
+
+  // A change can be sitting in the 3s debounce when the tab is closed or backgrounded —
+  // very common right after logging a meal — and that pending write would otherwise be
+  // lost. Flush it immediately (keepalive so it survives the page tearing down) whenever
+  // the app is hidden, covers both closing the tab and backgrounding on mobile.
+  useEffect(()=>{
+    const flush=()=>{
+      if(syncTimer.current){clearTimeout(syncTimer.current);syncTimer.current=null;syncToCloud({keepalive:true})}
+    };
+    const onVisibility=()=>{if(document.visibilityState==="hidden")flush()};
+    document.addEventListener("visibilitychange",onVisibility);
+    window.addEventListener("pagehide",flush);
+    return()=>{document.removeEventListener("visibilitychange",onVisibility);window.removeEventListener("pagehide",flush)};
+  },[syncToCloud]);
 
   const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last180();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
   const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
