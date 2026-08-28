@@ -5,54 +5,80 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Meal Analyzer</title><!-- v24 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
   <style>
+    :root{
+      --rose:oklch(60% 0.16 340); --rose-soft:oklch(94% 0.03 340);
+      --good:oklch(58% 0.13 150); --good-soft:oklch(94% 0.04 150);
+      --warn:oklch(70% 0.14 70); --warn-soft:oklch(94% 0.045 70);
+      --bad:oklch(55% 0.17 25); --bad-soft:oklch(94% 0.045 25);
+      --ink:oklch(20% 0.01 340); --ink-soft:oklch(45% 0.012 340); --ink-faint:oklch(55% 0.012 340);
+      --gray:oklch(75% 0.02 340); --track:oklch(90% 0.008 340);
+      --page-bg:oklch(96% 0.006 340); --card-bg:#fff; --border:oklch(90% 0.008 340); --border-soft:oklch(93% 0.006 340);
+      --serif:'Source Serif 4',Georgia,serif;
+    }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;-webkit-font-smoothing:antialiased}
-    .app{max-width:640px;margin:0 auto;padding:20px 16px 40px}
-    h1{font-size:24px;font-weight:600} .sub{font-size:14px;color:#666;margin-top:4px}
-    .nav{display:flex;gap:6px;margin:20px 0 24px;background:#f5f5f5;padding:4px;border-radius:10px}
-    .nav button{flex:1;padding:12px 0;border:none;cursor:pointer;font-size:14px;font-weight:500;border-radius:8px;transition:all .2s;background:transparent;color:#888}
-    .nav button.on{background:#1a1a1a;color:#fff}
-    .tog{display:flex;border:1px solid #e5e5e5;border-radius:8px;overflow:hidden;margin-bottom:16px}
-    .tog button{flex:1;padding:10px 0;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s;background:#fff;color:#666}
-    .tog button.on{background:#1a1a1a;color:#fff}
-    textarea{width:100%;min-height:90px;padding:14px;border:1px solid #e5e5e5;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none}
-    textarea:focus{border-color:#999}
-    input[type=text],input[type=number],select{width:100%;padding:12px;border:1px solid #e5e5e5;border-radius:8px;font-size:14px;font-family:inherit;outline:none}
-    input:focus,select:focus{border-color:#999}
-    .btn{padding:12px 0;background:#1a1a1a;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;width:100%;margin-top:8px}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--ink);background:var(--page-bg);-webkit-font-smoothing:antialiased}
+    .app{max-width:640px;margin:0 auto;padding:20px 16px 100px}
+    h1{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--ink)} .sub{font-size:14px;color:var(--ink-soft);margin-top:4px}
+    .h-page{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--ink);text-wrap:balance}
+    .tog{display:flex;background:var(--page-bg);border-radius:12px;padding:3px;margin-bottom:16px}
+    .tog button{flex:1;padding:10px 0;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:all .15s;background:transparent;color:var(--ink-soft);border-radius:10px}
+    .tog button.on{background:#fff;color:var(--ink)}
+    textarea{width:100%;min-height:90px;padding:14px;border:1px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;resize:vertical;outline:none;background:#fff}
+    textarea:focus{border-color:var(--rose)}
+    input[type=text],input[type=number],input[type=time],select{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;outline:none;background:#fff;color:var(--ink)}
+    input:focus,select:focus{border-color:var(--rose)}
+    .btn{padding:14px 0;background:var(--ink);color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;width:100%;margin-top:8px}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    .btn-s{padding:6px 14px;font-size:13px;width:auto;margin-top:0}
-    .btn-o{background:#fff;color:#666;border:1px solid #e5e5e5}
-    .btn-d{background:#dc2626;color:#fff;border:none}
-    .btn-do{background:#fff;color:#dc2626;border:1px solid #fca5a5}
-    .btn-x{background:none;border:none;color:#ccc;cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
-    .upl{background:#fafafa;border-radius:12px;border:2px dashed #d4d4d4;padding:32px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center}
-    .prev{width:100%;max-height:280px;object-fit:cover;border-radius:12px;border:1px solid #e5e5e5}
-    .card{background:#fafafa;border-radius:8px;padding:12px;text-align:center}
-    .card-l{font-size:11px;color:#888;font-weight:500;margin-bottom:4px}
-    .card-v{font-size:20px;font-weight:600} .card-s{font-size:11px;color:#bbb;margin-top:2px}
+    .btn-rose{background:var(--rose)}
+    .btn-s{padding:9px 14px;font-size:13px;width:auto;margin-top:0;border-radius:10px}
+    .btn-o{background:#fff;color:var(--ink-soft);border:1px solid var(--border)}
+    .btn-d{background:var(--bad);color:#fff;border:none}
+    .btn-do{background:#fff;color:var(--bad);border:1px solid oklch(80% 0.1 25)}
+    .btn-x{background:none;border:none;color:var(--gray);cursor:pointer;font-size:18px;padding:0 4px;line-height:1}
+    .upl{background:#fff;border-radius:14px;border:1.5px dashed var(--gray);padding:32px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center}
+    .prev{width:100%;max-height:280px;object-fit:cover;border-radius:14px;border:1px solid var(--border)}
+    .card{background:var(--page-bg);border-radius:12px;padding:12px;text-align:center}
+    .card-l{font-size:11px;color:var(--ink-soft);font-weight:500;margin-bottom:4px}
+    .card-v{font-size:20px;font-weight:600} .card-s{font-size:11px;color:var(--gray);margin-top:2px}
     .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:28px}
     .gm{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px;margin-bottom:32px}
-    .pbg{width:100%;height:8px;background:#e5e5e5;border-radius:4px;overflow:hidden}
+    .pbg{width:100%;height:6px;background:var(--track);border-radius:4px;overflow:hidden}
     .pf{height:100%;border-radius:4px;transition:width .4s ease}
-    .stit{font-size:16px;font-weight:600;margin:0 0 16px}
-    .slab{font-size:13px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px}
-    .mi{background:#fafafa;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;border:1px solid #f0f0f0}
-    .mn{font-weight:500;font-size:14px} .mm{font-size:12px;color:#888;margin-top:4px}
-    .err{background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#dc2626}
-    .info{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;margin-bottom:24px;font-size:13px;color:#92400e;line-height:1.5}
-    .defb{background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px;margin-bottom:24px}
-    .deft{font-size:14px;font-weight:600;color:#dc2626;margin-bottom:8px}
+    .stit{font-size:13px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin:0 0 12px}
+    .slab{font-size:13px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin:0 0 12px}
+    .mi{background:#fff;border-radius:14px;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;border:1px solid var(--border)}
+    .mn{font-weight:500;font-size:14px} .mm{font-size:12px;color:var(--ink-soft);margin-top:4px}
+    .err{background:var(--bad-soft);border:1px solid oklch(80% 0.1 25);border-radius:12px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--bad)}
+    .info{background:var(--warn-soft);border:1px solid oklch(85% 0.08 70);border-radius:16px;padding:16px;margin-bottom:24px;font-size:13px;color:oklch(38% 0.09 60);line-height:1.5}
+    .defb{background:var(--bad-soft);border:1px solid oklch(85% 0.1 25);border-radius:16px;padding:16px;margin-bottom:24px}
+    .deft{font-size:14px;font-weight:600;color:var(--bad);margin-bottom:8px}
     .deftags{display:flex;flex-wrap:wrap;gap:8px}
-    .deftag{font-size:13px;background:#fff;border:1px solid #fca5a5;padding:4px 12px;border-radius:6px;color:#dc2626;font-weight:500}
-    .dc{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:16px;margin-bottom:12px}
-    .pill{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:500;display:inline-block;margin:2px}
+    .deftag{font-size:13px;background:#fff;border:1px solid oklch(85% 0.1 25);padding:4px 12px;border-radius:100px;color:var(--bad);font-weight:500}
+    .dc{background:#fff;border:1px solid var(--border);border-radius:20px;padding:0;margin-bottom:12px;overflow:hidden}
+    .pill{font-size:11px;padding:2px 8px;border-radius:100px;font-weight:500;display:inline-block;margin:2px}
     .fr{display:flex;gap:8px} .fc{display:flex;flex-direction:column;gap:8px}
-    .field{margin-bottom:16px} .field label{display:block;font-size:13px;font-weight:500;color:#666;margin-bottom:6px}
+    .field{margin-bottom:16px} .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:5px}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .sp{display:inline-block;width:20px;height:20px;border:2px solid #e5e5e5;border-top-color:#1a1a1a;border-radius:50%;animation:spin .6s linear infinite}
-    .collapse-btn{background:none;border:none;cursor:pointer;font-size:13px;color:#888;font-weight:500;padding:0;display:flex;align-items:center;gap:4px}
+    .sp{display:inline-block;width:20px;height:20px;border:2px solid var(--track);border-top-color:var(--ink);border-radius:50%;animation:spin .6s linear infinite}
+    .collapse-btn{background:none;border:none;cursor:pointer;font-size:13px;color:var(--ink-soft);font-weight:600;padding:0;display:flex;align-items:center;gap:4px}
+    .panel{background:#fff;border-radius:20px;padding:18px;border:1px solid var(--border)}
+    .chip{padding:8px 14px;border-radius:100px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--ink-soft);display:inline-flex;align-items:center;gap:4px}
+    .chip.on{background:var(--rose-soft);color:var(--rose);border-color:var(--rose)}
+    .switch{width:46px;height:28px;border-radius:16px;padding:3px;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;flex-shrink:0;transition:background .15s}
+    .switch-knob{width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.2);transition:margin .15s}
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px}
+    .toggle-row+.toggle-row{border-top:1px solid var(--border-soft)}
+    .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;padding:10px 6px calc(env(safe-area-inset-bottom) + 10px);max-width:640px;margin:0 auto}
+    .tab{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;background:none;border:none;padding:4px 0}
+    .tab-dot{width:20px;height:3px;border-radius:2px;background:transparent}
+    .tab.on .tab-dot{background:var(--rose)}
+    .tab-label{font-size:11px;font-weight:500;color:var(--gray)}
+    .tab.on .tab-label{font-weight:700;color:var(--ink)}
+    .chev{transition:transform .15s;flex-shrink:0}
+    .chev.open{transform:rotate(0deg)} .chev.closed{transform:rotate(-90deg)}
   </style>
 </head>
 <body>
@@ -910,33 +936,6 @@ function MC({name,value,target,unit,infoKey}){
   </div>
 }
 
-/* ── TRACKING CHART ── */
-function TrackingChart({history,baseline,sunlight,trackKey,DT}){
-  const days=last10().reverse();
-  const info=TRACKABLE.find(t=>t.key===trackKey);
-  const target=DT[trackKey]||0;
-  const unit=MICROS.find(m=>m.key===trackKey)?.unit||(trackKey==="calories"?"kcal":"g");
-  const values=days.map(d=>{const s=history[d]?sum(history[d]):null;const base=baseline[trackKey]||0;const logged=s?s[trackKey]||0:0;const sun=(trackKey==="vitaminD"&&sunlight[d])?sunVitD(d):0;return{date:d,val:s?logged+base+sun:null}});
-  const vals=values.filter(v=>v.val!==null).map(v=>v.val);
-  if(vals.length<2)return null;
-  const maxV=Math.max(...vals,target)*1.1;
-  const W=580,H=200,PX=50,PY=20;
-  const points=values.map((v,i)=>{if(v.val===null)return null;const x=PX+i*((W-PX*2)/(days.length-1));const y=PY+(H-PY*2)*(1-v.val/maxV);return{x,y,val:v.val,date:v.date}}).filter(Boolean);
-  const line=points.map((p,i)=>`${i===0?"M":"L"}${p.x},${p.y}`).join(" ");
-  const targetY=PY+(H-PY*2)*(1-target/maxV);
-  return<div style={{marginBottom:28}}>
-    <h3 className="stit">{info?.label||trackKey} — 10-day tracking</h3>
-    <svg viewBox={`0 0 ${W} ${H+30}`} style={{width:"100%",background:"#fafafa",borderRadius:12,border:"1px solid #e5e5e5"}}>
-      <line x1={PX} y1={targetY} x2={W-PX} y2={targetY} stroke="#22c55e" strokeWidth="1" strokeDasharray="6,4"/>
-      <text x={W-PX+4} y={targetY+4} fontSize="10" fill="#22c55e">target</text>
-      <path d={line} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinejoin="round"/>
-      {points.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r="4" fill="#3b82f6"/><text x={p.x} y={p.y-10} textAnchor="middle" fontSize="10" fill="#1a1a1a" fontWeight="600">{Math.round(p.val)}</text></g>)}
-      {days.map((d,i)=>{const x=PX+i*((W-PX*2)/(days.length-1));return<text key={d} x={x} y={H+16} textAnchor="middle" fontSize="9" fill="#999">{d.slice(5)}</text>})}
-    </svg>
-    <div style={{fontSize:12,color:"#888",marginTop:8,textAlign:"center"}}>Target: {target} {unit}/day</div>
-  </div>
-}
-
 /* ── ADMIN PAGE ── */
 function AdminPage({onLogout}){
   const[profiles,setProfiles]=useState([]);
@@ -1004,10 +1003,10 @@ function LoginScreen({onLogin,onCreate,onAdmin}){
       <div className="field" style={{flex:1,marginBottom:0}}><label>First name</label><input type="text" value={fn} onChange={e=>setFn(e.target.value)} placeholder="Francesco"/></div>
       <div className="field" style={{flex:1,marginBottom:0}}><label>Last name</label><input type="text" value={ln} onChange={e=>setLn(e.target.value)} placeholder="Rossi"/></div>
     </div>
-    <div className="field"><label>4-digit PIN</label><input type="text" inputMode="numeric" maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="0000" style={{letterSpacing:8,textAlign:"center",fontSize:20,fontWeight:600}}/><p style={{fontSize:12,color:"#888",marginTop:4}}>Choose any 4 numbers — this identifies your account</p></div>
+    <div className="field"><label>4-digit PIN</label><input type="text" inputMode="numeric" maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="0000" style={{letterSpacing:8,textAlign:"center",fontSize:20,fontWeight:600}}/><p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>Choose any 4 numbers — this identifies your account</p></div>
     {err&&<div className="err">{err}</div>}
-    <button className="btn" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()||pin.length!==4}>{loading?"Loading…":"Continue"}</button>
-    <p style={{fontSize:12,color:"#999",marginTop:12,textAlign:"center"}}>Your data syncs to the cloud — log in from any device</p>
+    <button className="btn btn-rose" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()||pin.length!==4}>{loading?"Loading…":"Continue"}</button>
+    <p style={{fontSize:12,color:"var(--gray)",marginTop:12,textAlign:"center"}}>Your data syncs to the cloud — log in from any device</p>
   </div>
 }
 
@@ -1040,7 +1039,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   const fPct=effCalories>0?Math.round(effFat*9/effCalories*100):0;
   const cPct=effCalories>0?Math.round(effCarbs*4/effCalories*100):0;
   return<div>
-    <h2 style={{fontSize:20,fontWeight:600,marginBottom:4}}>{initial?"Edit profile":"Welcome"+(firstName?", "+firstName:"")+"!"}</h2>
+    <h2 style={{fontFamily:"var(--serif)",fontSize:24,fontWeight:700,marginBottom:4,color:"var(--ink)"}}>{initial?"Edit profile":"Welcome"+(firstName?", "+firstName:"")+"!"}</h2>
     {!initial&&<p className="sub" style={{marginBottom:20}}>Set up your profile to calculate your daily targets</p>}
     <div className="fr" style={{gap:12}}>
       <div className="field" style={{flex:1}}><label>Age</label><input type="number" value={age} onChange={e=>setAge(e.target.value)}/></div>
@@ -1052,19 +1051,19 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       <div className="field" style={{flex:1}}><label>Training (h/day)</label><input type="number" step="0.5" min="0" max="5" value={hours} onChange={e=>setHours(e.target.value)}/></div>
     </div>
     <div className="field"><label>Goal</label><select value={goal} onChange={e=>setGoal(e.target.value)}>{GOALS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
-      <p style={{fontSize:12,color:"#888",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance · {goalInfo?.protMult}g protein/kg</p>
+      <p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance · {goalInfo?.protMult}g protein/kg</p>
     </div>
     <div className="field"><label>Diet</label><select value={diet} onChange={e=>setDiet(e.target.value)}>{DIETS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></div>
     <div className="field"><label>Intolerances / allergies</label>
-      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>{INTOLERANCES.map(i=><button key={i.id} onClick={()=>toggleIntol(i.id)} style={{padding:"6px 14px",borderRadius:20,border:`1px solid ${intol.includes(i.id)?"#dc2626":"#e5e5e5"}`,background:intol.includes(i.id)?"#fef2f2":"#fff",color:intol.includes(i.id)?"#dc2626":"#666",fontSize:13,fontWeight:500,cursor:"pointer"}}>{intol.includes(i.id)?"✕ ":""}{i.label}</button>)}</div>
-      {intol.length===0&&<p style={{fontSize:12,color:"#888",marginTop:6}}>Tap to select any that apply</p>}
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>{INTOLERANCES.map(i=><button key={i.id} onClick={()=>toggleIntol(i.id)} className={"chip"+(intol.includes(i.id)?" on":"")}>{intol.includes(i.id)?"✕ ":""}{i.label}</button>)}</div>
+      {intol.length===0&&<p style={{fontSize:12,color:"var(--ink-soft)",marginTop:6}}>Tap to select any that apply</p>}
     </div>
     <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
-    <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,padding:16,marginBottom:16}}>
-      <div style={{fontSize:14,fontWeight:600,color:"#16a34a",marginBottom:8}}>{useCustom?"Your daily targets":"Calculated daily targets"}</div>
-      <div style={{fontSize:13,color:"#333",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> ({pPct}%) · Fat: <strong>{effFat}g</strong> ({fPct}%) · Carbs: <strong>{effCarbs}g</strong> ({cPct}%) · Fiber: <strong>{targets.fiber}g</strong></div>
+    <div style={{background:"var(--good-soft)",border:"1px solid oklch(80% 0.08 150)",borderRadius:16,padding:16,marginBottom:16}}>
+      <div style={{fontSize:14,fontWeight:700,color:"var(--good)",marginBottom:8}}>{useCustom?"Your daily targets":"Calculated daily targets"}</div>
+      <div style={{fontSize:13,color:"oklch(35% 0.05 150)",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> ({pPct}%) · Fat: <strong>{effFat}g</strong> ({fPct}%) · Carbs: <strong>{effCarbs}g</strong> ({cPct}%) · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:useCustom?"#eff6ff":"#fafafa",border:`1px solid ${useCustom?"#93c5fd":"#e5e5e5"}`,borderRadius:8,cursor:"pointer",marginBottom:useCustom?16:20}} onClick={()=>{
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",background:useCustom?"var(--rose-soft)":"var(--page-bg)",border:`1px solid ${useCustom?"var(--rose)":"var(--border)"}`,borderRadius:12,cursor:"pointer",marginBottom:useCustom?16:20}} onClick={()=>{
       if(!useCustom){
         if(cProtein==null)setCProtein(targets.protein);
         if(cFat==null)setCFat(targets.fat);
@@ -1073,26 +1072,26 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       setUseCustom(!useCustom);
     }}>
       <input type="checkbox" checked={useCustom} readOnly style={{width:16,height:16,pointerEvents:"none"}}/>
-      <span style={{fontSize:13,fontWeight:500}}>Set my own macro targets</span>
+      <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>Set my own macro targets</span>
     </div>
     {useCustom&&<div className="fr" style={{gap:12,marginBottom:20}}>
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Protein (g)</label>
         <input type="number" value={cProtein??""} onChange={e=>setCProtein(e.target.value)}/>
-        <p style={{fontSize:11,color:"#888",marginTop:4}}>{(+weight)>0?((+cProtein||0)/(+weight)).toFixed(2):"—"} g/kg</p>
+        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cProtein||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Fat (g)</label>
         <input type="number" value={cFat??""} onChange={e=>setCFat(e.target.value)}/>
-        <p style={{fontSize:11,color:"#888",marginTop:4}}>{(+weight)>0?((+cFat||0)/(+weight)).toFixed(2):"—"} g/kg</p>
+        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cFat||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Carbs (g)</label>
         <input type="number" value={cCarbs??""} onChange={e=>setCCarbs(e.target.value)}/>
-        <p style={{fontSize:11,color:"#888",marginTop:4}}>{(+weight)>0?((+cCarbs||0)/(+weight)).toFixed(2):"—"} g/kg</p>
+        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cCarbs||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
     </div>}
-    <button className="btn" onClick={()=>{
+    <button className="btn btn-rose" onClick={()=>{
       const weightChanged=initial?+weight!==initial.weight:false;
       onSave({...p,diet,intolerances:intol,trackNutrient:track,
         multiplier:initial?.multiplier||1,
@@ -1104,135 +1103,105 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   </div>
 }
 
-/* ── TODAY ── */
-function TodayPage({meals,setMeals,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt,onEditGoal}){
-  const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
-  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
-  const[mealsOpen,setMealsOpen]=useState(false);
-  const[aminoOpen,setAminoOpen]=useState(false);
+/* ── HOME ── */
+function HomePage({meals,setMeals,history,sunlight,templates,skipped,toggleSkip,profile,DT,prompt}){
+  const[mealsOpen,setMealsOpen]=useState(true);
   const[microsOpen,setMicrosOpen]=useState(false);
+  const[aminoOpen,setAminoOpen]=useState(false);
+  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
+  const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
+  const[editTimeIdx,setEditTimeIdx]=useState(null);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
+  const sun=!!sunlight[today()];
   if(sun)tot.vitaminD+=sunVitD(today());
-  const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
-  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=nowTime();m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
-  const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false);
-  const[editTimeIdx,setEditTimeIdx]=useState(null);
-  const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditMealLd(false)}};
+  const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setEditMealErr("Edit failed: "+e.message)}finally{setEditMealLd(false)}};
   const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x));setEditTimeIdx(null)};
-  const ml=m=>`${Math.round(m.calories)} cal · P:${Math.round(m.protein)}g · F:${Math.round(m.fat)}g · C:${Math.round(m.carbs)}g · Fi:${Math.round(m.fiber||0)}g`;
-  const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
-  const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
-  const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
-  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime,trainingType:rppType});
-  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
-  const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
+  const macroRows=[
+    {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,color:"var(--rose)"},
+    {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,color:"var(--ink)"},
+    {label:"Fat",key:"fat",value:Math.round(tot.fat),target:DT.fat,color:"var(--gray)"},
+    {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,color:"var(--good)"},
+  ];
   return<div>
-    <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Text":"📷 Photo"}</button>)}</div>
-    {mode==="photo"&&<div style={{marginBottom:24}}>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
-    {mode==="text"&&<div style={{marginBottom:24}}><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button></div>}
-    {err&&<div className="err">{err}</div>}
-    {ld&&<div style={{textAlign:"center",padding:20,fontSize:14,color:"#666"}}>Analyzing…</div>}
+    <h1 className="h-page">Today</h1>
+    <p className="sub" style={{marginBottom:20}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</p>
 
-    <div style={{marginBottom:28}}>
-      <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?12:0}}>
-        {mealsOpen?"▾":"▸"} TODAY'S MEALS ({meals.length + activeTemplates.length})
-      </button>
-      {mealsOpen&&<div className="fc">
-        {/* Logged meals */}
-        {meals.length===0&&templates.length===0&&<div style={{textAlign:"center",padding:16,color:"#bbb",fontSize:14}}>No meals logged yet</div>}
-        {meals.map((m,i)=>editMealIdx===i?<div key={"m"+i} style={{background:"#fafafa",borderRadius:8,padding:12,border:"1px solid #e5e5e5"}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>:<div key={"m"+i} style={{background:"#fafafa",borderRadius:8,padding:"12px 14px",border:"1px solid #f0f0f0"}}>
-          <div className="mn">{m.mealName}</div>
-          <div className="mm">{ml(m)}</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"1px solid #eee"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{padding:"2px 6px",border:"1px solid #93c5fd",borderRadius:4,fontSize:12,width:80}}/>:
-              <span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,color:"#999",background:"#eee",padding:"3px 8px",borderRadius:4,cursor:"pointer"}}>{m.time||"set time"}</span>}
-              <button onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{fontSize:12,color:"#888",background:"#eee",border:"none",padding:"3px 10px",borderRadius:4,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>✏️ edit</button>
-            </div>
-            <button className="btn-x" style={{color:"#ddd",fontSize:14}} onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))}>×</button>
-          </div>
-        </div>)}
-        {/* Saved meals at bottom */}
-        {templates.map((t,i)=>{const isSkipped=skipped.includes(i);return<div key={"t"+i} style={{background:isSkipped?"#fff":"#fffff0",borderRadius:8,padding:"8px 14px",border:`1px solid ${isSkipped?"#e5e5e5":"#fde68a"}`,opacity:isSkipped?0.5:1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}><span style={{fontSize:12}}>⭐</span><span style={{fontSize:13,fontWeight:500,color:isSkipped?"#999":"#1a1a1a",textDecoration:isSkipped?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.mealName}</span></div>
-          <button onClick={()=>toggleSkip(i)} style={{fontSize:12,color:isSkipped?"#16a34a":"#dc2626",background:"none",border:`1px solid ${isSkipped?"#86efac":"#fca5a5"}`,padding:"3px 10px",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap",marginLeft:8}}>{isSkipped?"+ restore today":"× skip today"}</button>
-        </div>})}
-      </div>}
-    </div>
-
-    <h3 className="stit">Food intake breakdown</h3>
-    <div className="fc" style={{marginBottom:32,gap:14}}>
-      {[{l:"Calories",k:"calories",v:tot.calories,t:DT.calories,c:"#ef4444",u:""},{l:"Protein",k:"protein",v:tot.protein,t:DT.protein,c:"#3b82f6",u:"g"},{l:"Fat",k:"fat",v:tot.fat,t:DT.fat,c:"#f59e0b",u:"g"},{l:"Carbs",k:"carbs",v:tot.carbs,t:DT.carbs,c:"#22c55e",u:"g"},{l:"Fiber",k:"fiber",v:tot.fiber||0,t:DT.fiber,c:"#8b5cf6",u:"g"}].map(m=><div key={m.l}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:14,fontWeight:500,display:"flex",alignItems:"center"}}>{m.l}<InfoBtn id={m.k}/></span><span style={{fontSize:13,color:"#888"}}>{Math.round(m.v)}{m.u} / {m.t}{m.u} ({Math.round((m.v/m.t)*100)}%)</span></div>
-        <PB value={m.v} max={m.t} color={m.c}/>
-        {m.l==="Protein"&&<div style={{marginTop:8}}>
-          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)} style={{fontSize:12,color:"#3b82f6"}}>{aminoOpen?"▾":"▸"} Key amino acids</button>
-          {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"#f8faff",border:"1px solid #dbeafe",borderRadius:8}}>
+    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+        <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
+        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
+        <InfoBtn id="calories"/>
+      </div>
+      {macroRows.map(row=><div key={row.label}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
+          <span style={{display:"flex",alignItems:"center"}}>{row.label}{row.key==="protein"&&<InfoBtn id="protein"/>}</span>
+          <span>{row.value}g / {row.target}g</span>
+        </div>
+        <PB value={row.value} max={row.target} color={row.color}/>
+        {row.key==="protein"&&<div style={{marginTop:8}}>
+          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"▾":"▸"} Key amino acids</button>
+          {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
             {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,color:"#333",display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"#888"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
-              <PB value={v} max={a.target} color={pct>=90?"#3b82f6":pct>=70?"#f59e0b":"#dc2626"}/>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
+              <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
             </div>})}
           </div>}
         </div>}
       </div>)}
     </div>
-    <div style={{display:"flex",gap:8,marginBottom:16}}>
-      <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:sun?"#fffbeb":"#fafafa",border:`1px solid ${sun?"#fde68a":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleSun}>
-        <input type="checkbox" checked={sun} readOnly style={{width:16,height:16,accentColor:"#f59e0b",pointerEvents:"none"}}/>
-        <span style={{fontSize:13,fontWeight:500}}>☀️ Sunlight exposure</span>
-      </div>
-      <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:hydrated?"#f0f9ff":"#fafafa",border:`1px solid ${hydrated?"#93c5fd":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleHydration}>
-        <input type="checkbox" checked={hydrated} readOnly style={{width:16,height:16,accentColor:"#3b82f6",pointerEvents:"none"}}/>
-        <span style={{fontSize:13,fontWeight:500}}>💧 Water: {profile?calcHydration(profile):2.5}L</span>
-      </div>
-    </div>
-    <div style={{display:"flex",gap:8,marginBottom:16}}>
-      <div style={{flex:1,padding:"10px 12px",background:gi?"#fef2f2":"#fafafa",border:`1px solid ${gi?"#fca5a5":"#e5e5e5"}`,borderRadius:8,cursor:"pointer"}} onClick={toggleGi}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <input type="checkbox" checked={gi} readOnly style={{width:16,height:16,accentColor:"#dc2626",pointerEvents:"none"}}/>
-          <span style={{fontSize:13,fontWeight:500}}>🤢 GI distress</span>
-        </div>
-        {gi&&<div style={{fontSize:11,color:"#dc2626",marginTop:4,marginLeft:24}}>Check meals for triggers</div>}
-      </div>
-      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 12px",background:sleep===true?"#f0fdf4":sleep===false?"#fef2f2":"#fafafa",border:`1px solid ${sleep===true?"#86efac":sleep===false?"#fca5a5":"#e5e5e5"}`,borderRadius:8}}>
-        <span style={{fontSize:13,fontWeight:500}}>😴 Sleep quality</span>
-        <div style={{display:"flex",gap:4}}>
-          <button onClick={()=>setSleep(sleep===true?undefined:true)} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${sleep===true?"#16a34a":"#e5e5e5"}`,background:sleep===true?"#16a34a":"#fff",color:sleep===true?"#fff":"#666",fontSize:12,fontWeight:sleep===true?600:500,cursor:"pointer"}}>Good</button>
-          <button onClick={()=>setSleep(sleep===false?undefined:false)} style={{padding:"4px 10px",borderRadius:6,border:`1px solid ${sleep===false?"#dc2626":"#e5e5e5"}`,background:sleep===false?"#dc2626":"#fff",color:sleep===false?"#fff":"#666",fontSize:12,fontWeight:sleep===false?600:500,cursor:"pointer"}}>Bad</button>
-        </div>
-      </div>
-    </div>
-    <div style={{marginBottom:16,padding:"12px 14px",background:rppScore?"#f0f9ff":"#fafafa",border:`1px solid ${rppScore?"#93c5fd":"#e5e5e5"}`,borderRadius:8}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <span style={{fontSize:14,fontWeight:500}}>💪 Rate of Perceived Performance</span>
-        {rppScore>0&&<span style={{fontSize:16,fontWeight:700,color:rppScore>=8?"#16a34a":rppScore>=5?"#ca8a04":"#dc2626"}}>{rppScore}/10</span>}
-      </div>
-      <div style={{display:"flex",gap:4,marginBottom:10}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:32,border:`1px solid ${n===rppScore?"#3b82f6":n<=rppScore?"#bfdbfe":"#e5e5e5"}`,borderRadius:6,background:n===rppScore?"#3b82f6":n<=rppScore?"#eff6ff":"#fff",color:n===rppScore?"#fff":n<=rppScore?"#3b82f6":"#999",fontSize:12,fontWeight:n===rppScore?700:500,cursor:"pointer"}}>{n}</button>)}</div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-        <label style={{fontSize:13,color:"#666",whiteSpace:"nowrap"}}>Training time:</label>
-        <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)} style={{padding:"6px 10px",border:"1px solid #e5e5e5",borderRadius:6,fontSize:13,flex:1}}/>
-      </div>
-      <div>
-        <label style={{fontSize:13,color:"#666",display:"block",marginBottom:6}}>Training type:</label>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRppType(tt.id)} style={{padding:"6px 12px",borderRadius:6,border:`1px solid ${tt.id===rppType?tt.color:"#e5e5e5"}`,background:tt.id===rppType?tt.color:"#fff",color:tt.id===rppType?"#fff":"#666",fontSize:12,fontWeight:tt.id===rppType?600:500,cursor:"pointer"}}>{tt.icon} {tt.short}</button>)}</div>
-      </div>
-    </div>
-    <button className="collapse-btn" onClick={()=>setMicrosOpen(!microsOpen)} style={{marginBottom:microsOpen?12:20,fontSize:16,fontWeight:600,color:"#1a1a1a"}}>
-      {microsOpen?"▾":"▸"} Key micronutrients
-    </button>
-    {microsOpen&&<div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>}
 
-    {/* LIFESTYLE SUGGESTIONS */}
+    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
+    {mealsOpen&&<div className="fc" style={{marginBottom:20,gap:10}}>
+      {meals.length===0&&activeTemplates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — head to the Log tab.</div>}
+      {editMealErr&&<div className="err">{editMealErr}</div>}
+      {meals.map((m,i)=>editMealIdx===i?
+        <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
+        :<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
+            <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+            {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
+            :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
+            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">✏️</span>
+            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
+          </div>
+        </div>
+      )}
+      {activeTemplates.map((t)=>{
+        const idx=templates.indexOf(t);
+        return<div key={"t"+idx} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{t.mealName}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(t.calories)} kcal</span>
+              <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
+            </div>
+          </div>
+          <span onClick={()=>toggleSkip(idx)} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",flexShrink:0,lineHeight:1}} title="Skip today (manage in Log tab)">×</span>
+        </div>;
+      })}
+    </div>}
+
+    <button className="collapse-btn" onClick={()=>setMicrosOpen(!microsOpen)} style={{marginBottom:microsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{microsOpen?"▾":"▸"} Micronutrients today</button>
+    {microsOpen&&<div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
+      {MICROS.map(m=>{const v=tot[m.key]||0,p=Math.round((v/DT[m.key])*100);return<div key={m.key}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:4}}><span style={{display:"flex",alignItems:"center"}}>{m.name}<InfoBtn id={m.key}/></span><span>{p}%</span></div>
+        <div className="pbg" style={{height:5}}><div className="pf" style={{width:`${Math.min(100,p)}%`,background:p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"}}/></div>
+      </div>})}
+    </div>}
+
     {(()=>{
       const days=last10();const wd=days.filter(d=>history[d]);if(wd.length<2)return null;
       const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
       const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
       const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
       const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
-      if(defs.length===0&&excesses.length===0)return<div style={{marginTop:24,padding:16,background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12,textAlign:"center",fontSize:14,color:"#16a34a",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
+      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
       const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
 const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
 
@@ -1243,65 +1212,123 @@ ${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round
 
 IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
 [{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
-      return<div style={{marginTop:28}}>
-        <h3 className="stit">Lifestyle suggestions</h3>
-        {defs.length>0&&<><p style={{fontSize:13,color:"#666",marginBottom:8}}>Deficiencies:</p><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"#fef2f2",border:"1px solid #fca5a5",padding:"3px 10px",borderRadius:6,color:"#dc2626",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div></>}
-        {excesses.length>0&&<><p style={{fontSize:13,color:"#666",marginBottom:8}}>Excesses:</p><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"#fffbeb",border:"1px solid #fde68a",padding:"3px 10px",borderRadius:6,color:"#ca8a04",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div></>}
+      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10}}>
+        {defs.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"var(--bad-soft)",padding:"3px 10px",borderRadius:100,color:"var(--bad)",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>}
+        {excesses.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"var(--warn-soft)",padding:"3px 10px",borderRadius:100,color:"oklch(45% 0.12 70)",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div>}
         {sugErr&&<div className="err">{sugErr}</div>}
-        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestions</button>}
-        {sugLd&&<div style={{textAlign:"center",padding:24,fontSize:14,color:"#666"}}>Thinking…</div>}
+        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
+        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
         {suggestions&&<div>
-          <div style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:12,padding:20}}>
-            <div style={{fontSize:12,color:"#888",marginBottom:8,fontWeight:500}}>Tip {sugIdx+1}/{suggestions.length}</div>
-            <div style={{fontSize:16,fontWeight:600,marginBottom:8,lineHeight:1.4}}>{suggestions[sugIdx].tip}</div>
-            <div style={{fontSize:13,color:"#16a34a",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
+          <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
+            <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
           </div>
-          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:16,marginTop:12}}>
-            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:36,height:36,borderRadius:"50%",border:"1px solid #e5e5e5",background:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===sugIdx?"#1a1a1a":"#e5e5e5"}}/>)}</div>
-            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:36,height:36,borderRadius:"50%",border:"1px solid #e5e5e5",background:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>→</button>
+          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
+            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
+            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
+            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
           </div>
-          <button className="btn btn-o" style={{marginTop:12,width:"100%"}} onClick={getSug}>Refresh</button>
+          <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
         </div>}
       </div>;
     })()}
-
-    <div style={{marginTop:32,textAlign:"center"}}>
-      <button className="btn btn-o" style={{width:"auto",padding:"10px 24px"}} onClick={onEditGoal}>🎯 Change goal: {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain"}</button>
-    </div>
   </div>
 }
 
-/* ── TEMPLATES ── */
-function TemplatesPage({templates,setTemplates,DT,prompt}){
-  const[txt,setTxt]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null),[ei,setEi]=useState(null),[et,setEt]=useState(""),[cd,setCd]=useState(null);
+/* ── LOG A MEAL ── */
+function LogMealPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,DT,prompt}){
+  const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
+  const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[ei,setEi]=useState(null),[et,setEt]=useState(""),[cd,setCd]=useState(null);
   const[baselineOpen,setBaselineOpen]=useState(false);
-  const doAdd=async()=>{if(!txt.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(txt,null,prompt);setTemplates(p=>[...p,m]);setTxt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
-  const doEdit=async i=>{if(!et.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(et,null,prompt);setTemplates(p=>p.map((t,j)=>j===i?m:t));setEi(null);setEt("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
+  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=nowTime();m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
+  const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("")}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false)}};
+  const doEditRecurring=async i=>{if(!et.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(et,null,prompt);setTemplates(p=>p.map((t,j)=>j===i?m:t));setEi(null);setEt("")}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false)}};
   const ml=t=>`${Math.round(t.calories)} cal · P:${Math.round(t.protein)}g · F:${Math.round(t.fat)}g · C:${Math.round(t.carbs)}g · Fi:${Math.round(t.fiber||0)}g`;
   const baseline=sum(templates);
   return<div>
-    <div className="info"><strong>Saved meals</strong> — supplements, breakfast staples, daily snacks. These are added to every day's totals.</div>
-    <div style={{marginBottom:24}}><h3 style={{fontSize:14,fontWeight:600,marginBottom:12}}>Add a recurring meal</h3><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))doAdd()}} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements: 1 tablet Vitamin C + product URL"}/><button className="btn" onClick={doAdd} disabled={ld||!txt.trim()}>{ld&&ei===null?"Analyzing…":"Save meal"}</button></div>
-    {templates.length>0&&<div style={{marginBottom:28}}>
-      <button className="collapse-btn" onClick={()=>setBaselineOpen(!baselineOpen)} style={{marginBottom:baselineOpen?12:0,fontSize:16,fontWeight:600,color:"#1a1a1a"}}>
-        {baselineOpen?"▾":"▸"} Daily baseline from saved meals
-      </button>
+    <h1 className="h-page" style={{marginBottom:20}}>Log a meal</h1>
+    <div className="panel" style={{marginBottom:24}}>
+      <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Type it in":"📷 Photo"}</button>)}</div>
+      {mode==="photo"&&<div>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn btn-rose" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
+      {mode==="text"&&<div><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn btn-rose" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button></div>}
+      {err&&<div className="err" style={{marginTop:12,marginBottom:0}}>{err}</div>}
+      {ld&&<div style={{textAlign:"center",padding:12,fontSize:13,color:"var(--ink-soft)"}}>Analyzing…</div>}
+    </div>
+
+    <h3 className="stit">Recurring meals</h3>
+    <div className="panel" style={{marginBottom:16}}>
+      <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"var(--ink)"}}>Add a recurring meal</div>
+      <textarea value={rTxt} onChange={e=>setRTxt(e.target.value)} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements: 1 tablet Vitamin C + product URL"}/>
+      <button className="btn btn-rose" onClick={doAddRecurring} disabled={rLd||!rTxt.trim()}>{rLd&&ei===null?"Analyzing…":"Save meal"}</button>
+      {rErr&&<div className="err" style={{marginTop:12,marginBottom:0}}>{rErr}</div>}
+    </div>
+
+    {templates.length>0&&<div style={{marginBottom:20}}>
+      <button className="collapse-btn" onClick={()=>setBaselineOpen(!baselineOpen)} style={{marginBottom:baselineOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{baselineOpen?"▾":"▸"} Daily baseline from saved meals</button>
       {baselineOpen&&<div>
         <div className="g5" style={{marginBottom:16}}>{[{l:"Calories",v:baseline.calories,t:DT.calories,u:""},{l:"Protein",v:baseline.protein,t:DT.protein,u:"g"},{l:"Fat",v:baseline.fat,t:DT.fat,u:"g"},{l:"Carbs",v:baseline.carbs,t:DT.carbs,u:"g"},{l:"Fiber",v:baseline.fiber||0,t:DT.fiber,u:"g"}].map(m=><div key={m.l} className="card"><div className="card-l">{m.l}</div><div className="card-v">{Math.round(m.v)}{m.u}</div><div className="card-s">/ {m.t}{m.u} ({Math.round((m.v/m.t)*100)}%)</div></div>)}</div>
         <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={baseline[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
       </div>}
     </div>}
-    {err&&<div className="err">{err}</div>}
-    <h3 className="slab">Your saved meals ({templates.length})</h3>
-    {templates.length===0?<div style={{textAlign:"center",padding:32,color:"#bbb",fontSize:14,background:"#fafafa",borderRadius:12}}>No saved meals yet.</div>:
-    <div className="fc" style={{gap:10}}>{templates.map((t,i)=><div key={i} style={{background:"#fff",border:"1px solid #e5e5e5",borderRadius:10,padding:16}}>
-      {ei===i?<div><textarea value={et} onChange={e=>setEt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-s" onClick={()=>doEdit(i)} disabled={ld}>{ld?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEi(null);setEt("")}}>Cancel</button></div></div>:
-      <div><div style={{fontWeight:600,fontSize:15,marginBottom:6}}>{t.mealName}</div><div style={{fontSize:13,color:"#666",marginBottom:8}}>{ml(t)}</div>
-      <div className="fr" style={{marginTop:8,borderTop:"1px solid #f0f0f0",paddingTop:8}}><button className="btn btn-o btn-s" onClick={()=>{setEi(i);setEt(t.mealName)}}>Edit</button>
-      {cd===i?<div className="fr" style={{alignItems:"center"}}><span style={{fontSize:12,color:"#dc2626"}}>Delete?</span><button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==i));setCd(null)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCd(null)}>No</button></div>:
-      <button className="btn btn-do btn-s" onClick={()=>setCd(i)}>Delete</button>}</div></div>}
-    </div>)}</div>}
+
+    {templates.length===0?<div style={{textAlign:"center",padding:32,color:"var(--gray)",fontSize:14,background:"#fff",borderRadius:16,border:"1px solid var(--border)"}}>No recurring meals yet.</div>:
+    <div className="fc" style={{gap:10}}>{templates.map((t,i)=>{
+      const isSkipped=skipped.includes(i);
+      return ei===i?
+        <div key={i} className="panel"><textarea value={et} onChange={e=>setEt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>doEditRecurring(i)} disabled={rLd}>{rLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEi(null);setEt("")}}>Cancel</button></div></div>
+        :<div key={i} className="panel" style={{padding:"14px 16px",opacity:isSkipped?0.5:1}}>
+          <div style={{fontSize:15,fontWeight:600,color:"var(--ink)",textDecoration:isSkipped?"line-through":"none"}}>{t.mealName}</div>
+          <div style={{fontSize:12,color:"var(--ink-soft)",marginBottom:10}}>{ml(t)}</div>
+          <div className="fr" style={{borderTop:"1px solid var(--border-soft)",paddingTop:10,flexWrap:"wrap"}}>
+            <button className="btn btn-o btn-s" onClick={()=>{setEi(i);setEt(t.mealName)}}>✏️ Edit</button>
+            <button className="btn btn-s" style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--bad-soft)",color:"var(--bad)",border:"none"}} onClick={()=>toggleSkip(i)}>{isSkipped?"+ restore today":"× skip today"}</button>
+            {cd===i?<span className="fr" style={{alignItems:"center"}}><span style={{fontSize:12,color:"var(--bad)"}}>Delete?</span><button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==i));setCd(null)}}>Yes</button><button className="btn btn-o btn-s" onClick={()=>setCd(null)}>No</button></span>
+            :<button className="btn-x" onClick={()=>setCd(i)} title="Delete permanently">🗑</button>}
+          </div>
+        </div>;
+    })}</div>}
+  </div>
+}
+
+/* ── DAILY CHECK-IN ── */
+function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile}){
+  const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
+  const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
+  const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
+  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime,trainingType:rppType});
+  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
+  const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
+  const Switch=({on,onClick})=><div onClick={onClick} className="switch" style={{background:on?"var(--rose)":"var(--track)",justifyContent:on?"flex-end":"flex-start",cursor:"pointer"}}><div className="switch-knob"/></div>;
+  return<div>
+    <h1 className="h-page" style={{marginBottom:20}}>Daily check-in</h1>
+    <div className="panel" style={{padding:0,marginBottom:20}}>
+      <div className="toggle-row" onClick={toggleGi} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>🤢 GI distress</span><Switch on={gi} onClick={toggleGi}/></div>
+      <div className="toggle-row" onClick={toggleSun} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>☀️ Sunlight exposure</span><Switch on={sun} onClick={toggleSun}/></div>
+      <div className="toggle-row" onClick={toggleHydration} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>💧 Hydration ({profile?calcHydration(profile):2.5}L)</span><Switch on={hydrated} onClick={toggleHydration}/></div>
+      <div className="toggle-row"><span style={{fontSize:15,color:"var(--ink)"}}>😴 Sleep quality</span>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setSleep(sleep===true?undefined:true)} className="chip" style={sleep===true?{background:"var(--good-soft)",color:"var(--good)",borderColor:"var(--good)"}:{}}>Good</button>
+          <button onClick={()=>setSleep(sleep===false?undefined:false)} className="chip" style={sleep===false?{background:"var(--bad-soft)",color:"var(--bad)",borderColor:"var(--bad)"}:{}}>Bad</button>
+        </div>
+      </div>
+    </div>
+    <h3 className="stit">Performance rating</h3>
+    <div className="panel" style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+        <div style={{fontSize:32,fontWeight:700,color:"var(--rose)"}}>{rppScore||"–"}</div>
+        <div style={{fontSize:13,color:"var(--ink-soft)"}}>/ 10</div>
+      </div>
+      <div style={{display:"flex",gap:4}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><div key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:26,borderRadius:5,cursor:"pointer",background:n<=rppScore?"var(--rose)":"var(--track)"}}/>)}</div>
+      <div>
+        <div style={{fontSize:13,color:"var(--ink-soft)",marginBottom:8}}>Training type</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRppType(tt.id)} className={"chip"+(tt.id===rppType?" on":"")}>{tt.icon} {tt.short}</button>)}</div>
+      </div>
+      <div>
+        <div style={{fontSize:13,color:"var(--ink-soft)",marginBottom:6}}>Time of session</div>
+        <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)}/>
+      </div>
+    </div>
   </div>
 }
 
@@ -1345,59 +1372,187 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
     }catch(e){alert("Couldn't generate the report: "+e.message)}
   };
 
+  const[chartNutrient,setChartNutrient]=useState("calories");
+  const chartN=allN.find(n=>n.key===chartNutrient)||allN[0];
+  const chartDays=dd.map(d=>({
+    date:d.date,
+    v:d.totals?(d.totals[chartNutrient]||0)+(d.base[chartNutrient]||0)+(chartNutrient==="vitaminD"&&sunlight[d.date]?sunVitD(d.date):0):null,
+    isToday:d.date===today(),
+    shortLabel:d.date===today()?"Today":new Date(d.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short"}),
+  }));
+  const maxV=Math.max(...chartDays.map(d=>d.v||0),chartN.target,1)*1.05;
+  const goalLinePct=Math.min(100,Math.round(100*chartN.target/maxV));
+
   return<div>
+    <h1 className="h-page" style={{marginBottom:20}}>History</h1>
     <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{marginBottom:20}}>{reportState.label}</button>
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
 
-    {profile.trackNutrient&&profile.trackNutrient!=="none"&&<TrackingChart history={history} baseline={baseline} sunlight={sunlight} trackKey={profile.trackNutrient} DT={DT}/>}
+    <h3 className="stit">Track a nutrient</h3>
+    <select value={chartNutrient} onChange={e=>setChartNutrient(e.target.value)} style={{marginBottom:16}}>
+      {[{k:"calories",l:"Calories"},{k:"protein",l:"Protein"},{k:"carbs",l:"Carbs"},{k:"fat",l:"Fat"},{k:"fiber",l:"Fiber"}].map(o=><option key={o.k} value={o.k}>{o.l}</option>)}
+    </select>
+    <div className="panel" style={{marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--ink-soft)",marginBottom:10}}><span>{chartN.label} per day</span><span>goal {chartN.target}{chartN.unit}</span></div>
+      <div style={{position:"relative",display:"flex",alignItems:"flex-end",gap:6,height:120}}>
+        <div style={{position:"absolute",left:0,right:0,bottom:`${goalLinePct}%`,borderTop:"2px dashed var(--gray)",pointerEvents:"none"}}/>
+        {chartDays.map(d=>{
+          const pct=d.v!=null?Math.max(4,Math.round(100*d.v/maxV)):0;
+          return<div key={d.date} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
+            <div style={{width:"100%",borderRadius:"6px 6px 2px 2px",background:d.v==null?"var(--track)":(d.v>=chartN.target*0.9?"var(--good)":"var(--bad)"),height:`${pct}%`}}/>
+            <div style={{height:24,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:6,fontSize:9,lineHeight:1.2,textAlign:"center",color:d.isToday?"var(--ink)":"var(--gray)",fontWeight:d.isToday?700:500}}>{d.shortLabel}</div>
+          </div>;
+        })}
+      </div>
+    </div>
 
     {wd.length>=2&&<div style={{marginBottom:24}}>
-      <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:16,fontWeight:600,color:"#1a1a1a"}}>
+      <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>
         {avgOpen?"▾":"▸"} {wd.length}-day averages
       </button>
-      {avgOpen&&<div className="gm">{allN.filter(n=>{if(MACRO_KEYS.includes(n.key))return true;const p=Math.round((avg[n.key]/n.target)*100);return p<90}).map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fafafa",borderRadius:8,padding:"10px 12px",textAlign:"center",border:`1px solid ${p>=90?"#86efac":p>=70?"#fde68a":"#fca5a5"}`}}><div style={{fontSize:11,color:"#888",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div>}
+      {avgOpen&&<div className="gm">{allN.filter(n=>{if(MACRO_KEYS.includes(n.key))return true;const p=Math.round((avg[n.key]/n.target)*100);return p<90}).map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fff",border:`1px solid ${p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"}`,borderRadius:14,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:11,color:"var(--ink-soft)",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div>}
     </div>}
-    <h3 className="slab">Daily breakdown</h3>
-    {breakdownDD.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const dayRpp=rpp[d.date]||0;return<div key={d.date} className="dc">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div><div style={{fontWeight:600,fontSize:14}}>{fmt(d.date)}</div><div style={{fontSize:12,color:"#999"}}>{d.date}</div></div>
+    <h3 className="slab">Past 9 days</h3>
+    {breakdownDD.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const isExpanded=ex===d.date;return<div key={d.date} className="dc">
+      <div onClick={()=>d.totals&&setEx(isExpanded?null:d.date)} style={{padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:d.totals?"pointer":"default"}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:15,color:"var(--ink)",fontFamily:"var(--serif)"}}>{fmt(d.date)}</div>
+          <div style={{fontSize:12,color:"var(--ink-soft)"}}>{d.date}</div>
+        </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {d.totals&&<div style={{fontWeight:600,fontSize:15}}>{Math.round(d.totals.calories+(d.base.calories||0))} cal</div>}
-          {!d.totals&&<div style={{fontSize:13,color:"#bbb"}}>No data</div>}
-          {ad!==d.date&&<button className="btn btn-o btn-s" onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+</button>}
+          {d.totals&&<span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(d.totals.calories+(d.base.calories||0))} kcal</span>}
+          {!d.totals&&<span style={{fontSize:13,color:"var(--gray)"}}>No data</span>}
+          {d.totals&&<span className={"chev "+(isExpanded?"open":"closed")} style={{fontSize:12,color:"var(--ink-soft)"}}>▾</span>}
+          {ad!==d.date&&<button className="btn btn-o btn-s" onClick={(e)=>{e.stopPropagation();setAd(d.date);setDi("");setErr(null)}}>+</button>}
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,flexWrap:"wrap"}}>
-        {hasSun&&<span style={{fontSize:13,color:"#ca8a04"}}>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
-        {hasHydration&&<span style={{fontSize:13,color:"#3b82f6"}}>💧 Hydrated</span>}
-        {hasGi&&<span style={{fontSize:13,color:"#dc2626"}}>🤢 GI distress</span>}
-        {daySleep!==undefined&&<span style={{fontSize:13,color:daySleep===true?"#16a34a":"#dc2626",fontWeight:500}}>😴 {daySleep===true?"Slept well":"Poor sleep"}</span>}
-        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"#16a34a":s>=5?"#ca8a04":s>0?"#dc2626":"#888",fontWeight:s>0?600:400,background:s>0?"transparent":"#f5f5f5",padding:s>0?"0":"3px 10px",borderRadius:4,border:s>0?"none":"1px dashed #ccc"}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
-      </div>
-      {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"#f0f9ff",border:"1px solid #93c5fd",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
-        <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRpp(d.date,{score:n===s?0:n,trainingTime:t,trainingType:ty})} style={{flex:1,height:28,border:`1px solid ${n===s?"#3b82f6":n<=s?"#bfdbfe":"#e5e5e5"}`,borderRadius:5,background:n===s?"#3b82f6":n<=s?"#eff6ff":"#fff",color:n===s?"#fff":n<=s?"#3b82f6":"#999",fontSize:11,fontWeight:n===s?700:500,cursor:"pointer"}}>{n}</button>)}</div>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <label style={{fontSize:12,color:"#666",whiteSpace:"nowrap"}}>Training time:</label>
-          <input type="time" value={t} onChange={e=>setRpp(d.date,{score:s,trainingTime:e.target.value,trainingType:ty})} style={{padding:"4px 8px",border:"1px solid #e5e5e5",borderRadius:5,fontSize:12,flex:1}}/>
+      {isExpanded&&d.totals&&<div style={{padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
+          {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
+          {hasHydration&&<span>💧 Hydrated</span>}
+          {hasGi&&<span style={{color:"var(--bad)"}}>🤢 GI distress</span>}
+          {daySleep!==undefined&&<span style={{color:daySleep===true?"var(--good)":"var(--bad)",fontWeight:500}}>😴 {daySleep===true?"Slept well":"Poor sleep"}</span>}
         </div>
-        <div style={{marginBottom:8}}>
-          <label style={{fontSize:12,color:"#666",display:"block",marginBottom:4}}>Training type:</label>
-          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRpp(d.date,{score:s,trainingTime:t,trainingType:tt.id===ty?"":tt.id})} style={{padding:"4px 10px",borderRadius:5,border:`1px solid ${tt.id===ty?tt.color:"#e5e5e5"}`,background:tt.id===ty?tt.color:"#fff",color:tt.id===ty?"#fff":"#666",fontSize:11,fontWeight:tt.id===ty?600:500,cursor:"pointer"}}>{tt.icon} {tt.short}</button>)}</div>
-        </div>
-        <div style={{textAlign:"right"}}>
-          <button onClick={()=>setRppEditDate(null)} style={{padding:"4px 12px",background:"#fff",border:"1px solid #e5e5e5",borderRadius:5,fontSize:12,cursor:"pointer",color:"#666"}}>Done</button>
-        </div>
-      </div>})()}
-      {ad===d.date&&<div style={{background:"#fafafa",borderRadius:8,padding:12,marginBottom:12,border:"1px solid #f0f0f0"}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
-      {d.totals&&<div>
-        <button onClick={()=>setEx(ex===d.date?null:d.date)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#888",padding:"0 0 10px",fontWeight:500}}>{ex===d.date?"▾":"▸"} {d.mc} meal{d.mc!==1?"s":""}</button>
-        {ex===d.date&&<div className="fc" style={{marginBottom:12,gap:6}}>{(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} style={{background:"#fafafa",borderRadius:6,padding:10,border:"1px solid #e5e5e5"}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fafafa",borderRadius:6,padding:"8px 10px",border:"1px solid #f0f0f0"}}><div><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:500}}>{m.mealName}</span>{m.time&&<span style={{fontSize:10,color:"#999",background:"#f0f0f0",padding:"1px 5px",borderRadius:3}}>{m.time}</span>}</div><div style={{fontSize:11,color:"#888",marginTop:2}}>{Math.round(m.calories)} cal · P:{Math.round(m.protein)}g</div></div><div className="fr" style={{gap:2}}><button style={{background:"none",border:"none",color:"#bbb",cursor:"pointer",fontSize:12,padding:"0 4px"}} onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}}>✏️</button><button className="btn-x" onClick={()=>onDel(d.date,mi)}>×</button></div></div>)}</div>}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px",marginBottom:10}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"#3b82f6"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"#f59e0b"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"#22c55e"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"#8b5cf6"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"#888"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90).map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"#fffbeb":"#fef2f2",color:pc(p)}}>{m.name} {p}%</span>)}</div>
+        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
+        {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"var(--page-bg)",borderRadius:12,padding:"10px 12px"}}>
+          <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRpp(d.date,{score:n===s?0:n,trainingTime:t,trainingType:ty})} style={{flex:1,height:28,border:"none",borderRadius:5,background:n<=s?"var(--rose)":"var(--track)",color:n<=s?"#fff":"var(--ink-soft)",fontSize:11,fontWeight:n===s?700:500,cursor:"pointer"}}>{n}</button>)}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <label style={{fontSize:12,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
+            <input type="time" value={t} onChange={e=>setRpp(d.date,{score:s,trainingTime:e.target.value,trainingType:ty})} style={{padding:"4px 8px",fontSize:12,flex:1}}/>
+          </div>
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:12,color:"var(--ink-soft)",display:"block",marginBottom:4}}>Training type:</label>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRpp(d.date,{score:s,trainingTime:t,trainingType:tt.id===ty?"":tt.id})} className={"chip"+(tt.id===ty?" on":"")} style={{fontSize:11,padding:"4px 10px"}}>{tt.icon} {tt.short}</button>)}</div>
+          </div>
+          <div style={{textAlign:"right"}}><button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button></div>
+        </div>})()}
+        {ad===d.date&&<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
+        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{m.time&&<span style={{fontSize:11.5,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100}}>{m.time}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
+        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
       </div>}
     </div>})}
 
   </div>
+}
+
+/* ── WEEKLY REPORT ── */
+function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportWindowStart,setLastReportWindowStart}){
+  const[showToast,setShowToast]=useState(false);
+  const toastTimer=useRef(null);
+  const activeDaysLogged=Object.keys(history).filter(d=>history[d]&&history[d].length>0).length;
+  const reportState=(()=>{
+    if(!lastReportWindowStart){
+      if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`First report available in ${x} day${x!==1?"s":""}`}}
+      return{enabled:true,label:"Report available — download now"};
+    }
+    const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
+    if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`Next report available in ${z} day${z!==1?"s":""}`}}
+    if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
+    return{enabled:true,label:"Report available — download now"};
+  })();
+  const downloadReport=()=>{
+    try{
+      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress});
+      const doc=window.renderReportPDF(report);
+      doc.save(`performance-report-${today()}.pdf`);
+      setLastReportWindowStart(today());
+      setShowToast(true);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setShowToast(false),2600);
+    }catch(e){alert("Couldn't generate the report: "+e.message)}
+  };
+  const preview=(()=>{try{return window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress})}catch{return null}})();
+  const t2Label={sun:"sun exposure",hydration:"hydration",sleep:"a well-slept night"};
+  const bestT2=preview&&preview.tier2?Object.entries(preview.tier2).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
+  const bestT3=preview&&preview.tier3&&preview.tier3.factors?Object.entries(preview.tier3.factors).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
+  const bestGi=preview&&preview.gi&&preview.gi.triggers&&preview.gi.triggers.length>0?preview.gi.triggers[0]:null;
+  return<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:20}}>
+      <div>
+        <h1 className="h-page">Weekly report</h1>
+        <p className="sub">Based on {activeDaysLogged} logged day{activeDaysLogged!==1?"s":""}</p>
+      </div>
+      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:4}}>⬇ Full report</button>
+    </div>
+    {!reportState.enabled&&<div className="info" style={{fontSize:13}}>{reportState.label}</div>}
+    {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>✓ Detailed PDF report downloaded</div>}
+
+    <h3 className="stit">Performance</h3>
+    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Lifestyle &amp; performance</div>
+      {bestT2?<>
+        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>On the {bestT2[1].nTrue} days you logged {t2Label[bestT2[0]]||bestT2[0]}, your average performance was <b style={{color:"var(--ink)"}}>{bestT2[1].meanTrue}</b> — {Math.abs(bestT2[1].delta)} points {bestT2[1].delta>0?"higher":"lower"} than the {bestT2[1].nFalse} days without ({bestT2[1].meanFalse}).</div>
+        <div style={{display:"flex",gap:20,alignItems:"flex-end",height:64,padding:"0 10px"}}>
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,height:"100%",justifyContent:"flex-end"}}><div style={{width:40,borderRadius:"6px 6px 2px 2px",background:"var(--good)",height:`${Math.max(6,bestT2[1].meanTrue/10*100)}%`}}/><div style={{fontSize:10,color:"var(--ink-soft)"}}>with</div></div>
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,height:"100%",justifyContent:"flex-end"}}><div style={{width:40,borderRadius:"6px 6px 2px 2px",background:"var(--bad)",height:`${Math.max(6,bestT2[1].meanFalse/10*100)}%`}}/><div style={{fontSize:10,color:"var(--ink-soft)"}}>without</div></div>
+        </div>
+      </>:<div style={{fontSize:13,color:"var(--gray)"}}>Not enough data yet to correlate lifestyle factors with performance.</div>}
+    </div>
+
+    <h3 className="stit">Sleep</h3>
+    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Habits &amp; sleep</div>
+      {bestT3?<>
+        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>{bestT3[1].wellRate!==undefined?
+          `${bestT3[1].label} occurred on ${bestT3[1].wellRate}% of well-slept nights vs ${bestT3[1].poorRate}% of poor-sleep nights.`
+          :`Well-slept nights averaged ${bestT3[1].wellMean} for ${bestT3[1].label.toLowerCase()}, vs ${bestT3[1].poorMean} on poor-sleep nights.`}</div>
+        <div className="pbg" style={{height:10}}><div className="pf" style={{width:`${bestT3[1].wellRate!==undefined?bestT3[1].wellRate:Math.min(100,Math.round(preview.tier3.nWell/(preview.tier3.nWell+preview.tier3.nPoor)*100))}%`,background:"var(--good)"}}/></div>
+      </>:<div style={{fontSize:13,color:"var(--gray)"}}>Not enough sleep data yet, or no factor showed a meaningful pattern.</div>}
+    </div>
+
+    <h3 className="stit">GI distress</h3>
+    <div className="panel" style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Nutrition &amp; GI distress</div>
+      {bestGi?<>
+        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>"{bestGi.word}" appeared in {bestGi.total} meals; {bestGi.giCount} of those were on days you reported GI distress ({Math.round(bestGi.giCount/bestGi.total*100)}%).</div>
+        <div className="pbg" style={{height:10}}><div className="pf" style={{width:`${bestGi.confidence}%`,background:"var(--bad)"}}/></div>
+      </>:<div style={{fontSize:13,color:"var(--gray)"}}>{preview&&preview.gi?"A pattern was logged but no food keyword stood out yet.":"Not enough GI-distress reports yet to look for a pattern."}</div>}
+    </div>
+  </div>
+}
+
+/* ── ONBOARDING ── */
+function OnboardingSlides({onDone}){
+  const slides=[
+    {icon:"🍽️",heading:"Log meals your way",body:"Type a meal in seconds, or snap a photo and let AI estimate the macros for you."},
+    {icon:"📋",heading:"Track the habits around food",body:"A quick daily check-in on GI comfort, sunlight, hydration and sleep — plus how you performed."},
+    {icon:"📊",heading:"See the connections",body:"Weekly reports surface deficiencies, excesses, and how nutrition relates to sleep and performance."},
+  ];
+  const[step,setStep]=useState(0);
+  const s=slides[step];
+  return<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",padding:"64px 28px 40px",boxSizing:"border-box"}}>
+    <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:28,textAlign:"center"}}>
+      <div style={{width:120,height:120,borderRadius:24,background:"var(--rose-soft)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:52}}>{s.icon}</div>
+      <div className="h-page" style={{fontSize:26,lineHeight:1.25}}>{s.heading}</div>
+      <div style={{fontSize:15,color:"var(--ink-soft)",lineHeight:1.5,maxWidth:280}}>{s.body}</div>
+    </div>
+    <div style={{display:"flex",justifyContent:"center",gap:7,marginBottom:24}}>
+      {slides.map((_,i)=><div key={i} style={{width:i===step?20:7,height:7,borderRadius:4,background:i===step?"var(--rose)":"var(--track)",transition:"width .15s"}}/>)}
+    </div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div onClick={onDone} style={{fontSize:15,color:"var(--ink-soft)",padding:10,cursor:"pointer"}}>Skip</div>
+      <div onClick={()=>step<slides.length-1?setStep(step+1):onDone()} className="btn btn-rose" style={{width:"auto",padding:"13px 28px",margin:0,cursor:"pointer"}}>{step===slides.length-1?"Get started":"Next"}</div>
+    </div>
+  </div>;
 }
 
 /* ── MAIN APP ── */
@@ -1405,7 +1560,8 @@ function App(){
   const[userKey_,setUserKey]=useState(()=>ls("nt-user-key",null));
   useEffect(()=>{currentUserKey=userKey_},[userKey_]);
   const[profile,setProfile]=useState(()=>ls("nt-profile",null));
-  const[page,setPage]=useState("today");
+  const[tab,setTab]=useState("home");
+  const[onboardingDone,setOnboardingDone]=useState(false);
   const[editProfile,setEditProfile]=useState(false);
   const[editGoal,setEditGoal]=useState(false);
   const[isAdmin,setIsAdmin]=useState(false);
@@ -1597,69 +1753,75 @@ function App(){
 
   if(!userKey_||!profile){
     if(isAdmin)return<AdminPage onLogout={()=>setIsAdmin(false)}/>;
+    if(newKey&&!onboardingDone)return<OnboardingSlides onDone={()=>setOnboardingDone(true)}/>;
     if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{},skipped:{},hydration:{}})}}/>;
     return<LoginScreen onLogin={(key,data)=>{setUserKey(key);lss("nt-user-key",key);if(data&&data.profile){setProfile(data.profile);lss("nt-profile",data.profile)}}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}} onAdmin={()=>setIsAdmin(true)}/>;
   }
 
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
 
-  const nc=p=>page===p?"on":"";const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
+  const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
+  const tabsDef=[["home","Home"],["log","Log"],["checkin","Check-in"],["history","History"],["report","Report"]];
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-      <h1>Meal Analyzer</h1>
+      <div style={{fontFamily:"var(--serif)",fontSize:15,color:"var(--ink-soft)",fontWeight:600}}>Meal Analyzer</div>
       <div className="fr" style={{gap:4}}>
-        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",color:"#888"}} title="Log out">🚪</button>
-        <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:13,cursor:"pointer",color:"#888"}} title="Edit profile">✏️</button>
+        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Log out">🚪</button>
+        <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Edit profile">✏️</button>
       </div>
     </div>
-    <p className="sub" style={{marginBottom:4}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel} · {DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore"}</p>
-    <p style={{fontSize:12,color:"#16a34a",marginBottom:20}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
+    <p className="sub" style={{marginBottom:4,fontSize:12}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel} · {DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore"}</p>
+    <p style={{fontSize:12,color:"var(--good)",marginBottom:20,fontWeight:500}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
 
-    {syncing&&<div style={{textAlign:"center",padding:12,marginBottom:16,fontSize:13,color:"#888"}}>☁️ Syncing data…</div>}
+    {syncing&&<div style={{textAlign:"center",padding:10,marginBottom:16,fontSize:13,color:"var(--ink-soft)"}}>☁️ Syncing data…</div>}
 
     {showSleepPrompt&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
         <div style={{fontSize:44,marginBottom:12}}>😴</div>
-        <div style={{fontSize:19,fontWeight:600,marginBottom:6}}>Did you sleep well tonight?</div>
-        <p style={{fontSize:13,color:"#888",marginBottom:24}}>This helps correlate rest with your performance over time.</p>
+        <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>Did you sleep well tonight?</div>
+        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:24}}>This helps correlate rest with your performance over time.</p>
         <div style={{display:"flex",gap:12}}>
-          <button onClick={()=>{setSleep(today(),true);setShowSleepPrompt(false)}} style={{flex:1,padding:"14px 0",background:"#16a34a",color:"#fff",border:"none",borderRadius:10,fontSize:15,fontWeight:600,cursor:"pointer"}}>✓ Yes</button>
-          <button onClick={()=>{setSleep(today(),false);setShowSleepPrompt(false)}} style={{flex:1,padding:"14px 0",background:"#dc2626",color:"#fff",border:"none",borderRadius:10,fontSize:15,fontWeight:600,cursor:"pointer"}}>✗ No</button>
+          <button onClick={()=>{setSleep(today(),true);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--good)",margin:0,flex:1}}>✓ Yes</button>
+          <button onClick={()=>{setSleep(today(),false);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--bad)",margin:0,flex:1}}>✗ No</button>
         </div>
-        <button onClick={()=>setShowSleepPrompt(false)} style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:13,marginTop:16}}>Ask me later</button>
+        <button onClick={()=>setShowSleepPrompt(false)} style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:16}}>Ask me later</button>
       </div>
     </div>}
 
     {showWeightModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
         <div style={{fontSize:44,marginBottom:12}}>⚖️</div>
-        <div style={{fontSize:19,fontWeight:600,marginBottom:6}}>10-day weight check</div>
-        <p style={{fontSize:13,color:"#888",marginBottom:20}}>Enter your current weight so the app can fine-tune your portion estimates.</p>
+        <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>10-day weight check</div>
+        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:20}}>Enter your current weight so the app can fine-tune your portion estimates.</p>
         <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder={`Weight (kg) — last: ${profile.calibWeight??profile.weight}kg`} style={{marginBottom:weightErr?4:16,textAlign:"center",fontSize:18,fontWeight:600}}/>
-        {weightErr&&<p style={{fontSize:12,color:"#dc2626",marginBottom:12}}>{weightErr}</p>}
-        <button className="btn" style={{background:"#1d4ed8"}} onClick={()=>submitWeightCheck(weightInput)}>Save weight</button>
-        <button style={{background:"none",border:"none",color:"#aaa",cursor:"pointer",fontSize:13,marginTop:14}} onClick={()=>{setShowWeightModal(false);setWeightErr(null)}}>Skip for now</button>
+        {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginBottom:12}}>{weightErr}</p>}
+        <button className="btn btn-rose" onClick={()=>submitWeightCheck(weightInput)}>Save weight</button>
+        <button style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:14}} onClick={()=>{setShowWeightModal(false);setWeightErr(null)}}>Skip for now</button>
       </div>
     </div>}
 
-    {weightCheckDue&&!showWeightModal&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:12,padding:16,marginBottom:24}}>
-      <div style={{fontSize:14,fontWeight:600,color:"#1d4ed8",marginBottom:8}}>⚖️ 10-day weight check pending</div>
-      <p style={{fontSize:13,color:"#333",marginBottom:12}}>Log your current weight to fine-tune future portion estimates.</p>
+    {weightCheckDue&&!showWeightModal&&<div className="panel" style={{background:"var(--rose-soft)",borderColor:"var(--rose)",marginBottom:24}}>
+      <div style={{fontSize:14,fontWeight:600,color:"var(--rose)",marginBottom:8}}>⚖️ 10-day weight check pending</div>
+      <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:12}}>Log your current weight to fine-tune future portion estimates.</p>
       <div className="fr" style={{gap:8}}>
         <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder="Weight (kg)" style={{flex:1}}/>
-        <button className="btn btn-s" style={{marginTop:0}} onClick={()=>submitWeightCheck(weightInput)}>Save</button>
+        <button className="btn btn-rose btn-s" style={{marginTop:0}} onClick={()=>submitWeightCheck(weightInput)}>Save</button>
       </div>
-      {weightErr&&<p style={{fontSize:12,color:"#dc2626",marginTop:6}}>{weightErr}</p>}
+      {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    <div className="nav">
-      <button className={nc("today")} onClick={()=>setPage("today")}>Today</button>
-      <button className={nc("templates")} onClick={()=>setPage("templates")}>Saved meals</button>
-      <button className={nc("history")} onClick={()=>setPage("history")}>History</button>
+    {tab==="home"&&<HomePage meals={meals} setMeals={wrap} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt}/>}
+    {tab==="log"&&<LogMealPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} DT={DT} prompt={prompt}/>}
+    {tab==="checkin"&&<CheckinPage sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile}/>}
+    {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
+    {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
+
+    <div className="tabbar">
+      {tabsDef.map(([key,label])=><button key={key} className={"tab"+(tab===key?" on":"")} onClick={()=>setTab(key)}>
+        <div className="tab-dot"/>
+        <div className="tab-label">{label}</div>
+      </button>)}
     </div>
-    {page==="today"&&<TodayPage meals={meals} setMeals={wrap} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} onEditGoal={()=>setEditGoal(true)}/>}
-    {page==="templates"&&<TemplatesPage templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} DT={DT} prompt={prompt}/>}
-    {page==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
   </div>
 }
 
