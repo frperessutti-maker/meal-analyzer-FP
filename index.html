@@ -1236,14 +1236,15 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
 }
 
 /* ── LOG A MEAL ── */
-function LogMealPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,DT,prompt}){
+function LogMealPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,DT,prompt,quota,refreshQuota}){
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[ei,setEi]=useState(null),[et,setEt]=useState(""),[cd,setCd]=useState(null);
   const[baselineOpen,setBaselineOpen]=useState(false);
+  const[addRecurringOpen,setAddRecurringOpen]=useState(false);
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
-  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=nowTime();m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}};
-  const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("")}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false)}};
-  const doEditRecurring=async i=>{if(!et.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(et,null,prompt);setTemplates(p=>p.map((t,j)=>j===i?m:t));setEi(null);setEt("")}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false)}};
+  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=nowTime();m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
+  const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
+  const doEditRecurring=async i=>{if(!et.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(et,null,prompt);setTemplates(p=>p.map((t,j)=>j===i?m:t));setEi(null);setEt("")}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
   const ml=t=>`${Math.round(t.calories)} cal · P:${Math.round(t.protein)}g · F:${Math.round(t.fat)}g · C:${Math.round(t.carbs)}g · Fi:${Math.round(t.fiber||0)}g`;
   const baseline=sum(templates);
   return<div>
@@ -1254,15 +1255,20 @@ function LogMealPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,D
       {mode==="text"&&<div><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn btn-rose" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button></div>}
       {err&&<div className="err" style={{marginTop:12,marginBottom:0}}>{err}</div>}
       {ld&&<div style={{textAlign:"center",padding:12,fontSize:13,color:"var(--ink-soft)"}}>Analyzing…</div>}
+      {quota&&quota.meal&&<div style={{marginTop:10,fontSize:12,textAlign:"center",color:quota.meal.remaining===0?"var(--bad)":quota.meal.remaining<=3?"var(--warn)":"var(--ink-soft)"}}>
+        {quota.meal.remaining===0?`No analyses left — ${quota.meal.perDay} more tomorrow`:`${quota.meal.remaining} analys${quota.meal.remaining===1?"is":"es"} left · +${quota.meal.perDay}/day, stacks to ${quota.meal.max}`}
+      </div>}
     </div>
 
-    <h3 className="stit">Recurring meals</h3>
-    <div className="panel" style={{marginBottom:16}}>
-      <div style={{fontWeight:600,fontSize:14,marginBottom:12,color:"var(--ink)"}}>Add a recurring meal</div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+      <h3 className="stit" style={{marginBottom:0}}>Recurring meals</h3>
+      <button onClick={()=>{setAddRecurringOpen(!addRecurringOpen);setRErr(null)}} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,fontWeight:600,color:"var(--rose)"}}>{addRecurringOpen?"Cancel":"+ Add"}</button>
+    </div>
+    {addRecurringOpen&&<div className="panel" style={{marginBottom:16}}>
       <textarea value={rTxt} onChange={e=>setRTxt(e.target.value)} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements: 1 tablet Vitamin C + product URL"}/>
       <button className="btn btn-rose" onClick={doAddRecurring} disabled={rLd||!rTxt.trim()}>{rLd&&ei===null?"Analyzing…":"Save meal"}</button>
       {rErr&&<div className="err" style={{marginTop:12,marginBottom:0}}>{rErr}</div>}
-    </div>
+    </div>}
 
     {templates.length>0&&<div style={{marginBottom:20}}>
       <button className="collapse-btn" onClick={()=>setBaselineOpen(!baselineOpen)} style={{marginBottom:baselineOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{baselineOpen?"▾":"▸"} Daily baseline from saved meals</button>
@@ -1662,6 +1668,15 @@ function App(){
 
   useEffect(()=>{fetchAndMergeCloud()},[userKey_]);
 
+  // Remaining meal-analysis balance, shown as a counter in the Log tab. Refreshed on
+  // login and after each analysis; the worker is the source of truth.
+  const[quota,setQuota]=useState(null);
+  const refreshQuota=useCallback(()=>{
+    if(!userKey_)return;
+    fetch(`${API_URL}/quota?key=${encodeURIComponent(userKey_)}`).then(r=>r.json()).then(d=>{if(d&&d.meal)setQuota(d)}).catch(()=>{});
+  },[userKey_]);
+  useEffect(()=>{refreshQuota()},[userKey_]);
+
   // Re-pull from the cloud whenever the app regains focus (tab switch, unlocking the
   // phone, reopening a PWA) — not just on a fresh page load.
   useEffect(()=>{
@@ -1811,7 +1826,7 @@ function App(){
     </div>}
 
     {tab==="home"&&<HomePage meals={meals} setMeals={wrap} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt}/>}
-    {tab==="log"&&<LogMealPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} DT={DT} prompt={prompt}/>}
+    {tab==="log"&&<LogMealPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota}/>}
     {tab==="checkin"&&<CheckinPage sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile}/>}
     {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}

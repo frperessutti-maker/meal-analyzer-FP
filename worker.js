@@ -7,10 +7,15 @@
 // Enforcement lives here, not in the client, because client-side checks
 // are trivially bypassed by anyone who can see the worker URL.
 const DAILY_BUDGET_USD = 1.00;           // hard stop for total spend/day across all users
-const DAILY_MEAL_LIMIT = 10;             // meal analyses per user per day
-const DAILY_LIFESTYLE_LIMIT = 3;         // lifestyle-suggestion calls per user per day
+const MEAL_DAILY_REFILL = 10;            // meal analyses added to the balance each day
+const MEAL_MAX_BALANCE = 100;            // ceiling on accumulated (unused) meal analyses
+const DAILY_LIFESTYLE_LIMIT = 3;         // lifestyle-suggestion calls per user per day (no rollover)
 const MIN_MS_BETWEEN_REQUESTS = 4000;    // per-user cooldown — blunts rapid-fire/agentic loops
 const KV_TTL_SECONDS = 172800;           // 2 days — auto-expire daily counters
+// A meal balance must outlive gaps in usage, otherwise a user who stops logging for
+// a while loses the analyses they were accruing. 60 days is well past the 10 days it
+// takes to fill from empty to MEAL_MAX_BALANCE; beyond that the balance resets.
+const BALANCE_TTL_SECONDS = 5184000;     // 60 days
 
 // Approximate Claude Sonnet pricing (USD per token). This is a rough estimate
 // for budget-capping purposes, not an exact billing reconciliation — check
@@ -29,6 +34,34 @@ function errorResponse(message, status, corsHeaders) {
 async function getCounter(env, key) {
   const raw = await env.USERDATA.get(key);
   return raw ? parseFloat(raw) || 0 : 0;
+}
+function daysBetweenISO(fromISO, toISO) {
+  const a = Date.parse(fromISO + "T00:00:00Z"), b = Date.parse(toISO + "T00:00:00Z");
+  if (isNaN(a) || isNaN(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+// Meal analyses use a refill bucket rather than a flat daily counter: each calendar
+// day adds MEAL_DAILY_REFILL to the balance (capped at MEAL_MAX_BALANCE) and each
+// analysis spends one, so unused days accumulate. That lets someone who didn't log
+// for a few days go back and fill in their history later.
+// Accrual is computed lazily on read — no cron needed.
+async function readMealBalance(env, userKey, day) {
+  const key = `mealbal:${userKey}`;
+  let rec = null;
+  try { rec = JSON.parse(await env.USERDATA.get(key)); } catch { rec = null; }
+  if (!rec || typeof rec.balance !== "number" || !rec.day) {
+    rec = { balance: MEAL_DAILY_REFILL, day };            // new user, or balance aged out
+  } else if (rec.day !== day) {
+    const elapsed = daysBetweenISO(rec.day, day);
+    if (elapsed > 0) {
+      rec = { balance: Math.min(MEAL_MAX_BALANCE, rec.balance + elapsed * MEAL_DAILY_REFILL), day };
+    }
+  }
+  return { key, rec };
+}
+function writeMealBalance(env, key, rec) {
+  return env.USERDATA.put(key, JSON.stringify(rec), { expirationTtl: BALANCE_TTL_SECONDS });
 }
 
 export default {
@@ -115,6 +148,22 @@ export default {
       });
     }
 
+    // Remaining-quota lookup for the UI counter. Read-only: it applies pending
+    // day-rollover accrual and persists that, but never spends an analysis.
+    if (url.pathname === "/quota" && request.method === "GET") {
+      if (!env.USERDATA) return errorResponse("KV not configured", 500, corsHeaders);
+      const qKey = url.searchParams.get("key");
+      if (!qKey) return errorResponse("Missing key", 400, corsHeaders);
+      const day = todayKey();
+      const { key: balKey, rec } = await readMealBalance(env, qKey, day);
+      await writeMealBalance(env, balKey, rec);
+      const lifeUsed = await getCounter(env, `quota:lifestyle:${qKey}:${day}`);
+      return new Response(JSON.stringify({
+        meal: { remaining: rec.balance, max: MEAL_MAX_BALANCE, perDay: MEAL_DAILY_REFILL },
+        lifestyle: { remaining: Math.max(0, DAILY_LIFESTYLE_LIMIT - lifeUsed), perDay: DAILY_LIFESTYLE_LIMIT }
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Fetch URL content (proxy for CORS)
     if (url.pathname === "/fetch-url" && request.method === "GET") {
       const targetUrl = url.searchParams.get("url");
@@ -177,14 +226,21 @@ export default {
         return errorResponse("The app has reached its shared daily analysis budget. Please try again tomorrow.", 429, corsHeaders);
       }
 
-      // 3. Per-user, per-kind daily quota
-      const quotaKind = kind === "lifestyle_suggestion" ? "lifestyle" : "meal";
-      const quotaLimit = quotaKind === "lifestyle" ? DAILY_LIFESTYLE_LIMIT : DAILY_MEAL_LIMIT;
-      const quotaKey = `quota:${quotaKind}:${userKey}:${day}`;
-      const usedSoFar = await getCounter(env, quotaKey);
-      if (usedSoFar >= quotaLimit) {
-        const label = quotaKind === "lifestyle" ? "lifestyle-suggestion" : "meal analysis";
-        return errorResponse(`Daily ${label} limit reached (${quotaLimit}/day). Please try again tomorrow.`, 429, corsHeaders);
+      // 3. Per-user quota. Lifestyle suggestions stay a flat daily limit; meal
+      //    analyses draw on the accumulating balance (see readMealBalance).
+      const isLifestyle = kind === "lifestyle_suggestion";
+      const lifestyleKey = `quota:lifestyle:${userKey}:${day}`;
+      let lifestyleUsed = 0, mealBal = null;
+      if (isLifestyle) {
+        lifestyleUsed = await getCounter(env, lifestyleKey);
+        if (lifestyleUsed >= DAILY_LIFESTYLE_LIMIT) {
+          return errorResponse(`Daily lifestyle-suggestion limit reached (${DAILY_LIFESTYLE_LIMIT}/day). Please try again tomorrow.`, 429, corsHeaders);
+        }
+      } else {
+        mealBal = await readMealBalance(env, userKey, day);
+        if (mealBal.rec.balance <= 0) {
+          return errorResponse(`You've used all your meal analyses. You get ${MEAL_DAILY_REFILL} more tomorrow — unused ones stack up to ${MEAL_MAX_BALANCE}.`, 429, corsHeaders);
+        }
       }
 
       // 4. Forward to Claude
@@ -204,8 +260,17 @@ export default {
         const cost = (data.usage.input_tokens || 0) * PRICE_PER_INPUT_TOKEN
                    + (data.usage.output_tokens || 0) * PRICE_PER_OUTPUT_TOKEN;
         await env.USERDATA.put(budgetKey, String(spentSoFar + cost), { expirationTtl: KV_TTL_SECONDS });
-        await env.USERDATA.put(quotaKey, String(usedSoFar + 1), { expirationTtl: KV_TTL_SECONDS });
+        if (isLifestyle) {
+          await env.USERDATA.put(lifestyleKey, String(lifestyleUsed + 1), { expirationTtl: KV_TTL_SECONDS });
+        } else {
+          mealBal.rec.balance = Math.max(0, mealBal.rec.balance - 1);
+          await writeMealBalance(env, mealBal.key, mealBal.rec);
+        }
       }
+
+      // Piggyback the remaining balance so the client can update its counter without
+      // a second round-trip. Anthropic never returns a `_quota` field of its own.
+      if (!isLifestyle && mealBal) data._quota = { mealRemaining: mealBal.rec.balance, mealMax: MEAL_MAX_BALANCE, mealPerDay: MEAL_DAILY_REFILL };
 
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
