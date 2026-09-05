@@ -1,0 +1,12 @@
+   {
+     "name": "meal-analyzer-fp",
+     "compatibility_date": "2026-08-26",
+     "main": "worker.js",
+     "kv_namespaces": [
+       { "binding": "USERDATA", "id": "a88d3d7bb7e449bda0948c104eacb1af" }
+     ],
+     "assets": {
+       "directory": "./",
+       "binding": "ASSETS"
+     }
+   }

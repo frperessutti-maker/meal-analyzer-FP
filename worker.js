@@ -192,7 +192,8 @@ export default {
       }
     }
 
-    // Claude API proxy (existing)
+    // Claude API proxy. The client posts to /analyze rather than "/" because this
+    // Worker also serves the app's static assets, and "/" resolves to index.html.
     if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }

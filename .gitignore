@@ -1,0 +1,3 @@
+# Wrangler's local build/state cache — machine-specific, not source
+.wrangler/
+node_modules/
