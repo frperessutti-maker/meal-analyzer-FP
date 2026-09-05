@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -88,15 +88,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   PERFORMANCE REPORT BUNDLE â€” for inline injection into index.html
+/* ─────────────────────────────────────────────────────────────
+   PERFORMANCE REPORT BUNDLE — for inline injection into index.html
 
    Exposes on window:
-     window.buildPerformanceReport(state) â†’ report object
-     window.renderReportPDF(report)       â†’ jsPDF doc
+     window.buildPerformanceReport(state) → report object
+     window.renderReportPDF(report)       → jsPDF doc
 
    REQUIRES: jsPDF loaded via CDN as window.jspdf.jsPDF
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ───────────────────────────────────────────────────────────── */
 (function () {
   const MACROS = ["calories", "protein", "fat", "carbs", "fiber"];
   const TRAINING_TYPES = ["strength", "hiit", "endurance", "skill", "recovery", "other"];
@@ -409,7 +409,7 @@
     const extractKeywords = (meals) => {
       const words = new Set();
       (meals || []).forEach((m) => {
-        const name = (m.mealName || "").toLowerCase().replace(/[^a-zÃ Ã¨Ã©Ã¬Ã²Ã¹Ã¤Ã¶Ã¼\s]/g, "");
+        const name = (m.mealName || "").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g, "");
         name.split(/\s+/).filter((w) => w.length > 2 && !stopWords.includes(w)).forEach((w) => words.add(w));
       });
       return words;
@@ -432,7 +432,7 @@
         const windowStart = new Date(clickDT.getTime() - 24 * 3600 * 1000);
         suspectMeals = allMeals.filter((m) => m._dt >= windowStart && m._dt < clickDT);
       } else {
-        // No click time recorded (older data logged before this fix) â€” fall back to the whole day.
+        // No click time recorded (older data logged before this fix) — fall back to the whole day.
         suspectMeals = history[d] || [];
       }
       extractKeywords(suspectMeals).forEach((w) => { giKeywords[w] = (giKeywords[w] || 0) + 1; });
@@ -472,7 +472,7 @@
     };
   }
 
-  /* â”€â”€â”€ PDF RENDERER â”€â”€â”€ */
+  /* ─── PDF RENDERER ─── */
   const TRAINING_LABELS = { strength: "Strength", hiit: "HIIT / Conditioning", endurance: "Endurance", skill: "Skill / Technical", recovery: "Recovery / Mobility", other: "Other" };
   const TRAINING_ICONS = { strength: "STR", hiit: "HIT", endurance: "END", skill: "SKL", recovery: "REC", other: "OTH" };
   const WINDOW_LABELS = { W1: "the 3 hours before training", W2: "the 3-12 hours before training", W3: "the 24-hour recovery window after the previous session" };
@@ -521,7 +521,7 @@
         ensureSpace(10);
         const afterDotsX = drawDots(doc, MARGIN + indent, y, confidence, dotColor);
         doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...COLORS.faint);
-        doc.text(`${confidence}% confidence Â· ${confidenceLabel(confidence)}`, afterDotsX + 2, y);
+        doc.text(`${confidence}% confidence · ${confidenceLabel(confidence)}`, afterDotsX + 2, y);
         y += 4;
         doc.setFontSize(10); doc.setTextColor(...COLORS.ink);
         const wrapped = doc.splitTextToSize(text, CONTENT_W - indent);
@@ -563,7 +563,7 @@
     const labels = { sun: { yes: "days you logged sun exposure", no: "days without" }, hydration: { yes: "days you logged hydration", no: "days without" }, sleep: { yes: "sessions after a well-slept night", no: "sessions after poor sleep" } };
     const l = labels[name] || { yes: `days with ${name}`, no: `days without` };
     const diff = Math.abs(data.delta); const direction = data.delta > 0 ? "higher" : "lower";
-    return `On the ${data.nTrue} ${l.yes} your average RPP was ${data.meanTrue} â€” ${diff} points ${direction} than the ${data.nFalse} ${l.no}, for which you averaged ${data.meanFalse}.`;
+    return `On the ${data.nTrue} ${l.yes} your average RPP was ${data.meanTrue} — ${diff} points ${direction} than the ${data.nFalse} ${l.no}, for which you averaged ${data.meanFalse}.`;
   }
   function tier3Sentence(name, f) {
     if (f.wellRate !== undefined) return `${f.label} occurred on ${f.wellRate}% of well-slept nights (n=${f.nWell}) and ${f.poorRate}% of poor-sleep nights (n=${f.nPoor}).`;
@@ -640,7 +640,7 @@
     if (words.length === 1) joined = words[0];
     else if (words.length === 2) joined = `${words[0]} and ${words[1]}`;
     else joined = `${words.slice(0, -1).join(", ")}, and ${words[words.length - 1]}`;
-    return `Meals containing ${joined} seem to be linked to GI distress â€” worth watching.`;
+    return `Meals containing ${joined} seem to be linked to GI distress — worth watching.`;
   }
 
   function renderPDF(report) {
@@ -649,7 +649,7 @@
     const w = createWriter(doc);
 
     w.title("Performance Report");
-    w.body(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} Â· Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
+    w.body(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} · Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
     w.space(2); w.hr();
 
     w.section("Diet impact on performance");
@@ -658,7 +658,7 @@
     else {
       t1Keys.forEach((type) => {
         const data = report.tier1[type];
-        w.subheading(`${TRAINING_ICONS[type]}  ${TRAINING_LABELS[type]} â€” ${data.n} sessions`);
+        w.subheading(`${TRAINING_ICONS[type]}  ${TRAINING_LABELS[type]} — ${data.n} sessions`);
         data.findings.forEach((f) => {
           const color = f.direction === "positive" ? COLORS.positive : COLORS.negative;
           w.finding(tier1Sentence(f), f.confidence, { dotColor: color });
@@ -708,7 +708,7 @@
         w.space(1);
         report.gi.triggers.forEach((t) => {
           const pct = Math.round((t.giCount / t.total) * 100);
-          w.finding(`"${t.word}" â€” appeared in ${t.total} meals; ${t.giCount} of those (${pct}%) were on days you reported GI distress.`, t.confidence, { dotColor: COLORS.neutral });
+          w.finding(`"${t.word}" — appeared in ${t.total} meals; ${t.giCount} of those (${pct}%) were on days you reported GI distress.`, t.confidence, { dotColor: COLORS.neutral });
         });
         w.body("This is a keyword pattern, not a diagnosis. Consider tracking further to confirm.", { color: COLORS.faint, size: 9 });
         w.takeaway(giTakeaway(report.gi));
@@ -729,7 +729,7 @@
         lx = drawDots(doc, lx, legendY, it.conf, COLORS.neutral) + 1.5;
         doc.text(it.label, lx, legendY);
         lx += doc.getTextWidth(it.label) + 4;
-        if (i < legendItems.length - 1) doc.text("Â·", lx - 2, legendY);
+        if (i < legendItems.length - 1) doc.text("·", lx - 2, legendY);
       });
       doc.text(`${p} / ${pageCount}`, PAGE_W - MARGIN, legendY, { align: "right" });
     }
@@ -762,12 +762,12 @@ const GOALS=[
 ];
 const TRACKABLE=[{key:"none",label:"None"},...MK.map(k=>({key:k,label:k.charAt(0).toUpperCase()+k.slice(1)})),...MICROS.map(m=>({key:m.key,label:m.name})),...AMINOS_BASE.map(a=>({key:a.key,label:a.name}))];
 const TRAINING_TYPES=[
-  {id:"strength",label:"Strength",short:"Strength",icon:"ðŸ‹ï¸",color:"#8b5cf6"},
-  {id:"hiit",label:"HIIT / Conditioning",short:"HIIT",icon:"âš¡",color:"#f59e0b"},
-  {id:"endurance",label:"Endurance",short:"Endurance",icon:"ðŸƒ",color:"#3b82f6"},
-  {id:"skill",label:"Skill / Technical",short:"Skill",icon:"ðŸŽ¯",color:"#22c55e"},
-  {id:"recovery",label:"Recovery / Mobility",short:"Recovery",icon:"ðŸ§˜",color:"#6b7280"},
-  {id:"other",label:"Other",short:"Other",icon:"ðŸ”˜",color:"#94a3b8"},
+  {id:"strength",label:"Strength",short:"Strength",icon:"🏋️",color:"#8b5cf6"},
+  {id:"hiit",label:"HIIT / Conditioning",short:"HIIT",icon:"⚡",color:"#f59e0b"},
+  {id:"endurance",label:"Endurance",short:"Endurance",icon:"🏃",color:"#3b82f6"},
+  {id:"skill",label:"Skill / Technical",short:"Skill",icon:"🎯",color:"#22c55e"},
+  {id:"recovery",label:"Recovery / Mobility",short:"Recovery",icon:"🧘",color:"#6b7280"},
+  {id:"other",label:"Other",short:"Other",icon:"🔘",color:"#94a3b8"},
 ];
 
 const NUTRIENT_INFO={
@@ -787,11 +787,11 @@ const NUTRIENT_INFO={
   vitaminB12:"Red blood cell production, nerve function, DNA synthesis. Deficiency causes fatigue and poor concentration. Critical for vegans.",
   folate:"Cell division, DNA repair, red blood cell formation. Supports recovery at cellular level. Important for brain health and mood.",
   calcium:"Bone density, muscle contraction, nerve signaling. Critical for impact sports. Works with Vitamin D for bone health.",
-  iodine:"Thyroid function â€” regulates metabolism, energy levels, body temperature. Deficiency causes fatigue and weight management issues.",
+  iodine:"Thyroid function — regulates metabolism, energy levels, body temperature. Deficiency causes fatigue and weight management issues.",
   omega3:"Anti-inflammatory, brain health, joint protection. Reduces muscle soreness (DOMS). Supports focus and reaction time.",
   leucine:"Primary trigger for muscle protein synthesis (mTOR pathway). The most anabolic amino acid. Key for post-training recovery.",
   glutamine:"Most abundant amino acid in muscle. Supports gut lining and immune function. Heavily depleted during intense/prolonged training.",
-  betaAlanine:"Precursor to carnosine â€” buffers lactic acid in muscles. Improves performance in high-intensity efforts like sparring rounds."
+  betaAlanine:"Precursor to carnosine — buffers lactic acid in muscles. Improves performance in high-intensity efforts like sparring rounds."
 };
 
 function InfoBtn({id}){
@@ -803,7 +803,7 @@ function InfoBtn({id}){
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <span style={{fontSize:16,fontWeight:600}}>{TRACKABLE.find(t=>t.key===id)?.label||id}</span>
-          <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#999"}}>Ã—</button>
+          <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#999"}}>×</button>
         </div>
         <p style={{fontSize:14,color:"#444",lineHeight:1.6,margin:0}}>{info}</p>
       </div>
@@ -833,7 +833,7 @@ function calcTargets(p){
   if(p.gender==="female"){t.iron=18;t.vitaminA=700;t.vitaminC=75}
   // Overlay any user-set macro targets on top of the automatic calculation.
   // Protein is stored as g/kg so it rescales if weight changes; fat/carbs are stored as grams.
-  // Fiber and micros are never overridden â€” they always stay automatic.
+  // Fiber and micros are never overridden — they always stay automatic.
   if(p.custom){
     if(p.custom.protein!=null)t.protein=Math.round(p.custom.protein*p.weight);
     if(p.custom.fat!=null)t.fat=Math.round(p.custom.fat);
@@ -940,7 +940,7 @@ function MC({name,value,target,unit,infoKey}){
   </div>
 }
 
-/* â”€â”€ ADMIN PAGE â”€â”€ */
+/* ── ADMIN PAGE ── */
 function AdminPage({onLogout}){
   const[profiles,setProfiles]=useState([]);
   const[loading,setLoading]=useState(true);
@@ -952,10 +952,10 @@ function AdminPage({onLogout}){
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
       <div><h1>Admin Panel</h1><p className="sub">Manage all user profiles</p></div>
-      <button className="btn btn-o btn-s" onClick={onLogout}>ðŸšª Logout</button>
+      <button className="btn btn-o btn-s" onClick={onLogout}>🚪 Logout</button>
     </div>
-    {msg&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:8,padding:12,marginBottom:16,fontSize:13,color:"#1d4ed8"}}>{msg}<button onClick={()=>setMsg(null)} style={{float:"right",background:"none",border:"none",cursor:"pointer",color:"#93c5fd"}}>Ã—</button></div>}
-    {loading?<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading profilesâ€¦</div>:
+    {msg&&<div style={{background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:8,padding:12,marginBottom:16,fontSize:13,color:"#1d4ed8"}}>{msg}<button onClick={()=>setMsg(null)} style={{float:"right",background:"none",border:"none",cursor:"pointer",color:"#93c5fd"}}>×</button></div>}
+    {loading?<div style={{textAlign:"center",padding:40,color:"#888"}}>Loading profiles…</div>:
     <div>
       <div style={{marginBottom:16,padding:12,background:"#f5f5f5",borderRadius:8}}>
         <span style={{fontSize:14,fontWeight:600}}>{profiles.length} profiles</span>
@@ -965,13 +965,13 @@ function AdminPage({onLogout}){
           <div style={{flex:1}}>
             <div style={{fontSize:16,fontWeight:600,marginBottom:4,wordBreak:"break-all"}}>{p.key}</div>
             {pr.age?<div style={{fontSize:13,color:"#666",lineHeight:1.6}}>
-              {pr.age}y Â· {pr.height}cm Â· {pr.weight}kg Â· {pr.gender}<br/>
-              Training: {pr.trainingHours}h/day Â· Goal: {pr.goal||"maintain"} Â· Diet: {pr.diet||"omnivore"}<br/>
-              Multiplier: {(pr.multiplier||1).toFixed(2)}x Â· Calibration: {pr.lastCalibration||"â€”"}<br/>
+              {pr.age}y · {pr.height}cm · {pr.weight}kg · {pr.gender}<br/>
+              Training: {pr.trainingHours}h/day · Goal: {pr.goal||"maintain"} · Diet: {pr.diet||"omnivore"}<br/>
+              Multiplier: {(pr.multiplier||1).toFixed(2)}x · Calibration: {pr.lastCalibration||"—"}<br/>
               {pr.intolerances&&pr.intolerances.length>0&&<>Intolerances: {pr.intolerances.join(", ")}<br/></>}
               Tracking: {pr.trackNutrient||"none"}
             </div>:<div style={{fontSize:13,color:"#bbb"}}>No profile data</div>}
-            <div style={{fontSize:12,color:"#888",marginTop:8}}>ðŸ“‹ {p.templates} saved meals Â· ðŸ“Š {p.historyDays} days tracked</div>
+            <div style={{fontSize:12,color:"#888",marginTop:8}}>📋 {p.templates} saved meals · 📊 {p.historyDays} days tracked</div>
           </div>
           <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #f0f0f0",display:"flex",gap:8}}>
             {confirmDel===p.key?<div className="fr" style={{alignItems:"center"}}>
@@ -982,12 +982,12 @@ function AdminPage({onLogout}){
           </div>
         </div>})}
       </div>
-      <button className="btn btn-o" style={{marginTop:24}} onClick={load}>ðŸ”„ Refresh</button>
+      <button className="btn btn-o" style={{marginTop:24}} onClick={load}>🔄 Refresh</button>
     </div>}
   </div>
 }
 
-/* â”€â”€ LOGIN â”€â”€ */
+/* ── LOGIN ── */
 function LoginScreen({onLogin,onCreate,onAdmin}){
   const[fn,setFn]=useState(""),[ln,setLn]=useState(""),[pin,setPin]=useState(""),[loading,setLoading]=useState(false),[err,setErr]=useState(null);
   const handleLogin=async()=>{
@@ -1007,17 +1007,17 @@ function LoginScreen({onLogin,onCreate,onAdmin}){
       <div className="field" style={{flex:1,marginBottom:0}}><label>First name</label><input type="text" value={fn} onChange={e=>setFn(e.target.value)} placeholder="Francesco"/></div>
       <div className="field" style={{flex:1,marginBottom:0}}><label>Last name</label><input type="text" value={ln} onChange={e=>setLn(e.target.value)} placeholder="Rossi"/></div>
     </div>
-    <div className="field"><label>4-digit PIN</label><input type="text" inputMode="numeric" maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="0000" style={{letterSpacing:8,textAlign:"center",fontSize:20,fontWeight:600}}/><p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>Choose any 4 numbers â€” this identifies your account</p></div>
+    <div className="field"><label>4-digit PIN</label><input type="text" inputMode="numeric" maxLength={4} value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="0000" style={{letterSpacing:8,textAlign:"center",fontSize:20,fontWeight:600}}/><p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>Choose any 4 numbers — this identifies your account</p></div>
     {err&&<div className="err">{err}</div>}
-    <button className="btn btn-rose" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()||pin.length!==4}>{loading?"Loadingâ€¦":"Continue"}</button>
-    <p style={{fontSize:12,color:"var(--gray)",marginTop:12,textAlign:"center"}}>Your data syncs to the cloud â€” log in from any device</p>
+    <button className="btn btn-rose" onClick={handleLogin} disabled={loading||!fn.trim()||!ln.trim()||pin.length!==4}>{loading?"Loading…":"Continue"}</button>
+    <p style={{fontSize:12,color:"var(--gray)",marginTop:12,textAlign:"center"}}>Your data syncs to the cloud — log in from any device</p>
   </div>
 }
 
 const DIETS=[{id:"omnivore",label:"Omnivore"},{id:"vegetarian",label:"Vegetarian"},{id:"vegan",label:"Vegan"},{id:"pescatarian",label:"Pescatarian"},{id:"keto",label:"Keto"},{id:"paleo",label:"Paleo"}];
 const INTOLERANCES=[{id:"lactose",label:"Lactose"},{id:"gluten",label:"Gluten"},{id:"nuts",label:"Nuts"},{id:"eggs",label:"Eggs"},{id:"shellfish",label:"Shellfish"},{id:"soy",label:"Soy"},{id:"fish",label:"Fish"},{id:"fodmap",label:"FODMAPs"}];
 
-/* â”€â”€ PROFILE SETUP â”€â”€ */
+/* ── PROFILE SETUP ── */
 function ProfileSetup({onSave,initial,firstName,lastName}){
   const[age,setAge]=useState(initial?.age||30);
   const[height,setHeight]=useState(initial?.height||175);
@@ -1055,17 +1055,17 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       <div className="field" style={{flex:1}}><label>Training (h/day)</label><input type="number" step="0.5" min="0" max="5" value={hours} onChange={e=>setHours(e.target.value)}/></div>
     </div>
     <div className="field"><label>Goal</label><select value={goal} onChange={e=>setGoal(e.target.value)}>{GOALS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
-      <p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance Â· {goalInfo?.protMult}g protein/kg</p>
+      <p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance · {goalInfo?.protMult}g protein/kg</p>
     </div>
     <div className="field"><label>Diet</label><select value={diet} onChange={e=>setDiet(e.target.value)}>{DIETS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></div>
     <div className="field"><label>Intolerances / allergies</label>
-      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>{INTOLERANCES.map(i=><button key={i.id} onClick={()=>toggleIntol(i.id)} className={"chip"+(intol.includes(i.id)?" on":"")}>{intol.includes(i.id)?"âœ• ":""}{i.label}</button>)}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>{INTOLERANCES.map(i=><button key={i.id} onClick={()=>toggleIntol(i.id)} className={"chip"+(intol.includes(i.id)?" on":"")}>{intol.includes(i.id)?"✕ ":""}{i.label}</button>)}</div>
       {intol.length===0&&<p style={{fontSize:12,color:"var(--ink-soft)",marginTop:6}}>Tap to select any that apply</p>}
     </div>
     <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
     <div style={{background:"var(--good-soft)",border:"1px solid oklch(80% 0.08 150)",borderRadius:16,padding:16,marginBottom:16}}>
       <div style={{fontSize:14,fontWeight:700,color:"var(--good)",marginBottom:8}}>{useCustom?"Your daily targets":"Calculated daily targets"}</div>
-      <div style={{fontSize:13,color:"oklch(35% 0.05 150)",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> Â· Protein: <strong>{effProtein}g</strong> ({pPct}%) Â· Fat: <strong>{effFat}g</strong> ({fPct}%) Â· Carbs: <strong>{effCarbs}g</strong> ({cPct}%) Â· Fiber: <strong>{targets.fiber}g</strong></div>
+      <div style={{fontSize:13,color:"oklch(35% 0.05 150)",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> ({pPct}%) · Fat: <strong>{effFat}g</strong> ({fPct}%) · Carbs: <strong>{effCarbs}g</strong> ({cPct}%) · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",background:useCustom?"var(--rose-soft)":"var(--page-bg)",border:`1px solid ${useCustom?"var(--rose)":"var(--border)"}`,borderRadius:12,cursor:"pointer",marginBottom:useCustom?16:20}} onClick={()=>{
       if(!useCustom){
@@ -1082,17 +1082,17 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Protein (g)</label>
         <input type="number" value={cProtein??""} onChange={e=>setCProtein(e.target.value)}/>
-        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cProtein||0)/(+weight)).toFixed(2):"â€”"} g/kg</p>
+        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cProtein||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Fat (g)</label>
         <input type="number" value={cFat??""} onChange={e=>setCFat(e.target.value)}/>
-        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cFat||0)/(+weight)).toFixed(2):"â€”"} g/kg</p>
+        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cFat||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
       <div className="field" style={{flex:1,marginBottom:0}}>
         <label>Carbs (g)</label>
         <input type="number" value={cCarbs??""} onChange={e=>setCCarbs(e.target.value)}/>
-        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cCarbs||0)/(+weight)).toFixed(2):"â€”"} g/kg</p>
+        <p style={{fontSize:11,color:"var(--ink-soft)",marginTop:4}}>{(+weight)>0?((+cCarbs||0)/(+weight)).toFixed(2):"—"} g/kg</p>
       </div>
     </div>}
     <button className="btn btn-rose" onClick={()=>{
@@ -1107,7 +1107,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
   </div>
 }
 
-/* â”€â”€ LOG (meal entry + today's totals) â”€â”€ */
+/* ── LOG (meal entry + today's totals) ── */
 function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,quota,refreshQuota}){
   const[mealsOpen,setMealsOpen]=useState(true);
   const[microsOpen,setMicrosOpen]=useState(false);
@@ -1140,11 +1140,11 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
     <h1 className="h-page" style={{marginBottom:20}}>Log today meal</h1>
 
     <div className="panel" style={{marginBottom:16}}>
-      <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"âœï¸ Type it in":"ðŸ“· Photo"}</button>)}</div>
-      {mode==="photo"&&<div>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>ðŸ“·</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn btn-rose" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzingâ€¦":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
-      {mode==="text"&&<div><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn btn-rose" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzingâ€¦":"Analyze meal"}</button></div>}
+      <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Type it in":"📷 Photo"}</button>)}</div>
+      {mode==="photo"&&<div>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn btn-rose" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
+      {mode==="text"&&<div><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn btn-rose" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button></div>}
       {err&&<div className="err" style={{marginTop:12,marginBottom:0}}>{err}</div>}
-      {ld&&<div style={{textAlign:"center",padding:12,fontSize:13,color:"var(--ink-soft)"}}>Analyzingâ€¦</div>}
+      {ld&&<div style={{textAlign:"center",padding:12,fontSize:13,color:"var(--ink-soft)"}}>Analyzing…</div>}
       {quota&&quota.meal&&<div style={{marginTop:10,fontSize:12,textAlign:"center",color:quota.meal.remaining===0?"var(--bad)":quota.meal.remaining<=3?"var(--warn)":"var(--ink-soft)"}}>
         {quota.meal.remaining} analys{quota.meal.remaining===1?"is":"es"} left today
       </div>}
@@ -1153,7 +1153,7 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
     <button className="btn btn-o" onClick={()=>{setAddRecurringOpen(!addRecurringOpen);setRErr(null)}} style={{marginBottom:addRecurringOpen?12:20,marginTop:0}}>{addRecurringOpen?"Cancel":"+ Add recurring meal"}</button>
     {addRecurringOpen&&<div className="panel" style={{marginBottom:20}}>
       <textarea value={rTxt} onChange={e=>setRTxt(e.target.value)} placeholder={"e.g., Greek yogurt 200g with honey 15g, walnuts 20g\nFor supplements: 1 tablet Vitamin C + product URL"}/>
-      <button className="btn btn-rose" onClick={doAddRecurring} disabled={rLd||!rTxt.trim()}>{rLd?"Analyzingâ€¦":"Save recurring meal"}</button>
+      <button className="btn btn-rose" onClick={doAddRecurring} disabled={rLd||!rTxt.trim()}>{rLd?"Analyzing…":"Save recurring meal"}</button>
       {rErr&&<div className="err" style={{marginTop:12,marginBottom:0}}>{rErr}</div>}
     </div>}
 
@@ -1170,7 +1170,7 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
         </div>
         <PB value={row.value} max={row.target} color={row.color}/>
         {row.key==="protein"&&<div style={{marginTop:8}}>
-          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"â–¾":"â–¸"} Key amino acids</button>
+          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"▾":"▸"} Key amino acids</button>
           {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
             {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
@@ -1181,12 +1181,12 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
       </div>)}
     </div>
 
-    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"â–¾":"â–¸"} Meals logged</button>
+    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
     {mealsOpen&&<div className="fc" style={{marginBottom:20,gap:10}}>
-      {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet â€” analyze one above to get started.</div>}
+      {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — analyze one above to get started.</div>}
       {editMealErr&&<div className="err">{editMealErr}</div>}
       {meals.map((m,i)=>editMealIdx===i?
-        <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Savingâ€¦":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
+        <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
         :<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
@@ -1195,8 +1195,8 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
           <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
             :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
-            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">âœï¸</span>
-            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">Ã—</span>
+            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">✏️</span>
+            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
           </div>
         </div>
       )}
@@ -1217,14 +1217,14 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
               <button className="btn btn-o btn-s" onClick={()=>setEraseIdx(null)}>No</button>
             </>:<>
               <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
-              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{fontSize:15}}>ðŸ—‘</button>
+              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{fontSize:15}}>🗑</button>
             </>}
           </div>
         </div>;
       })}
     </div>}
 
-    <button className="collapse-btn" onClick={()=>setMicrosOpen(!microsOpen)} style={{marginBottom:microsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{microsOpen?"â–¾":"â–¸"} Micronutrients today</button>
+    <button className="collapse-btn" onClick={()=>setMicrosOpen(!microsOpen)} style={{marginBottom:microsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{microsOpen?"▾":"▸"} Micronutrients today</button>
     {microsOpen&&<div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
       {MICROS.map(m=>{const v=tot[m.key]||0,p=Math.round((v/DT[m.key])*100);return<div key={m.key}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:4}}><span style={{display:"flex",alignItems:"center"}}>{m.name}<InfoBtn id={m.key}/></span><span>{p}%</span></div>
@@ -1238,9 +1238,9 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
       const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
       const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
       const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
-      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>âœ“ No major deficiencies or excesses</div>;
+      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
       const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
-const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits â€” not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
+const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
 
 User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
 Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
@@ -1254,16 +1254,16 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         {excesses.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"var(--warn-soft)",padding:"3px 10px",borderRadius:100,color:"oklch(45% 0.12 70)",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div>}
         {sugErr&&<div className="err">{sugErr}</div>}
         {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
-        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinkingâ€¦</div>}
+        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
         {suggestions&&<div>
           <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
             <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
           </div>
           <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
-            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>â†</button>
+            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
             <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
-            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>â†’</button>
+            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
           </div>
           <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
         </div>}
@@ -1272,7 +1272,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
   </div>
 }
 
-/* â”€â”€ DAILY CHECK-IN â”€â”€ */
+/* ── DAILY CHECK-IN ── */
 function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile}){
   const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
   const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
@@ -1284,10 +1284,10 @@ function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,s
   return<div>
     <h1 className="h-page" style={{marginBottom:20}}>Daily check-in</h1>
     <div className="panel" style={{padding:0,marginBottom:20}}>
-      <div className="toggle-row" onClick={toggleGi} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>ðŸ¤¢ GI distress</span><Switch on={gi} onClick={toggleGi}/></div>
-      <div className="toggle-row" onClick={toggleSun} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>â˜€ï¸ Sunlight exposure</span><Switch on={sun} onClick={toggleSun}/></div>
-      <div className="toggle-row" onClick={toggleHydration} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>ðŸ’§ Hydration ({profile?calcHydration(profile):2.5}L)</span><Switch on={hydrated} onClick={toggleHydration}/></div>
-      <div className="toggle-row"><span style={{fontSize:15,color:"var(--ink)"}}>ðŸ˜´ Sleep quality</span>
+      <div className="toggle-row" onClick={toggleGi} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>🤢 GI distress</span><Switch on={gi} onClick={toggleGi}/></div>
+      <div className="toggle-row" onClick={toggleSun} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>☀️ Sunlight exposure</span><Switch on={sun} onClick={toggleSun}/></div>
+      <div className="toggle-row" onClick={toggleHydration} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>💧 Hydration ({profile?calcHydration(profile):2.5}L)</span><Switch on={hydrated} onClick={toggleHydration}/></div>
+      <div className="toggle-row"><span style={{fontSize:15,color:"var(--ink)"}}>😴 Sleep quality</span>
         <div style={{display:"flex",gap:6}}>
           <button onClick={()=>setSleep(sleep===true?undefined:true)} className="chip" style={sleep===true?{background:"var(--good-soft)",color:"var(--good)",borderColor:"var(--good)"}:{}}>Good</button>
           <button onClick={()=>setSleep(sleep===false?undefined:false)} className="chip" style={sleep===false?{background:"var(--bad-soft)",color:"var(--bad)",borderColor:"var(--bad)"}:{}}>Bad</button>
@@ -1297,7 +1297,7 @@ function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,s
     <h3 className="stit">Performance rating</h3>
     <div className="panel" style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-        <div style={{fontSize:32,fontWeight:700,color:"var(--rose)"}}>{rppScore||"â€“"}</div>
+        <div style={{fontSize:32,fontWeight:700,color:"var(--rose)"}}>{rppScore||"–"}</div>
         <div style={{fontSize:13,color:"var(--ink-soft)"}}>/ 10</div>
       </div>
       <div style={{display:"flex",gap:4}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><div key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:26,borderRadius:5,cursor:"pointer",background:n<=rppScore?"var(--rose)":"var(--track)"}}/>)}</div>
@@ -1313,7 +1313,7 @@ function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,s
   </div>
 }
 
-/* â”€â”€ HISTORY â”€â”€ */
+/* ── HISTORY ── */
 function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile,lastReportWindowStart,setLastReportWindowStart}){
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
@@ -1338,13 +1338,13 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
   const activeDaysLogged=Object.keys(history).filter(d=>history[d]&&history[d].length>0).length;
   const reportState=(()=>{
     if(!lastReportWindowStart){
-      if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`ðŸ“Š First report available in ${x} day${x!==1?"s":""}`}}
-      return{enabled:true,label:"ðŸ“Š Report available â€” download now"};
+      if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`📊 First report available in ${x} day${x!==1?"s":""}`}}
+      return{enabled:true,label:"📊 Report available — download now"};
     }
     const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
-    if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`ðŸ“Š Next report available in ${z} day${z!==1?"s":""}`}}
-    if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`ðŸ“Š Report available â€” download now (expires in ${y} day${y!==1?"s":""})`}}
-    return{enabled:true,label:"ðŸ“Š Report available â€” download now"};
+    if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`📊 Next report available in ${z} day${z!==1?"s":""}`}}
+    if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`📊 Report available — download now (expires in ${y} day${y!==1?"s":""})`}}
+    return{enabled:true,label:"📊 Report available — download now"};
   })();
   const downloadReport=()=>{
     try{
@@ -1357,7 +1357,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
 
   const[chartNutrient,setChartNutrient]=useState("calories");
   const chartN=allN.find(n=>n.key===chartNutrient)||allN[0];
-  // slice() first â€” dd is ordered newest-first, and reverse() mutates in place.
+  // slice() first — dd is ordered newest-first, and reverse() mutates in place.
   const chartDays=dd.slice().reverse().map(d=>({
     date:d.date,
     v:d.totals?(d.totals[chartNutrient]||0)+(d.base[chartNutrient]||0)+(chartNutrient==="vitaminD"&&sunlight[d.date]?sunVitD(d.date):0):null,
@@ -1392,7 +1392,7 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
 
     {wd.length>=2&&<div style={{marginBottom:24}}>
       <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>
-        {avgOpen?"â–¾":"â–¸"} {wd.length}-day averages
+        {avgOpen?"▾":"▸"} {wd.length}-day averages
       </button>
       {avgOpen&&<div className="gm">{allN.filter(n=>{if(MACRO_KEYS.includes(n.key))return true;const p=Math.round((avg[n.key]/n.target)*100);return p<90}).map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fff",border:`1px solid ${p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"}`,borderRadius:14,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:11,color:"var(--ink-soft)",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div>}
     </div>}
@@ -1406,18 +1406,18 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {d.totals&&<span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(d.totals.calories+(d.base.calories||0))} kcal</span>}
           {!d.totals&&<span style={{fontSize:13,color:"var(--gray)"}}>No data</span>}
-          {d.totals&&<span className={"chev "+(isExpanded?"open":"closed")} style={{fontSize:12,color:"var(--ink-soft)"}}>â–¾</span>}
+          {d.totals&&<span className={"chev "+(isExpanded?"open":"closed")} style={{fontSize:12,color:"var(--ink-soft)"}}>▾</span>}
           {ad!==d.date&&<button className="btn btn-o btn-s" onClick={(e)=>{e.stopPropagation();setAd(d.date);setDi("");setErr(null)}}>+</button>}
         </div>
       </div>
       {isExpanded&&d.totals&&<div style={{padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
-          {hasSun&&<span>â˜€ï¸ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
-          {hasHydration&&<span>ðŸ’§ Hydrated</span>}
-          {hasGi&&<span style={{color:"var(--bad)"}}>ðŸ¤¢ GI distress</span>}
-          {daySleep!==undefined&&<span style={{color:daySleep===true?"var(--good)":"var(--bad)",fontWeight:500}}>ðŸ˜´ {daySleep===true?"Slept well":"Poor sleep"}</span>}
+          {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
+          {hasHydration&&<span>💧 Hydrated</span>}
+          {hasGi&&<span style={{color:"var(--bad)"}}>🤢 GI distress</span>}
+          {daySleep!==undefined&&<span style={{color:daySleep===true?"var(--good)":"var(--bad)",fontWeight:500}}>😴 {daySleep===true?"Slept well":"Poor sleep"}</span>}
         </div>
-        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>ðŸ’ª Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" Â· "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
+        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
         {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"var(--page-bg)",borderRadius:12,padding:"10px 12px"}}>
           <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRpp(d.date,{score:n===s?0:n,trainingTime:t,trainingType:ty})} style={{flex:1,height:28,border:"none",borderRadius:5,background:n<=s?"var(--rose)":"var(--track)",color:n<=s?"#fff":"var(--ink-soft)",fontSize:11,fontWeight:n===s?700:500,cursor:"pointer"}}>{n}</button>)}</div>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -1430,17 +1430,17 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
           </div>
           <div style={{textAlign:"right"}}><button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button></div>
         </div>})()}
-        {ad===d.date&&<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzingâ€¦":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
-        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Savingâ€¦":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{m.time&&<span style={{fontSize:11.5,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100}}>{m.time}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>âœï¸</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>Ã—</span></div></div>)}
+        {ad===d.date&&<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
+        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{m.time&&<span style={{fontSize:11.5,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100}}>{m.time}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} Â· {p}%</span>)}</div>;})()}
+        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
       </div>}
     </div>})}
 
   </div>
 }
 
-/* â”€â”€ WEEKLY REPORT â”€â”€ */
+/* ── WEEKLY REPORT ── */
 function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportWindowStart,setLastReportWindowStart}){
   const[showToast,setShowToast]=useState(false);
   const toastTimer=useRef(null);
@@ -1448,12 +1448,12 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportW
   const reportState=(()=>{
     if(!lastReportWindowStart){
       if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`First report available in ${x} day${x!==1?"s":""}`}}
-      return{enabled:true,label:"Report available â€” download now"};
+      return{enabled:true,label:"Report available — download now"};
     }
     const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
     if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`Next report available in ${z} day${z!==1?"s":""}`}}
     if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
-    return{enabled:true,label:"Report available â€” download now"};
+    return{enabled:true,label:"Report available — download now"};
   })();
   const downloadReport=()=>{
     try{
@@ -1475,16 +1475,16 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportW
         <h1 className="h-page">Weekly report</h1>
         <p className="sub">Based on {activeDaysLogged} logged day{activeDaysLogged!==1?"s":""}</p>
       </div>
-      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:4}}>â¬‡ Full report</button>
+      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:4}}>⬇ Full report</button>
     </div>
     {!reportState.enabled&&<div className="info" style={{fontSize:13}}>{reportState.label}</div>}
-    {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>âœ“ Detailed PDF report downloaded</div>}
+    {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>✓ Detailed PDF report downloaded</div>}
 
     <h3 className="stit">Performance</h3>
     <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
       <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Lifestyle &amp; performance</div>
       {bestT2?<>
-        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>On the {bestT2[1].nTrue} days you logged {t2Label[bestT2[0]]||bestT2[0]}, your average performance was <b style={{color:"var(--ink)"}}>{bestT2[1].meanTrue}</b> â€” {Math.abs(bestT2[1].delta)} points {bestT2[1].delta>0?"higher":"lower"} than the {bestT2[1].nFalse} days without ({bestT2[1].meanFalse}).</div>
+        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>On the {bestT2[1].nTrue} days you logged {t2Label[bestT2[0]]||bestT2[0]}, your average performance was <b style={{color:"var(--ink)"}}>{bestT2[1].meanTrue}</b> — {Math.abs(bestT2[1].delta)} points {bestT2[1].delta>0?"higher":"lower"} than the {bestT2[1].nFalse} days without ({bestT2[1].meanFalse}).</div>
         <div style={{display:"flex",gap:20,alignItems:"flex-end",height:64,padding:"0 10px"}}>
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,height:"100%",justifyContent:"flex-end"}}><div style={{width:40,borderRadius:"6px 6px 2px 2px",background:"var(--good)",height:`${Math.max(6,bestT2[1].meanTrue/10*100)}%`}}/><div style={{fontSize:10,color:"var(--ink-soft)"}}>with</div></div>
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,height:"100%",justifyContent:"flex-end"}}><div style={{width:40,borderRadius:"6px 6px 2px 2px",background:"var(--bad)",height:`${Math.max(6,bestT2[1].meanFalse/10*100)}%`}}/><div style={{fontSize:10,color:"var(--ink-soft)"}}>without</div></div>
@@ -1514,12 +1514,12 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportW
   </div>
 }
 
-/* â”€â”€ ONBOARDING â”€â”€ */
+/* ── ONBOARDING ── */
 function OnboardingSlides({onDone}){
   const slides=[
-    {icon:"ðŸ½ï¸",heading:"Log meals your way",body:"Type a meal in seconds, or snap a photo and let AI estimate the macros for you."},
-    {icon:"ðŸ“‹",heading:"Track the habits around food",body:"A quick daily check-in on GI comfort, sunlight, hydration and sleep â€” plus how you performed."},
-    {icon:"ðŸ“Š",heading:"See the connections",body:"Weekly reports surface deficiencies, excesses, and how nutrition relates to sleep and performance."},
+    {icon:"🍽️",heading:"Log meals your way",body:"Type a meal in seconds, or snap a photo and let AI estimate the macros for you."},
+    {icon:"📋",heading:"Track the habits around food",body:"A quick daily check-in on GI comfort, sunlight, hydration and sleep — plus how you performed."},
+    {icon:"📊",heading:"See the connections",body:"Weekly reports surface deficiencies, excesses, and how nutrition relates to sleep and performance."},
   ];
   const[step,setStep]=useState(0);
   const s=slides[step];
@@ -1539,7 +1539,7 @@ function OnboardingSlides({onDone}){
   </div>;
 }
 
-/* â”€â”€ MAIN APP â”€â”€ */
+/* ── MAIN APP ── */
 function App(){
   const[userKey_,setUserKey]=useState(()=>ls("nt-user-key",null));
   useEffect(()=>{currentUserKey=userKey_},[userKey_]);
@@ -1569,7 +1569,7 @@ function App(){
   const[syncing,setSyncing]=useState(false);
 
   // Pull the latest data from the cloud and merge it in. Runs on login/mount, and
-  // again whenever the app comes back into view â€” otherwise a device left open in the
+  // again whenever the app comes back into view — otherwise a device left open in the
   // background would never see changes made on another device.
   const fetchAndMergeCloud=useCallback(()=>{
     if(!userKey_)return;
@@ -1656,7 +1656,7 @@ function App(){
   useEffect(()=>{refreshQuota()},[userKey_]);
 
   // Re-pull from the cloud whenever the app regains focus (tab switch, unlocking the
-  // phone, reopening a PWA) â€” not just on a fresh page load.
+  // phone, reopening a PWA) — not just on a fresh page load.
   useEffect(()=>{
     const onVisible=()=>{if(document.visibilityState==="visible")fetchAndMergeCloud()};
     document.addEventListener("visibilitychange",onVisible);
@@ -1670,8 +1670,8 @@ function App(){
   const syncToCloud=useCallback((opts)=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),lastReportWindow:ls("nt-last-report-window",null)},opts)},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
-  // A change can be sitting in the 3s debounce when the tab is closed or backgrounded â€”
-  // very common right after logging a meal â€” and that pending write would otherwise be
+  // A change can be sitting in the 3s debounce when the tab is closed or backgrounded —
+  // very common right after logging a meal — and that pending write would otherwise be
   // lost. Flush it immediately (keepalive so it survives the page tearing down) whenever
   // the app is hidden, covers both closing the tab and backgrounding on mobile.
   useEffect(()=>{
@@ -1700,11 +1700,11 @@ function App(){
   const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory_(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);scheduleSync();return u})}};
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
 
-  // Prompt "Did you sleep well?" once per day â€” only after cloud sync finishes,
+  // Prompt "Did you sleep well?" once per day — only after cloud sync finishes,
   // so a fresh device doesn't ask again for an answer that's already saved in the cloud.
   useEffect(()=>{if(userKey_&&profile&&!syncing&&sleep[today()]===undefined)setShowSleepPrompt(true);else if(sleep[today()]!==undefined)setShowSleepPrompt(false)},[userKey_,profile,syncing,sleep]);
 
-  // 10-day weight check â€” sequenced to appear only after the sleep prompt has been
+  // 10-day weight check — sequenced to appear only after the sleep prompt has been
   // resolved (answered or dismissed), never simultaneously with it.
   const weightCheckDue=profile?.lastCalibration?Math.floor((new Date()-new Date(profile.lastCalibration))/(1000*60*60*24))>=10:false;
   useEffect(()=>{
@@ -1731,13 +1731,13 @@ function App(){
       const observedDeltaKg=newWeight-oldWeight;
       const gapKg=observedDeltaKg-expectedDeltaKg;
       if(Math.abs(gapKg)<0.3){
-        msg="Tracking looks accurate â€” your weight change matches your logged intake.";
+        msg="Tracking looks accurate — your weight change matches your logged intake.";
       }else if(gapKg>0){
         mult=Math.min(mult*1.15,2.0);
-        msg=`Your weight didn't move as much as your logged intake suggested â€” meal sizes were likely underestimated. Portions increased to ${mult.toFixed(2)}x for future analyses.`;
+        msg=`Your weight didn't move as much as your logged intake suggested — meal sizes were likely underestimated. Portions increased to ${mult.toFixed(2)}x for future analyses.`;
       }else{
         mult=Math.max(mult*0.9,0.7);
-        msg=`You lost more than your logged intake suggested â€” meal sizes were likely overestimated. Portions decreased to ${mult.toFixed(2)}x for future analyses.`;
+        msg=`You lost more than your logged intake suggested — meal sizes were likely overestimated. Portions decreased to ${mult.toFixed(2)}x for future analyses.`;
       }
     }
     setProfile({...profile,weight:newWeight,calibWeight:newWeight,multiplier:mult,lastCalibration:today()});
@@ -1751,7 +1751,7 @@ function App(){
     return<LoginScreen onLogin={(key,data)=>{setUserKey(key);lss("nt-user-key",key);if(data&&data.profile){setProfile(data.profile);lss("nt-profile",data.profile)}}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}} onAdmin={()=>setIsAdmin(true)}/>;
   }
 
-  if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>â† Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
+  if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
 
   const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
   const tabsDef=[["log","Log"],["checkin","Check-in"],["history","History"],["report","Report"]];
@@ -1759,23 +1759,23 @@ function App(){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
       <div style={{fontFamily:"var(--serif)",fontSize:15,color:"var(--ink-soft)",fontWeight:600}}>Meal Analyzer</div>
       <div className="fr" style={{gap:4}}>
-        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Log out">ðŸšª</button>
-        <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Edit profile">âœï¸</button>
+        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Log out">🚪</button>
+        <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Edit profile">✏️</button>
       </div>
     </div>
-    <p className="sub" style={{marginBottom:4,fontSize:12}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day Â· {goalLabel} Â· {DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore"}</p>
-    <p style={{fontSize:12,color:"var(--good)",marginBottom:20,fontWeight:500}}>{DT.calories} kcal Â· {DT.protein}g prot Â· {DT.fat}g fat Â· {DT.carbs}g carbs{profile.multiplier>1?` Â· ${profile.multiplier.toFixed(2)}x`:""}</p>
+    <p className="sub" style={{marginBottom:4,fontSize:12}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel} · {DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore"}</p>
+    <p style={{fontSize:12,color:"var(--good)",marginBottom:20,fontWeight:500}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
 
-    {syncing&&<div style={{textAlign:"center",padding:10,marginBottom:16,fontSize:13,color:"var(--ink-soft)"}}>â˜ï¸ Syncing dataâ€¦</div>}
+    {syncing&&<div style={{textAlign:"center",padding:10,marginBottom:16,fontSize:13,color:"var(--ink-soft)"}}>☁️ Syncing data…</div>}
 
     {showSleepPrompt&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
-        <div style={{fontSize:44,marginBottom:12}}>ðŸ˜´</div>
+        <div style={{fontSize:44,marginBottom:12}}>😴</div>
         <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>Did you sleep well tonight?</div>
         <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:24}}>This helps correlate rest with your performance over time.</p>
         <div style={{display:"flex",gap:12}}>
-          <button onClick={()=>{setSleep(today(),true);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--good)",margin:0,flex:1}}>âœ“ Yes</button>
-          <button onClick={()=>{setSleep(today(),false);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--bad)",margin:0,flex:1}}>âœ— No</button>
+          <button onClick={()=>{setSleep(today(),true);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--good)",margin:0,flex:1}}>✓ Yes</button>
+          <button onClick={()=>{setSleep(today(),false);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--bad)",margin:0,flex:1}}>✗ No</button>
         </div>
         <button onClick={()=>setShowSleepPrompt(false)} style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:16}}>Ask me later</button>
       </div>
@@ -1783,10 +1783,10 @@ function App(){
 
     {showWeightModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
-        <div style={{fontSize:44,marginBottom:12}}>âš–ï¸</div>
+        <div style={{fontSize:44,marginBottom:12}}>⚖️</div>
         <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>10-day weight check</div>
         <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:20}}>Enter your current weight so the app can fine-tune your portion estimates.</p>
-        <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder={`Weight (kg) â€” last: ${profile.calibWeight??profile.weight}kg`} style={{marginBottom:weightErr?4:16,textAlign:"center",fontSize:18,fontWeight:600}}/>
+        <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder={`Weight (kg) — last: ${profile.calibWeight??profile.weight}kg`} style={{marginBottom:weightErr?4:16,textAlign:"center",fontSize:18,fontWeight:600}}/>
         {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginBottom:12}}>{weightErr}</p>}
         <button className="btn btn-rose" onClick={()=>submitWeightCheck(weightInput)}>Save weight</button>
         <button style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:14}} onClick={()=>{setShowWeightModal(false);setWeightErr(null)}}>Skip for now</button>
@@ -1794,7 +1794,7 @@ function App(){
     </div>}
 
     {weightCheckDue&&!showWeightModal&&<div className="panel" style={{background:"var(--rose-soft)",borderColor:"var(--rose)",marginBottom:24}}>
-      <div style={{fontSize:14,fontWeight:600,color:"var(--rose)",marginBottom:8}}>âš–ï¸ 10-day weight check pending</div>
+      <div style={{fontSize:14,fontWeight:600,color:"var(--rose)",marginBottom:8}}>⚖️ 10-day weight check pending</div>
       <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:12}}>Log your current weight to fine-tune future portion estimates.</p>
       <div className="fr" style={{gap:8}}>
         <input type="number" step="0.1" value={weightInput} onChange={e=>setWeightInput(e.target.value)} placeholder="Weight (kg)" style={{flex:1}}/>
