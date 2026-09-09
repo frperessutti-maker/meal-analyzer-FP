@@ -20,7 +20,7 @@
     }
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--ink);background:var(--page-bg);-webkit-font-smoothing:antialiased}
-    .app{max-width:640px;margin:0 auto;padding:20px 16px 100px}
+    .app{max-width:640px;margin:0 auto;padding:20px 16px 124px}
     h1{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--ink)} .sub{font-size:14px;color:var(--ink-soft);margin-top:4px}
     .h-page{font-family:var(--serif);font-size:28px;font-weight:700;color:var(--ink);text-wrap:balance}
     .tog{display:flex;background:var(--page-bg);border-radius:12px;padding:3px;margin-bottom:16px}
@@ -71,11 +71,11 @@
     .switch-knob{width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.2);transition:margin .15s}
     .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px}
     .toggle-row+.toggle-row{border-top:1px solid var(--border-soft)}
-    .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;padding:10px 6px calc(env(safe-area-inset-bottom) + 10px);max-width:640px;margin:0 auto}
-    .tab{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;background:none;border:none;padding:4px 0}
-    .tab-dot{width:20px;height:3px;border-radius:2px;background:transparent}
+    .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;padding:8px 6px calc(env(safe-area-inset-bottom) + 8px);max-width:640px;margin:0 auto}
+    .tab{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:center;cursor:pointer;background:none;border:none;padding:10px 0;min-height:52px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+    .tab-dot{width:24px;height:3px;border-radius:2px;background:transparent}
     .tab.on .tab-dot{background:var(--rose)}
-    .tab-label{font-size:11px;font-weight:500;color:var(--gray)}
+    .tab-label{font-size:14px;font-weight:500;color:var(--gray)}
     .tab.on .tab-label{font-weight:700;color:var(--ink)}
     .chev{transition:transform .15s;flex-shrink:0}
     .chev.open{transform:rotate(0deg)} .chev.closed{transform:rotate(-90deg)}
