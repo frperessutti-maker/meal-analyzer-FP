@@ -1383,6 +1383,43 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
 
   return<div>
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
+    <h3 className="stit" style={{marginTop:8}}>Lifestyle suggestions</h3>
+    {(()=>{
+      const days=last10();const wd=days.filter(d=>history[d]);
+      if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
+      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
+      const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
+      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
+      const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
+      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{marginBottom:24,textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses over the last {wd.length} days</div>;
+      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
+const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
+
+User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
+Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
+${defs.length>0?`\nDeficiencies: ${defText}`:""}
+${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
+
+IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
+[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
+      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+        {sugErr&&<div className="err">{sugErr}</div>}
+        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
+        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
+        {suggestions&&<div>
+          <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
+            <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
+          </div>
+          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
+            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
+            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
+            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
+          </div>
+          <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
+        </div>}
+      </div>;
+    })()}
 
     <h3 className="stit">Track a nutrient</h3>
     <select value={chartNutrient} onChange={e=>setChartNutrient(e.target.value)} style={{marginBottom:16}}>
@@ -1451,46 +1488,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
       </div>}
     </div>})}
 
-    <h3 className="stit" style={{marginTop:8}}>Lifestyle suggestions</h3>
-    {(()=>{
-      const days=last10();const wd=days.filter(d=>history[d]);
-      if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
-      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
-      const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
-      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
-      const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
-      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{marginBottom:24,textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses over the last {wd.length} days</div>;
-      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
-const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
-
-User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
-Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
-${defs.length>0?`\nDeficiencies: ${defText}`:""}
-${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
-
-IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
-[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
-      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
-        <div style={{fontSize:13,color:"var(--ink-soft)"}}>Based on your last {wd.length} logged days:</div>
-        {defs.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"var(--bad-soft)",padding:"3px 10px",borderRadius:100,color:"var(--bad)",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>}
-        {excesses.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"var(--warn-soft)",padding:"3px 10px",borderRadius:100,color:"oklch(45% 0.12 70)",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div>}
-        {sugErr&&<div className="err">{sugErr}</div>}
-        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
-        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
-        {suggestions&&<div>
-          <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
-            <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
-          </div>
-          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
-            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
-            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
-            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
-          </div>
-          <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
-        </div>}
-      </div>;
-    })()}
   </div>
 }
 
