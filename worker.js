@@ -7,8 +7,15 @@
 // Enforcement lives here, not in the client, because client-side checks
 // are trivially bypassed by anyone who can see the worker URL.
 const DAILY_BUDGET_USD = 1.00;           // hard stop for total spend/day across all users
+const MEAL_STARTING_BALANCE = 50;        // analyses a brand-new account opens with
 const MEAL_DAILY_REFILL = 10;            // meal analyses added to the balance each day
 const MEAL_MAX_BALANCE = 100;            // ceiling on accumulated (unused) meal analyses
+// One-time top-up so accounts that existed before MEAL_STARTING_BALANCE was introduced
+// get the same footing. Each balance record remembers the last grant it received, so
+// this lands exactly once per account however often the balance is read. To run another
+// grant later, change MEAL_GRANT_ID (any new string) and set the floor you want.
+const MEAL_GRANT_ID = "2026-09-09-open50";
+const MEAL_GRANT_FLOOR = 50;
 const DAILY_LIFESTYLE_LIMIT = 3;         // lifestyle-suggestion calls per user per day (no rollover)
 const MIN_MS_BETWEEN_REQUESTS = 4000;    // per-user cooldown — blunts rapid-fire/agentic loops
 const KV_TTL_SECONDS = 172800;           // 2 days — auto-expire daily counters
@@ -51,11 +58,20 @@ async function readMealBalance(env, userKey, day) {
   let rec = null;
   try { rec = JSON.parse(await env.USERDATA.get(key)); } catch { rec = null; }
   if (!rec || typeof rec.balance !== "number" || !rec.day) {
-    rec = { balance: MEAL_DAILY_REFILL, day };            // new user, or balance aged out
-  } else if (rec.day !== day) {
-    const elapsed = daysBetweenISO(rec.day, day);
-    if (elapsed > 0) {
-      rec = { balance: Math.min(MEAL_MAX_BALANCE, rec.balance + elapsed * MEAL_DAILY_REFILL), day };
+    // New account (or a balance that aged out) — starts stocked, and counts as
+    // already granted so the top-up below doesn't fire on top of it.
+    rec = { balance: MEAL_STARTING_BALANCE, day, grant: MEAL_GRANT_ID };
+  } else {
+    if (rec.day !== day) {
+      const elapsed = daysBetweenISO(rec.day, day);
+      if (elapsed > 0) {
+        rec = { ...rec, balance: Math.min(MEAL_MAX_BALANCE, rec.balance + elapsed * MEAL_DAILY_REFILL), day };
+      }
+    }
+    // One-time top-up for accounts created before the grant. Applied after accrual
+    // and as a floor, so nobody who already accumulated more than the floor loses any.
+    if (rec.grant !== MEAL_GRANT_ID) {
+      rec = { ...rec, balance: Math.max(rec.balance, MEAL_GRANT_FLOOR), grant: MEAL_GRANT_ID };
     }
   }
   return { key, rec };
