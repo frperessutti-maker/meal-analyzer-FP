@@ -885,6 +885,46 @@ Respond ONLY with JSON:
 
 function today(){return new Date().toISOString().slice(0,10)}
 function nowTime(){const d=new Date();return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")}
+function minsOf(t){if(!t)return null;const[h,m]=String(t).split(":").map(Number);return(isNaN(h)||isNaN(m))?null:h*60+m}
+// People usually log a main meal a while after eating it, so the first main meal logged
+// in each window gets that meal's canonical time rather than the moment it was typed in.
+// Everything else is stamped with the entry time. Two guards keep this honest:
+//   - a canonical time is only used once it has passed, so nothing is stamped in the
+//     future (logging at 00:30 stays 00:30 instead of jumping to 08:00);
+//   - a light snack is always stamped with the entry time and never claims a window,
+//     so an apple at 11:45 doesn't stop the real lunch from being placed at 12:30.
+// Snacks are detected by calories, which works regardless of the language meals are
+// typed in. Every time remains editable afterwards.
+const SNACK_MAX_CALORIES=250;
+const MEAL_WINDOWS=[
+  {end:11*60+30,at:8*60},      // morning   -> breakfast 08:00
+  {end:19*60,   at:12*60+30},  // midday    -> lunch     12:30
+  {end:23*60+30,at:19*60},     // evening   -> dinner    19:00
+];
+const hhmm=mins=>String(Math.floor(mins/60)).padStart(2,"0")+":"+String(mins%60).padStart(2,"0");
+const isSnack=m=>{const c=Number(m&&m.calories);return c>0&&c<SNACK_MAX_CALORIES};
+function defaultMealTime(todayMeals,meal){
+  if(isSnack(meal))return nowTime();
+  const d=new Date();const now=d.getHours()*60+d.getMinutes();
+  let start=0;
+  for(const w of MEAL_WINDOWS){
+    if(now<w.end){
+      // Only a main meal claims the window — snacks already logged in it don't count.
+      const taken=(todayMeals||[]).some(m=>{const v=minsOf(m.time);return v!==null&&v>=start&&v<w.end&&!isSnack(m)});
+      if(taken||now<w.at)return nowTime();
+      return hhmm(w.at);
+    }
+    start=w.end;
+  }
+  return nowTime();
+}
+// Backfilling a past day has no meaningful "entry time", so meals are placed by
+// position instead: first is breakfast, second lunch, third dinner. Anything beyond
+// that is left blank for the user to set.
+function defaultPastMealTime(dayMeals){
+  const n=(dayMeals||[]).length;
+  return n<MEAL_WINDOWS.length?hhmm(MEAL_WINDOWS[n].at):"";
+}
 function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
@@ -1126,7 +1166,7 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
   const sun=!!sunlight[today()];
   if(sun)tot.vitaminD+=sunVitD(today());
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
-  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=nowTime();m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
+  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=defaultMealTime(meals,m);m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
   const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setEditMealErr("Edit failed: "+e.message)}finally{setEditMealLd(false);refreshQuota&&refreshQuota()}};
   const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x));setEditTimeIdx(null)};
@@ -1314,7 +1354,8 @@ function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,s
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile,lastReportWindowStart,setLastReportWindowStart}){
+function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile,lastReportWindowStart,setLastReportWindowStart}){
+  const[editTimeKey,setEditTimeKey]=useState(null);
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
@@ -1430,8 +1471,10 @@ function HistoryPage({history,onAdd,onDel,sunlight,giDistress,hydration,rpp,setR
           </div>
           <div style={{textAlign:"right"}}><button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button></div>
         </div>})()}
-        {ad===d.date&&<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
-        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{m.time&&<span style={{fontSize:11.5,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100}}>{m.time}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
+        {ad===d.date&&<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[]);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
+        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
+  ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
+  :<span onClick={()=>setEditTimeKey(d.date+"#"+mi)} title="Edit time" style={{fontSize:11.5,fontWeight:600,color:m.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
       </div>}
@@ -1699,6 +1742,8 @@ function App(){
   const addToday=m=>update([...meals,{...m}]);
   const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory_(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);scheduleSync();return u})}};
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
+  // Patch one meal in place (used to edit a logged meal's time on any day).
+  const updHist=(date,idx,patch)=>{if(date===today()){update(meals.map((m,i)=>i===idx?{...m,...patch}:m))}else{setHistory_(p=>{const dm=[...(p[date]||[])];if(!dm[idx])return p;dm[idx]={...dm[idx],...patch};const u={...p,[date]:dm};lss("nt-history",u);scheduleSync();return u})}};
 
   // Prompt "Did you sleep well?" once per day — only after cloud sync finishes,
   // so a fresh device doesn't ask again for an answer that's already saved in the cloud.
@@ -1805,7 +1850,7 @@ function App(){
 
     {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota}/>}
     {tab==="checkin"&&<CheckinPage sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile}/>}
-    {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
+    {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
     <div className="tabbar">
