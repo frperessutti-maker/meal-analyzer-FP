@@ -1195,10 +1195,11 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
     </div>}
 
     <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
         <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
         <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
         <InfoBtn id="calories"/>
+        <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
       </div>
       {macroRows.map(row=><div key={row.label}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
@@ -1805,20 +1806,18 @@ function App(){
 
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
 
-  const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
   const tabsDef=[["log","Log"],["summary","Summary"],["history","History"],["report","Report"]];
   // The page title lives here rather than in each tab, so the account actions can sit
   // beside it on one row instead of needing a separate app-title bar above.
   const TAB_TITLES={log:"Log today meal",summary:"Today summary",history:"History",report:"Weekly report"};
   return<div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:6}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:20}}>
       <h1 className="h-page">{TAB_TITLES[tab]}</h1>
       <div style={{display:"flex",gap:16,flexShrink:0}}>
         <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Log out">🚪</button>
         <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Edit profile">✏️</button>
       </div>
     </div>
-    <p style={{fontSize:12,color:"var(--good)",marginBottom:20,fontWeight:500}}>{DT.calories} kcal · {goalLabel} · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
 
     {syncing&&<div style={{textAlign:"center",padding:10,marginBottom:16,fontSize:13,color:"var(--ink-soft)"}}>☁️ Syncing data…</div>}
 
