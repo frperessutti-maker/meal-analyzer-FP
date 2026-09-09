@@ -1248,6 +1248,32 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   ];
   return<div>
 
+    <h3 className="stit">Macros today</h3>
+    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
+        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
+        <InfoBtn id="calories"/>
+        <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
+      </div>
+      {macroRows.map(row=><div key={row.label}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
+          <span style={{display:"flex",alignItems:"center"}}>{row.label}{row.key==="protein"&&<InfoBtn id="protein"/>}</span>
+          <span>{row.value}g / {row.target}g</span>
+        </div>
+        <PB value={row.value} max={row.target} color={row.color}/>
+        {row.key==="protein"&&<div style={{marginTop:8}}>
+          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"▾":"▸"} Key amino acids</button>
+          {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
+            {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
+              <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
+            </div>})}
+          </div>}
+        </div>}
+      </div>)}
+    </div>
+
     <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
     {mealsOpen&&<div className="fc" style={{marginBottom:24,gap:10}}>
       {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — add one from the Log tab.</div>}
@@ -1292,32 +1318,6 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
         </div>;
       })}
     </div>}
-
-    <h3 className="stit">Macros today</h3>
-    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-        <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
-        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
-        <InfoBtn id="calories"/>
-        <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
-      </div>
-      {macroRows.map(row=><div key={row.label}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
-          <span style={{display:"flex",alignItems:"center"}}>{row.label}{row.key==="protein"&&<InfoBtn id="protein"/>}</span>
-          <span>{row.value}g / {row.target}g</span>
-        </div>
-        <PB value={row.value} max={row.target} color={row.color}/>
-        {row.key==="protein"&&<div style={{marginTop:8}}>
-          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"▾":"▸"} Key amino acids</button>
-          {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
-            {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
-              <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
-            </div>})}
-          </div>}
-        </div>}
-      </div>)}
-    </div>
 
     <h3 className="stit">Micronutrients today</h3>
     <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
@@ -1438,6 +1438,9 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         </div>
       </div>
       {isExpanded&&<div style={{padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:12}}>
+        {ad===d.date
+          ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[]);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
+          :<button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+ Add meal</button>}
         <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
           {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
           {hasHydration&&<span>💧 Hydrated</span>}
@@ -1460,9 +1463,6 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
   ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
   :<span onClick={()=>setEditTimeKey(d.date+"#"+mi)} title="Edit time" style={{fontSize:11.5,fontWeight:600,color:m.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
-        {ad===d.date
-          ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[]);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
-          :<button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+ Add meal</button>}
         {d.totals&&<>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
