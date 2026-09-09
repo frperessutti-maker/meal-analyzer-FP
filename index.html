@@ -1149,16 +1149,10 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 
 /* ── LOG (meal entry + today's totals) ── */
 function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota}){
-  const[aminoOpen,setAminoOpen]=useState(false);
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
   const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[addRecurringOpen,setAddRecurringOpen]=useState(false);
-  const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
-  const baseline=sum(activeTemplates);
-  const loggedTot=sum(meals);
-  const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
-  if(sun)tot.vitaminD+=sunVitD(today());
   const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
   const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
   const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
@@ -1168,12 +1162,6 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
   const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=defaultMealTime(meals,m);m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
-  const macroRows=[
-    {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,color:"var(--rose)"},
-    {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,color:"var(--ink)"},
-    {label:"Fat",key:"fat",value:Math.round(tot.fat),target:DT.fat,color:"var(--gray)"},
-    {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,color:"var(--good)"},
-  ];
   return<div>
 
     <div className="panel" style={{marginBottom:16}}>
@@ -1193,31 +1181,6 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
       <button className="btn btn-rose" onClick={doAddRecurring} disabled={rLd||!rTxt.trim()}>{rLd?"Analyzing…":"Save recurring meal"}</button>
       {rErr&&<div className="err" style={{marginTop:12,marginBottom:0}}>{rErr}</div>}
     </div>}
-
-    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-        <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
-        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
-        <InfoBtn id="calories"/>
-        <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
-      </div>
-      {macroRows.map(row=><div key={row.label}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
-          <span style={{display:"flex",alignItems:"center"}}>{row.label}{row.key==="protein"&&<InfoBtn id="protein"/>}</span>
-          <span>{row.value}g / {row.target}g</span>
-        </div>
-        <PB value={row.value} max={row.target} color={row.color}/>
-        {row.key==="protein"&&<div style={{marginTop:8}}>
-          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"▾":"▸"} Key amino acids</button>
-          {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
-            {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
-              <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
-            </div>})}
-          </div>}
-        </div>}
-      </div>)}
-    </div>
 
     <h3 className="stit" style={{marginTop:6}}>Daily check-in</h3>
     <div style={{display:"flex",gap:8,marginBottom:8}}>
@@ -1263,6 +1226,7 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
 /* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
 function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
   const[mealsOpen,setMealsOpen]=useState(true);
+  const[aminoOpen,setAminoOpen]=useState(false);
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
@@ -1275,12 +1239,12 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   // A recurring meal's time is stored on the template itself, so changing it here
   // sticks for every following day until it's changed again.
   const updateTemplateTime=(idx,time)=>{setTemplates(p=>p.map((t,j)=>j===idx?{...t,time}:t))};
+  // Calories are the headline figure in the panel below, so they aren't repeated as a row.
   const macroRows=[
-    {label:"Calories",key:"calories",value:Math.round(tot.calories),target:DT.calories,unit:"",color:"var(--ink)"},
-    {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,unit:"g",color:"var(--rose)"},
-    {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,unit:"g",color:"var(--ink)"},
-    {label:"Fat",key:"fat",value:Math.round(tot.fat),target:DT.fat,unit:"g",color:"var(--gray)"},
-    {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,unit:"g",color:"var(--good)"},
+    {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,color:"var(--rose)"},
+    {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,color:"var(--ink)"},
+    {label:"Fat",key:"fat",value:Math.round(tot.fat),target:DT.fat,color:"var(--gray)"},
+    {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,color:"var(--good)"},
   ];
   return<div>
 
@@ -1330,14 +1294,29 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
     </div>}
 
     <h3 className="stit">Macros today</h3>
-    <div className="panel" style={{marginBottom:24,display:"flex",flexDirection:"column",gap:14}}>
-      {macroRows.map(row=>{const p=Math.round((row.value/row.target)*100);return<div key={row.key}>
+    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
+        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
+        <InfoBtn id="calories"/>
+        <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
+      </div>
+      {macroRows.map(row=><div key={row.label}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
-          <span style={{display:"flex",alignItems:"center"}}>{row.label}<InfoBtn id={row.key}/></span>
-          <span>{row.value}{row.unit} / {row.target}{row.unit} ({p}%)</span>
+          <span style={{display:"flex",alignItems:"center"}}>{row.label}{row.key==="protein"&&<InfoBtn id="protein"/>}</span>
+          <span>{row.value}g / {row.target}g</span>
         </div>
         <PB value={row.value} max={row.target} color={row.color}/>
-      </div>})}
+        {row.key==="protein"&&<div style={{marginTop:8}}>
+          <button className="collapse-btn" onClick={()=>setAminoOpen(!aminoOpen)}>{aminoOpen?"▾":"▸"} Key amino acids</button>
+          {aminoOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
+            {getAminos(DT.protein).map(a=>{const v=tot[a.key]||0;const pct=Math.round((v/a.target)*100);return<div key={a.key} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
+              <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
+            </div>})}
+          </div>}
+        </div>}
+      </div>)}
     </div>
 
     <h3 className="stit">Micronutrients today</h3>
