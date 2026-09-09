@@ -1148,15 +1148,12 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota}){
-  const[mealsOpen,setMealsOpen]=useState(true);
+function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota}){
   const[aminoOpen,setAminoOpen]=useState(false);
-  const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
-  const[editTimeIdx,setEditTimeIdx]=useState(null);
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
-  const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[addRecurringOpen,setAddRecurringOpen]=useState(false),[eraseIdx,setEraseIdx]=useState(null);
+  const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[addRecurringOpen,setAddRecurringOpen]=useState(false);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
@@ -1171,8 +1168,6 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,sun,t
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
   const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=defaultMealTime(meals,m);m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
-  const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setEditMealErr("Edit failed: "+e.message)}finally{setEditMealLd(false);refreshQuota&&refreshQuota()}};
-  const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x));setEditTimeIdx(null)};
   const macroRows=[
     {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,color:"var(--rose)"},
     {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,color:"var(--ink)"},
@@ -1224,49 +1219,6 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,sun,t
       </div>)}
     </div>
 
-    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
-    {mealsOpen&&<div className="fc" style={{marginBottom:20,gap:10}}>
-      {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — analyze one above to get started.</div>}
-      {editMealErr&&<div className="err">{editMealErr}</div>}
-      {meals.map((m,i)=>editMealIdx===i?
-        <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
-        :<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
-            <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-            {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
-            :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
-            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">✏️</span>
-            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
-          </div>
-        </div>
-      )}
-      {templates.map((t,idx)=>{
-        const isSkipped=skipped.includes(idx);
-        return<div key={"t"+idx} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,opacity:isSkipped?0.55:1}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:15,fontWeight:600,color:"var(--ink)",textDecoration:isSkipped?"line-through":"none"}}>{t.mealName}</div>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(t.calories)} kcal</span>
-              <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
-            </div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            {eraseIdx===idx?<>
-              <span style={{fontSize:12,color:"var(--bad)"}}>Erase?</span>
-              <button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==idx));setEraseIdx(null)}}>Yes</button>
-              <button className="btn btn-o btn-s" onClick={()=>setEraseIdx(null)}>No</button>
-            </>:<>
-              <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
-              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{fontSize:15}}>🗑</button>
-            </>}
-          </div>
-        </div>;
-      })}
-    </div>}
-
     <h3 className="stit" style={{marginTop:6}}>Daily check-in</h3>
     <div style={{display:"flex",gap:8,marginBottom:8}}>
       <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"12px",background:sun?"var(--warn-soft)":"#fff",border:`1px solid ${sun?"var(--warn)":"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={toggleSun}>
@@ -1308,14 +1260,21 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,sun,t
     </div>
   </div>
 }
-/* ── SUMMARY (today's nutrition + standing deficiencies) ── */
-function SummaryPage({meals,history,sunlight,templates,skipped,profile,DT}){
-  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
+/* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
+function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
+  const[mealsOpen,setMealsOpen]=useState(true);
+  const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
+  const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
   if(sunlight[today()])tot.vitaminD+=sunVitD(today());
+  const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setEditMealErr("Edit failed: "+e.message)}finally{setEditMealLd(false);refreshQuota&&refreshQuota()}};
+  const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x));setEditTimeIdx(null)};
+  // A recurring meal's time is stored on the template itself, so changing it here
+  // sticks for every following day until it's changed again.
+  const updateTemplateTime=(idx,time)=>{setTemplates(p=>p.map((t,j)=>j===idx?{...t,time}:t))};
   const macroRows=[
     {label:"Calories",key:"calories",value:Math.round(tot.calories),target:DT.calories,unit:"",color:"var(--ink)"},
     {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,unit:"g",color:"var(--rose)"},
@@ -1324,47 +1283,52 @@ function SummaryPage({meals,history,sunlight,templates,skipped,profile,DT}){
     {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,unit:"g",color:"var(--good)"},
   ];
   return<div>
-    <h1 className="h-page" style={{marginBottom:20}}>Summary</h1>
+    <h1 className="h-page" style={{marginBottom:20}}>Today summary</h1>
 
-    {(()=>{
-      const days=last10();const wd=days.filter(d=>history[d]);
-      if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
-      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
-      const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
-      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
-      const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
-      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{marginBottom:24,textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses over the last {wd.length} days</div>;
-      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
-const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
-
-User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
-Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
-${defs.length>0?`\nDeficiencies: ${defText}`:""}
-${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
-
-IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
-[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
-      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
-        <div style={{fontSize:13,color:"var(--ink-soft)"}}>Based on your last {wd.length} logged days:</div>
-        {defs.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"var(--bad-soft)",padding:"3px 10px",borderRadius:100,color:"var(--bad)",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>}
-        {excesses.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"var(--warn-soft)",padding:"3px 10px",borderRadius:100,color:"oklch(45% 0.12 70)",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div>}
-        {sugErr&&<div className="err">{sugErr}</div>}
-        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
-        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
-        {suggestions&&<div>
-          <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
-            <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
+    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
+    {mealsOpen&&<div className="fc" style={{marginBottom:24,gap:10}}>
+      {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — add one from the Log tab.</div>}
+      {editMealErr&&<div className="err">{editMealErr}</div>}
+      {meals.map((m,i)=>editMealIdx===i?
+        <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
+        :<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
+            <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div>
           </div>
-          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
-            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
-            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
-            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+            {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
+            :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
+            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">✏️</span>
+            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
           </div>
-          <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
-        </div>}
-      </div>;
-    })()}
+        </div>
+      )}
+      {templates.map((t,idx)=>{
+        const isSkipped=skipped.includes(idx);
+        return<div key={"t"+idx} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,opacity:isSkipped?0.55:1}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:15,fontWeight:600,color:"var(--ink)",textDecoration:isSkipped?"line-through":"none"}}>{t.mealName}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(t.calories)} kcal</span>
+              <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            {eraseIdx===idx?<>
+              <span style={{fontSize:12,color:"var(--bad)"}}>Erase?</span>
+              <button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==idx));setEraseIdx(null)}}>Yes</button>
+              <button className="btn btn-o btn-s" onClick={()=>setEraseIdx(null)}>No</button>
+            </>:<>
+              {editTmplTimeIdx===idx?<input type="time" autoFocus value={t.time||""} onChange={e=>updateTemplateTime(idx,e.target.value)} onBlur={()=>setEditTmplTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
+              :<span onClick={()=>setEditTmplTimeIdx(idx)} title="Set the time this recurring meal is usually eaten — it sticks until you change it again" style={{fontSize:12,fontWeight:600,color:t.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{t.time||"set time"}</span>}
+              <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
+              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{fontSize:15}}>🗑</button>
+            </>}
+          </div>
+        </div>;
+      })}
+    </div>}
 
     <h3 className="stit">Macros today</h3>
     <div className="panel" style={{marginBottom:24,display:"flex",flexDirection:"column",gap:14}}>
@@ -1383,8 +1347,9 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile,lastReportWindowStart,setLastReportWindowStart}){
+function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile}){
   const[editTimeKey,setEditTimeKey]=useState(null);
+  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
@@ -1404,26 +1369,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
-  // PERFORMANCE REPORT CADENCE
-  const activeDaysLogged=Object.keys(history).filter(d=>history[d]&&history[d].length>0).length;
-  const reportState=(()=>{
-    if(!lastReportWindowStart){
-      if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`📊 First report available in ${x} day${x!==1?"s":""}`}}
-      return{enabled:true,label:"📊 Report available — download now"};
-    }
-    const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
-    if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`📊 Next report available in ${z} day${z!==1?"s":""}`}}
-    if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`📊 Report available — download now (expires in ${y} day${y!==1?"s":""})`}}
-    return{enabled:true,label:"📊 Report available — download now"};
-  })();
-  const downloadReport=()=>{
-    try{
-      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress});
-      const doc=window.renderReportPDF(report);
-      doc.save(`performance-report-${today()}.pdf`);
-      setLastReportWindowStart(today());
-    }catch(e){alert("Couldn't generate the report: "+e.message)}
-  };
 
   const[chartNutrient,setChartNutrient]=useState("calories");
   const chartN=allN.find(n=>n.key===chartNutrient)||allN[0];
@@ -1439,7 +1384,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
 
   return<div>
     <h1 className="h-page" style={{marginBottom:20}}>History</h1>
-    <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{marginBottom:20}}>{reportState.label}</button>
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
 
     <h3 className="stit">Track a nutrient</h3>
@@ -1509,6 +1453,46 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
       </div>}
     </div>})}
 
+    <h3 className="stit" style={{marginTop:8}}>Lifestyle suggestions</h3>
+    {(()=>{
+      const days=last10();const wd=days.filter(d=>history[d]);
+      if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
+      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
+      const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
+      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
+      const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
+      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{marginBottom:24,textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses over the last {wd.length} days</div>;
+      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
+const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
+
+User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
+Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
+${defs.length>0?`\nDeficiencies: ${defText}`:""}
+${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
+
+IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
+[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
+      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+        <div style={{fontSize:13,color:"var(--ink-soft)"}}>Based on your last {wd.length} logged days:</div>
+        {defs.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"var(--bad-soft)",padding:"3px 10px",borderRadius:100,color:"var(--bad)",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>}
+        {excesses.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"var(--warn-soft)",padding:"3px 10px",borderRadius:100,color:"oklch(45% 0.12 70)",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div>}
+        {sugErr&&<div className="err">{sugErr}</div>}
+        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
+        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
+        {suggestions&&<div>
+          <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
+            <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
+          </div>
+          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
+            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
+            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
+            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
+          </div>
+          <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
+        </div>}
+      </div>;
+    })()}
   </div>
 }
 
@@ -1878,8 +1862,8 @@ function App(){
     </div>}
 
     {tab==="log"&&<LogPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota}/>}
-    {tab==="summary"&&<SummaryPage meals={meals} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} profile={profile} DT={DT}/>}
-    {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
+    {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
+    {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
     <div className="tabbar">
