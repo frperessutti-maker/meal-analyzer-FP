@@ -1148,11 +1148,9 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,quota,refreshQuota}){
+function LogPage({meals,setMeals,templates,setTemplates,skipped,toggleSkip,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota}){
   const[mealsOpen,setMealsOpen]=useState(true);
-  const[microsOpen,setMicrosOpen]=useState(false);
   const[aminoOpen,setAminoOpen]=useState(false);
-  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null);
   // meal-entry state
@@ -1163,8 +1161,13 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
-  const sun=!!sunlight[today()];
   if(sun)tot.vitaminD+=sunVitD(today());
+  const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
+  const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
+  const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
+  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime,trainingType:rppType});
+  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
+  const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
   const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=defaultMealTime(meals,m);m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
@@ -1264,21 +1267,73 @@ function LogPage({meals,setMeals,history,sunlight,templates,setTemplates,skipped
       })}
     </div>}
 
-    <button className="collapse-btn" onClick={()=>setMicrosOpen(!microsOpen)} style={{marginBottom:microsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{microsOpen?"▾":"▸"} Micronutrients today</button>
-    {microsOpen&&<div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
-      {MICROS.map(m=>{const v=tot[m.key]||0,p=Math.round((v/DT[m.key])*100);return<div key={m.key}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:4}}><span style={{display:"flex",alignItems:"center"}}>{m.name}<InfoBtn id={m.key}/></span><span>{p}%</span></div>
-        <div className="pbg" style={{height:5}}><div className="pf" style={{width:`${Math.min(100,p)}%`,background:p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"}}/></div>
-      </div>})}
-    </div>}
+    <h3 className="stit" style={{marginTop:6}}>Daily check-in</h3>
+    <div style={{display:"flex",gap:8,marginBottom:8}}>
+      <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"12px",background:sun?"var(--warn-soft)":"#fff",border:`1px solid ${sun?"var(--warn)":"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={toggleSun}>
+        <input type="checkbox" checked={sun} readOnly style={{width:16,height:16,accentColor:"var(--warn)",pointerEvents:"none",flexShrink:0}}/>
+        <span style={{fontSize:13,fontWeight:500}}>☀️ Sunlight exposure</span>
+      </div>
+      <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"12px",background:hydrated?"var(--rose-soft)":"#fff",border:`1px solid ${hydrated?"var(--rose)":"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={toggleHydration}>
+        <input type="checkbox" checked={hydrated} readOnly style={{width:16,height:16,accentColor:"var(--rose)",pointerEvents:"none",flexShrink:0}}/>
+        <span style={{fontSize:13,fontWeight:500}}>💧 Water: {profile?calcHydration(profile):2.5}L</span>
+      </div>
+    </div>
+    <div style={{display:"flex",gap:8,marginBottom:16}}>
+      <div style={{flex:1,display:"flex",alignItems:"center",gap:8,padding:"12px",background:gi?"var(--bad-soft)":"#fff",border:`1px solid ${gi?"var(--bad)":"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={toggleGi}>
+        <input type="checkbox" checked={gi} readOnly style={{width:16,height:16,accentColor:"var(--bad)",pointerEvents:"none",flexShrink:0}}/>
+        <span style={{fontSize:13,fontWeight:500}}>🤢 GI distress</span>
+      </div>
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"9px 12px",background:sleep===true?"var(--good-soft)":sleep===false?"var(--bad-soft)":"#fff",border:`1px solid ${sleep===true?"var(--good)":sleep===false?"var(--bad)":"var(--border)"}`,borderRadius:12}}>
+        <span style={{fontSize:13,fontWeight:500}}>😴 Sleep quality</span>
+        <div style={{display:"flex",gap:4,flexShrink:0}}>
+          <button onClick={()=>setSleep(sleep===true?undefined:true)} style={{padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:sleep===true?700:500,border:`1px solid ${sleep===true?"var(--good)":"var(--border)"}`,background:sleep===true?"var(--good)":"#fff",color:sleep===true?"#fff":"var(--ink-soft)"}}>Good</button>
+          <button onClick={()=>setSleep(sleep===false?undefined:false)} style={{padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:sleep===false?700:500,border:`1px solid ${sleep===false?"var(--bad)":"var(--border)"}`,background:sleep===false?"var(--bad)":"#fff",color:sleep===false?"#fff":"var(--ink-soft)"}}>Bad</button>
+        </div>
+      </div>
+    </div>
+    <div className="panel" style={{marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <span style={{fontSize:14,fontWeight:600}}>💪 Rate of Perceived Performance</span>
+        {rppScore>0&&<span style={{fontSize:16,fontWeight:700,color:rppScore>=8?"var(--good)":rppScore>=5?"var(--warn)":"var(--bad)"}}>{rppScore}/10</span>}
+      </div>
+      <div style={{display:"flex",gap:4,marginBottom:12}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:32,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:n===rppScore?700:500,border:`1px solid ${n===rppScore?"var(--rose)":n<=rppScore?"var(--rose-soft)":"var(--border)"}`,background:n===rppScore?"var(--rose)":n<=rppScore?"var(--rose-soft)":"#fff",color:n===rppScore?"#fff":n<=rppScore?"var(--rose)":"var(--gray)"}}>{n}</button>)}</div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
+        <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)} style={{flex:1}}/>
+      </div>
+      <div>
+        <label style={{fontSize:13,color:"var(--ink-soft)",display:"block",marginBottom:6}}>Training type:</label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRppType(tt.id)} className={"chip"+(tt.id===rppType?" on":"")}>{tt.icon} {tt.short}</button>)}</div>
+      </div>
+    </div>
+  </div>
+}
+/* ── SUMMARY (today's nutrition + standing deficiencies) ── */
+function SummaryPage({meals,history,sunlight,templates,skipped,profile,DT}){
+  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
+  const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
+  const baseline=sum(activeTemplates);
+  const loggedTot=sum(meals);
+  const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
+  if(sunlight[today()])tot.vitaminD+=sunVitD(today());
+  const macroRows=[
+    {label:"Calories",key:"calories",value:Math.round(tot.calories),target:DT.calories,unit:"",color:"var(--ink)"},
+    {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,unit:"g",color:"var(--rose)"},
+    {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,unit:"g",color:"var(--ink)"},
+    {label:"Fat",key:"fat",value:Math.round(tot.fat),target:DT.fat,unit:"g",color:"var(--gray)"},
+    {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,unit:"g",color:"var(--good)"},
+  ];
+  return<div>
+    <h1 className="h-page" style={{marginBottom:20}}>Summary</h1>
 
     {(()=>{
-      const days=last10();const wd=days.filter(d=>history[d]);if(wd.length<2)return null;
+      const days=last10();const wd=days.filter(d=>history[d]);
+      if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
       const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
       const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
       const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
       const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
-      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses</div>;
+      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{marginBottom:24,textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses over the last {wd.length} days</div>;
       const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
 const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
 
@@ -1289,7 +1344,8 @@ ${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round
 
 IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
 [{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
-      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10}}>
+      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+        <div style={{fontSize:13,color:"var(--ink-soft)"}}>Based on your last {wd.length} logged days:</div>
         {defs.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{defs.map(d=><span key={d.k} style={{fontSize:12,background:"var(--bad-soft)",padding:"3px 10px",borderRadius:100,color:"var(--bad)",fontWeight:500}}>{d.l} {Math.round((avg[d.k]/d.t)*100)}%</span>)}</div>}
         {excesses.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>{excesses.map(e=><span key={e.k} style={{fontSize:12,background:"var(--warn-soft)",padding:"3px 10px",borderRadius:100,color:"oklch(45% 0.12 70)",fontWeight:500}}>{e.l} {Math.round((avg[e.k]/e.t)*100)}%</span>)}</div>}
         {sugErr&&<div className="err">{sugErr}</div>}
@@ -1309,47 +1365,20 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         </div>}
       </div>;
     })()}
-  </div>
-}
 
-/* ── DAILY CHECK-IN ── */
-function CheckinPage({sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile}){
-  const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
-  const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
-  const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
-  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime,trainingType:rppType});
-  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
-  const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
-  const Switch=({on,onClick})=><div onClick={onClick} className="switch" style={{background:on?"var(--rose)":"var(--track)",justifyContent:on?"flex-end":"flex-start",cursor:"pointer"}}><div className="switch-knob"/></div>;
-  return<div>
-    <h1 className="h-page" style={{marginBottom:20}}>Daily check-in</h1>
-    <div className="panel" style={{padding:0,marginBottom:20}}>
-      <div className="toggle-row" onClick={toggleGi} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>🤢 GI distress</span><Switch on={gi} onClick={toggleGi}/></div>
-      <div className="toggle-row" onClick={toggleSun} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>☀️ Sunlight exposure</span><Switch on={sun} onClick={toggleSun}/></div>
-      <div className="toggle-row" onClick={toggleHydration} style={{cursor:"pointer"}}><span style={{fontSize:15,color:"var(--ink)"}}>💧 Hydration ({profile?calcHydration(profile):2.5}L)</span><Switch on={hydrated} onClick={toggleHydration}/></div>
-      <div className="toggle-row"><span style={{fontSize:15,color:"var(--ink)"}}>😴 Sleep quality</span>
-        <div style={{display:"flex",gap:6}}>
-          <button onClick={()=>setSleep(sleep===true?undefined:true)} className="chip" style={sleep===true?{background:"var(--good-soft)",color:"var(--good)",borderColor:"var(--good)"}:{}}>Good</button>
-          <button onClick={()=>setSleep(sleep===false?undefined:false)} className="chip" style={sleep===false?{background:"var(--bad-soft)",color:"var(--bad)",borderColor:"var(--bad)"}:{}}>Bad</button>
+    <h3 className="stit">Macros today</h3>
+    <div className="panel" style={{marginBottom:24,display:"flex",flexDirection:"column",gap:14}}>
+      {macroRows.map(row=>{const p=Math.round((row.value/row.target)*100);return<div key={row.key}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
+          <span style={{display:"flex",alignItems:"center"}}>{row.label}<InfoBtn id={row.key}/></span>
+          <span>{row.value}{row.unit} / {row.target}{row.unit} ({p}%)</span>
         </div>
-      </div>
+        <PB value={row.value} max={row.target} color={row.color}/>
+      </div>})}
     </div>
-    <h3 className="stit">Performance rating</h3>
-    <div className="panel" style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-        <div style={{fontSize:32,fontWeight:700,color:"var(--rose)"}}>{rppScore||"–"}</div>
-        <div style={{fontSize:13,color:"var(--ink-soft)"}}>/ 10</div>
-      </div>
-      <div style={{display:"flex",gap:4}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><div key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:26,borderRadius:5,cursor:"pointer",background:n<=rppScore?"var(--rose)":"var(--track)"}}/>)}</div>
-      <div>
-        <div style={{fontSize:13,color:"var(--ink-soft)",marginBottom:8}}>Training type</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRppType(tt.id)} className={"chip"+(tt.id===rppType?" on":"")}>{tt.icon} {tt.short}</button>)}</div>
-      </div>
-      <div>
-        <div style={{fontSize:13,color:"var(--ink-soft)",marginBottom:6}}>Time of session</div>
-        <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)}/>
-      </div>
-    </div>
+
+    <h3 className="stit">Micronutrients today</h3>
+    <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
   </div>
 }
 
@@ -1799,7 +1828,7 @@ function App(){
   if(editProfile||editGoal)return<div><button className="btn btn-o btn-s" onClick={()=>{setEditProfile(false);setEditGoal(false)}} style={{marginBottom:16}}>← Back</button><ProfileSetup onSave={p=>{setProfile(p);setEditProfile(false);setEditGoal(false)}} initial={profile}/></div>;
 
   const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
-  const tabsDef=[["log","Log"],["checkin","Check-in"],["history","History"],["report","Report"]];
+  const tabsDef=[["log","Log"],["summary","Summary"],["history","History"],["report","Report"]];
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
       <div style={{fontFamily:"var(--serif)",fontSize:15,color:"var(--ink-soft)",fontWeight:600}}>Meal Analyzer</div>
@@ -1848,8 +1877,8 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota}/>}
-    {tab==="checkin"&&<CheckinPage sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota}/>}
+    {tab==="summary"&&<SummaryPage meals={meals} history={history} sunlight={sunlight} templates={templates} skipped={skipped[today()]||[]} profile={profile} DT={DT}/>}
     {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
