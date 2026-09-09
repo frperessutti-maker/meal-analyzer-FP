@@ -1426,7 +1426,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
     </div>}
     <h3 className="slab">Past 6 days</h3>
     {breakdownDD.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const isExpanded=ex===d.date;return<div key={d.date} className="dc">
-      <div onClick={()=>d.totals&&setEx(isExpanded?null:d.date)} style={{padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:d.totals?"pointer":"default"}}>
+      <div onClick={()=>setEx(isExpanded?null:d.date)} style={{padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
         <div>
           <div style={{fontWeight:700,fontSize:15,color:"var(--ink)",fontFamily:"var(--serif)"}}>{fmt(d.date)}</div>
           <div style={{fontSize:12,color:"var(--ink-soft)"}}>{d.date}</div>
@@ -1434,11 +1434,10 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {d.totals&&<span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(d.totals.calories+(d.base.calories||0))} kcal</span>}
           {!d.totals&&<span style={{fontSize:13,color:"var(--gray)"}}>No data</span>}
-          {d.totals&&<span className={"chev "+(isExpanded?"open":"closed")} style={{fontSize:12,color:"var(--ink-soft)"}}>▾</span>}
-          {ad!==d.date&&<button className="btn btn-o btn-s" onClick={(e)=>{e.stopPropagation();setAd(d.date);setDi("");setErr(null)}}>+</button>}
+          <span className={"chev "+(isExpanded?"open":"closed")} style={{fontSize:12,color:"var(--ink-soft)"}}>▾</span>
         </div>
       </div>
-      {isExpanded&&d.totals&&<div style={{padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:12}}>
+      {isExpanded&&<div style={{padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:12}}>
         <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
           {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
           {hasHydration&&<span>💧 Hydrated</span>}
@@ -1458,12 +1457,16 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
           </div>
           <div style={{textAlign:"right"}}><button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button></div>
         </div>})()}
-        {ad===d.date&&<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[]);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>}
         {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
   ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
   :<span onClick={()=>setEditTimeKey(d.date+"#"+mi)} title="Edit time" style={{fontSize:11.5,fontWeight:600,color:m.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
+        {ad===d.date
+          ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[]);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
+          :<button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+ Add meal</button>}
+        {d.totals&&<>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
+        </>}
       </div>}
     </div>})}
 
