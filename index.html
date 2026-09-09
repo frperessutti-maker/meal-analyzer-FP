@@ -1175,7 +1175,6 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
     {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,color:"var(--good)"},
   ];
   return<div>
-    <h1 className="h-page" style={{marginBottom:20}}>Log today meal</h1>
 
     <div className="panel" style={{marginBottom:16}}>
       <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Type it in":"📷 Photo"}</button>)}</div>
@@ -1283,7 +1282,6 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
     {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,unit:"g",color:"var(--good)"},
   ];
   return<div>
-    <h1 className="h-page" style={{marginBottom:20}}>Today summary</h1>
 
     <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
     {mealsOpen&&<div className="fc" style={{marginBottom:24,gap:10}}>
@@ -1383,7 +1381,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const goalLinePct=Math.min(100,Math.round(100*chartN.target/maxV));
 
   return<div>
-    <h1 className="h-page" style={{marginBottom:20}}>History</h1>
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
 
     <h3 className="stit">Track a nutrient</h3>
@@ -1526,12 +1523,9 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportW
   const bestT3=preview&&preview.tier3&&preview.tier3.factors?Object.entries(preview.tier3.factors).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
   const bestGi=preview&&preview.gi&&preview.gi.triggers&&preview.gi.triggers.length>0?preview.gi.triggers[0]:null;
   return<div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:20}}>
-      <div>
-        <h1 className="h-page">Weekly report</h1>
-        <p className="sub">Based on {activeDaysLogged} logged day{activeDaysLogged!==1?"s":""}</p>
-      </div>
-      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:4}}>⬇ Full report</button>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:20}}>
+      <p className="sub" style={{marginTop:0}}>Based on {activeDaysLogged} logged day{activeDaysLogged!==1?"s":""}</p>
+      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:0}}>⬇ Full report</button>
     </div>
     {!reportState.enabled&&<div className="info" style={{fontSize:13}}>{reportState.label}</div>}
     {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>✓ Detailed PDF report downloaded</div>}
@@ -1813,16 +1807,18 @@ function App(){
 
   const goalLabel=GOALS.find(g=>g.id===profile.goal)?.label||"Maintain";
   const tabsDef=[["log","Log"],["summary","Summary"],["history","History"],["report","Report"]];
+  // The page title lives here rather than in each tab, so the account actions can sit
+  // beside it on one row instead of needing a separate app-title bar above.
+  const TAB_TITLES={log:"Log today meal",summary:"Today summary",history:"History",report:"Weekly report"};
   return<div>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-      <div style={{fontFamily:"var(--serif)",fontSize:15,color:"var(--ink-soft)",fontWeight:600}}>Meal Analyzer</div>
-      <div className="fr" style={{gap:4}}>
-        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Log out">🚪</button>
-        <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",color:"var(--ink-soft)"}} title="Edit profile">✏️</button>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:6}}>
+      <h1 className="h-page">{TAB_TITLES[tab]}</h1>
+      <div style={{display:"flex",gap:16,flexShrink:0}}>
+        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Log out">🚪</button>
+        <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Edit profile">✏️</button>
       </div>
     </div>
-    <p className="sub" style={{marginBottom:4,fontSize:12}}>{profile.age}y, {profile.height}cm, {profile.weight}kg, {profile.trainingHours}h/day · {goalLabel} · {DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore"}</p>
-    <p style={{fontSize:12,color:"var(--good)",marginBottom:20,fontWeight:500}}>{DT.calories} kcal · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
+    <p style={{fontSize:12,color:"var(--good)",marginBottom:20,fontWeight:500}}>{DT.calories} kcal · {goalLabel} · {DT.protein}g prot · {DT.fat}g fat · {DT.carbs}g carbs{profile.multiplier>1?` · ${profile.multiplier.toFixed(2)}x`:""}</p>
 
     {syncing&&<div style={{textAlign:"center",padding:10,marginBottom:16,fontSize:13,color:"var(--ink-soft)"}}>☁️ Syncing data…</div>}
 
