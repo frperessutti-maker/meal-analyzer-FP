@@ -1248,7 +1248,7 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
 }
 /* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
 function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
-  const[mealsOpen,setMealsOpen]=useState(true);
+  const[mealsOpen,setMealsOpen]=useState(false);
   const[aminoOpen,setAminoOpen]=useState(false);
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
@@ -1297,7 +1297,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
       </div>)}
     </div>
 
-    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged</button>
+    <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:15,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged today</button>
     {mealsOpen&&<div className="fc" style={{marginBottom:24,gap:10}}>
       {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — add one from the Log tab.</div>}
       {editMealErr&&<div className="err">{editMealErr}</div>}
