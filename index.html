@@ -72,7 +72,7 @@
     .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px}
     .toggle-row+.toggle-row{border-top:1px solid var(--border-soft)}
     .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;padding:8px 6px calc(env(safe-area-inset-bottom) + 8px);max-width:640px;margin:0 auto}
-    .tab{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:center;cursor:pointer;background:none;border:none;padding:10px 0;min-height:52px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+    .tab{flex:1;text-align:center;display:flex;flex-direction:column-reverse;align-items:center;gap:6px;justify-content:center;cursor:pointer;background:none;border:none;padding:10px 0;min-height:52px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
     .tab-dot{width:24px;height:3px;border-radius:2px;background:transparent}
     .tab.on .tab-dot{background:var(--rose)}
     .tab-label{font-size:14px;font-weight:500;color:var(--gray)}
@@ -933,12 +933,18 @@ function defaultMealTime(todayMeals,meal){
   }
   return nowTime();
 }
-// Backfilling a past day has no meaningful "entry time", so meals are placed by
+// Backfilling a past day has no meaningful "entry time", so main meals are placed by
 // position instead: first is breakfast, second lunch, third dinner. Anything beyond
-// that is left blank for the user to set.
-function defaultPastMealTime(dayMeals){
-  const n=(dayMeals||[]).length;
-  return n<MEAL_WINDOWS.length?hhmm(MEAL_WINDOWS[n].at):"";
+// that is left blank for the user to set. Snacks don't claim a main-meal slot (so a
+// mid-morning apple can't push the real breakfast into lunch) and aren't counted when
+// working out which slot is next — the same rule defaultMealTime applies to today.
+// A snack lands just after the last main meal the day holds, rather than blank: a
+// meal without a time is skipped by the report's training and GI windows entirely.
+const PAST_SNACK_SLOTS=[10*60,16*60,21*60];   // after breakfast / after lunch / after dinner
+function defaultPastMealTime(dayMeals,meal){
+  const mains=(dayMeals||[]).filter(m=>!isSnack(m)).length;
+  if(isSnack(meal))return hhmm(PAST_SNACK_SLOTS[Math.min(Math.max(mains-1,0),PAST_SNACK_SLOTS.length-1)]);
+  return mains<MEAL_WINDOWS.length?hhmm(MEAL_WINDOWS[mains].at):"";
 }
 function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
@@ -1454,7 +1460,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
       </div>
       {isExpanded&&<div style={{padding:"0 18px 18px",display:"flex",flexDirection:"column",gap:12}}>
         {ad===d.date
-          ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[]);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
+          ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[],m);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
           :<button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+ Add meal</button>}
         <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
           {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
