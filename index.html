@@ -488,8 +488,8 @@
   const WINDOW_LABELS = { W1: "the 3 hours before training", W2: "the 3-12 hours before training", W3: "the 24-hour recovery window after the previous session" };
   const WINDOW_SHORT = { W1: "before the session", W2: "3-12 hours before the session", W3: "during the previous 24 hours of recovery" };
   const MACRO_LABELS = { calories: "calories", protein: "protein", fat: "fat", carbs: "carbs", fiber: "fiber" };
-  const MACRO_UNITS = { calories: "kcal", protein: "g", fat: "g", carbs: "g", fiber: "g" };
-  const SLEEP_FACTOR_UNITS = { carbs: "g", calories: "kcal", protein: "g", fiber: "g" };
+  const MACRO_UNITS = { calories: "Cal", protein: "g", fat: "g", carbs: "g", fiber: "g" };
+  const SLEEP_FACTOR_UNITS = { carbs: "g", calories: "Cal", protein: "g", fiber: "g" };
 
   function confidenceLabel(c) { if (c >= 75) return "high"; if (c >= 50) return "medium"; if (c >= 25) return "low"; return "preliminary"; }
   function filledDots(c) { return c >= 75 ? 4 : c >= 50 ? 3 : c >= 25 ? 2 : 1; }
@@ -1116,7 +1116,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
       <div className="field" style={{flex:1}}><label>Training (h/day)</label><input type="number" step="0.5" min="0" max="5" value={hours} onChange={e=>setHours(e.target.value)}/></div>
     </div>
     <div className="field"><label>Goal</label><select value={goal} onChange={e=>setGoal(e.target.value)}>{GOALS.map(g=><option key={g.id} value={g.id}>{g.label}</option>)}</select>
-      <p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} kcal from maintenance · {goalInfo?.protMult}g protein/kg</p>
+      <p style={{fontSize:12,color:"var(--ink-soft)",marginTop:4}}>{goalInfo?.calAdj>0?`+${goalInfo.calAdj}`:goalInfo?.calAdj} Cal from maintenance · {goalInfo?.protMult}g protein/kg</p>
     </div>
     <div className="field"><label>Diet</label><select value={diet} onChange={e=>setDiet(e.target.value)}>{DIETS.map(d=><option key={d.id} value={d.id}>{d.label}</option>)}</select></div>
     <div className="field"><label>Intolerances / allergies</label>
@@ -1126,7 +1126,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
     <div className="field"><label>Track a specific nutrient (10-day chart)</label><select value={track} onChange={e=>setTrack(e.target.value)}>{TRACKABLE.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}</select></div>
     <div style={{background:"var(--good-soft)",border:"1px solid oklch(80% 0.08 150)",borderRadius:16,padding:16,marginBottom:16}}>
       <div style={{fontSize:14,fontWeight:700,color:"var(--good)",marginBottom:8}}>{useCustom?"Your daily targets":"Calculated daily targets"}</div>
-      <div style={{fontSize:13,color:"oklch(35% 0.05 150)",lineHeight:1.8}}>Calories: <strong>{effCalories} kcal</strong> · Protein: <strong>{effProtein}g</strong> ({pPct}%) · Fat: <strong>{effFat}g</strong> ({fPct}%) · Carbs: <strong>{effCarbs}g</strong> ({cPct}%) · Fiber: <strong>{targets.fiber}g</strong></div>
+      <div style={{fontSize:13,color:"oklch(35% 0.05 150)",lineHeight:1.8}}>Calories: <strong>{effCalories} Cal</strong> · Protein: <strong>{effProtein}g</strong> ({pPct}%) · Fat: <strong>{effFat}g</strong> ({fPct}%) · Carbs: <strong>{effCarbs}g</strong> ({cPct}%) · Fiber: <strong>{targets.fiber}g</strong></div>
     </div>
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",background:useCustom?"var(--rose-soft)":"var(--page-bg)",border:`1px solid ${useCustom?"var(--rose)":"var(--border)"}`,borderRadius:12,cursor:"pointer",marginBottom:useCustom?16:20}} onClick={()=>{
       if(!useCustom){
@@ -1275,7 +1275,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
     <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
         <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(tot.calories)}</div>
-        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} kcal</div>
+        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} Cal</div>
         <InfoBtn id="calories"/>
         <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
       </div>
@@ -1306,7 +1306,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
         :<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
-            <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div>
+            <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
@@ -1322,7 +1322,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)",textDecoration:isSkipped?"line-through":"none"}}>{t.mealName}</div>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(t.calories)} kcal</span>
+              <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(t.calories)} Cal</span>
               <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
             </div>
           </div>
@@ -1457,7 +1457,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
           <div style={{fontSize:12,color:"var(--ink-soft)"}}>{d.date}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          {d.totals&&<span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(d.totals.calories+(d.base.calories||0))} kcal</span>}
+          {d.totals&&<span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(d.totals.calories+(d.base.calories||0))} Cal</span>}
           {!d.totals&&<span style={{fontSize:13,color:"var(--gray)"}}>No data</span>}
           <span className={"chev "+(isExpanded?"open":"closed")} style={{fontSize:12,color:"var(--ink-soft)"}}>▾</span>
         </div>
@@ -1485,7 +1485,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
           </div>
           <div style={{textAlign:"right"}}><button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button></div>
         </div>})()}
-        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} kcal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
+        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
   ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
   :<span onClick={()=>setEditTimeKey(d.date+"#"+mi)} title="Edit time" style={{fontSize:11.5,fontWeight:600,color:m.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
         {d.totals&&<>
