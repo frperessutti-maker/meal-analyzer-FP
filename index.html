@@ -583,9 +583,12 @@
     const parts = [];
     Object.entries(tier1 || {}).forEach(([type, data]) => {
       const s = data.findings[0]; if (!s) return;
-      const macro = MACRO_LABELS[s.macro]; const dir = s.direction === "positive" ? "higher" : "lower";
-      const win = WINDOW_SHORT[s.window]; const verb = s.direction === "positive" ? "improve" : "hurt";
-      parts.push(`for ${type} workouts, ${dir} ${macro} ${win} seems to ${verb} performance`);
+      const macro = MACRO_LABELS[s.macro]; const win = WINDOW_SHORT[s.window];
+      // `dir` names the condition the BEST sessions followed — the same convention
+      // tier1Sentence uses — so the verb has to stay "improve". Swapping it to "hurt"
+      // for negative correlations restated each finding as its exact opposite.
+      const dir = s.direction === "positive" ? "higher" : "lower";
+      parts.push(`for ${type} workouts, ${dir} ${macro} ${win} seems to improve performance`);
     });
     if (parts.length === 0) return null;
     const joined = parts.join("; ");
