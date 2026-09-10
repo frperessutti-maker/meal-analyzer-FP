@@ -1371,7 +1371,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
 
-  const[chartNutrient,setChartNutrient]=useState("calories");
+  const[chartNutrient,setChartNutrient]=useState("");
   const chartN=allN.find(n=>n.key===chartNutrient)||allN[0];
   // slice() first — dd is ordered newest-first, and reverse() mutates in place.
   const chartDays=dd.slice().reverse().map(d=>({
@@ -1384,6 +1384,26 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const goalLinePct=Math.min(100,Math.round(100*chartN.target/maxV));
 
   return<div>
+    {/* No heading: the unselected <select> reads "Track a nutrient" and does that job,
+        and the chart only appears once a nutrient is actually picked. */}
+    <select value={chartNutrient} onChange={e=>setChartNutrient(e.target.value)} style={{marginBottom:chartNutrient?16:24}}>
+      <option value="">Track a nutrient</option>
+      {[{k:"calories",l:"Calories"},{k:"protein",l:"Protein"},{k:"carbs",l:"Carbs"},{k:"fat",l:"Fat"},{k:"fiber",l:"Fiber"}].map(o=><option key={o.k} value={o.k}>{o.l}</option>)}
+    </select>
+    {chartNutrient&&<div className="panel" style={{marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--ink-soft)",marginBottom:10}}><span>{chartN.label} per day</span><span>goal {chartN.target}{chartN.unit}</span></div>
+      <div style={{position:"relative",display:"flex",alignItems:"flex-end",gap:6,height:120}}>
+        <div style={{position:"absolute",left:0,right:0,bottom:`${goalLinePct}%`,borderTop:"2px dashed var(--gray)",pointerEvents:"none"}}/>
+        {chartDays.map(d=>{
+          const pct=d.v!=null?Math.max(4,Math.round(100*d.v/maxV)):0;
+          return<div key={d.date} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
+            <div style={{width:"100%",borderRadius:"6px 6px 2px 2px",background:d.v==null?"var(--track)":(d.v>=chartN.target*0.9?"var(--good)":"var(--bad)"),height:`${pct}%`}}/>
+            <div style={{height:24,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:6,fontSize:9,lineHeight:1.2,textAlign:"center",color:d.isToday?"var(--ink)":"var(--gray)",fontWeight:d.isToday?700:500}}>{d.shortLabel}</div>
+          </div>;
+        })}
+      </div>
+    </div>}
+
     {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
     <h3 className="stit" style={{marginTop:8}}>Lifestyle suggestions</h3>
     {(()=>{
@@ -1422,24 +1442,6 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         </div>}
       </div>;
     })()}
-
-    <h3 className="stit">Track a nutrient</h3>
-    <select value={chartNutrient} onChange={e=>setChartNutrient(e.target.value)} style={{marginBottom:16}}>
-      {[{k:"calories",l:"Calories"},{k:"protein",l:"Protein"},{k:"carbs",l:"Carbs"},{k:"fat",l:"Fat"},{k:"fiber",l:"Fiber"}].map(o=><option key={o.k} value={o.k}>{o.l}</option>)}
-    </select>
-    <div className="panel" style={{marginBottom:24}}>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--ink-soft)",marginBottom:10}}><span>{chartN.label} per day</span><span>goal {chartN.target}{chartN.unit}</span></div>
-      <div style={{position:"relative",display:"flex",alignItems:"flex-end",gap:6,height:120}}>
-        <div style={{position:"absolute",left:0,right:0,bottom:`${goalLinePct}%`,borderTop:"2px dashed var(--gray)",pointerEvents:"none"}}/>
-        {chartDays.map(d=>{
-          const pct=d.v!=null?Math.max(4,Math.round(100*d.v/maxV)):0;
-          return<div key={d.date} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
-            <div style={{width:"100%",borderRadius:"6px 6px 2px 2px",background:d.v==null?"var(--track)":(d.v>=chartN.target*0.9?"var(--good)":"var(--bad)"),height:`${pct}%`}}/>
-            <div style={{height:24,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:6,fontSize:9,lineHeight:1.2,textAlign:"center",color:d.isToday?"var(--ink)":"var(--gray)",fontWeight:d.isToday?700:500}}>{d.shortLabel}</div>
-          </div>;
-        })}
-      </div>
-    </div>
 
     {wd.length>=2&&<div style={{marginBottom:24}}>
       <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>
