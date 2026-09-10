@@ -100,6 +100,10 @@
 (function () {
   const MACROS = ["calories", "protein", "fat", "carbs", "fiber"];
   const TRAINING_TYPES = ["strength", "hiit", "endurance", "skill", "recovery", "other"];
+  // Keyword lift needs several GI days to mean anything: with one or two, every
+  // keyword eaten that day looks like a trigger simply because there is nothing
+  // to contrast it against. Below this, the report reports no conclusions.
+  const GI_MIN_DAYS = 5;
   const HABIT_VARS = [
     { key: "sun_freq",       label: "Sun exposure frequency" },
     { key: "hydration_freq", label: "Hydration frequency" },
@@ -405,6 +409,12 @@
     const giDates = Object.keys(giDistress).filter((d) => giDistress[d]);
     const okDays = daysWithData.filter((d) => !giDistress[d]);
     if (giDates.length < 1 || daysWithData.length < 3) return null;
+    // Too few GI days to draw from — report the count, but no trigger analysis.
+    // Returning a record rather than null keeps the section visible so the reader
+    // can see how much further they have to track.
+    if (giDates.length < GI_MIN_DAYS) {
+      return { giDays: giDates.length, totalDays: daysWithData.length, triggers: [], belowThreshold: true, minDays: GI_MIN_DAYS };
+    }
     const stopWords = ["with", "and", "the", "for", "cup", "some", "two", "one", "per", "from"];
     const extractKeywords = (meals) => {
       const words = new Set();
@@ -715,6 +725,8 @@
         });
         w.body("This is a keyword pattern, not a diagnosis. Consider tracking further to confirm.", { color: COLORS.faint, size: 9 });
         w.takeaway(giTakeaway(report.gi));
+      } else if (report.gi.belowThreshold) {
+        w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. At least ${report.gi.minDays} days with GI distress are needed before food keywords can be compared meaningfully, so no trigger analysis is shown yet.`);
       } else {
         w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days, but no food-name keyword appeared often enough yet to suggest a pattern. Keep tracking for more accurate correlations.`);
       }
@@ -1542,7 +1554,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportW
       {bestGi?<>
         <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>"{bestGi.word}" appeared in {bestGi.total} meals; {bestGi.giCount} of those were on days you reported GI distress ({Math.round(bestGi.giCount/bestGi.total*100)}%).</div>
         <div className="pbg" style={{height:10}}><div className="pf" style={{width:`${bestGi.confidence}%`,background:"var(--bad)"}}/></div>
-      </>:<div style={{fontSize:13,color:"var(--gray)"}}>{preview&&preview.gi?"A pattern was logged but no food keyword stood out yet.":"Not enough GI-distress reports yet to look for a pattern."}</div>}
+      </>:<div style={{fontSize:13,color:"var(--gray)"}}>{preview&&preview.gi&&preview.gi.belowThreshold?`GI distress logged on ${preview.gi.giDays} of ${preview.gi.totalDays} days — ${preview.gi.minDays} are needed before food patterns can be compared.`:preview&&preview.gi?"A pattern was logged but no food keyword stood out yet.":"Not enough GI-distress reports yet to look for a pattern."}</div>}
     </div>
   </div>
 }
