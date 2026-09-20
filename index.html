@@ -1317,15 +1317,23 @@ function nextSleepLevel(v){
 }
 // Report cadence, shared: the Report page shows it as a button label, the Log page as a
 // banner. One source so the two can never disagree about whether a report is due.
+const REPORT_CADENCE_DAYS=7;    // days between reports
+const REPORT_GRACE_DAYS=2;      // how long an unlocked report stays downloadable
+// Every user's report unlocks on this date. A window opened before it is ignored once, so
+// the count restarts from that user's next download without touching any stored data.
+// Bump this date to unlock everyone again.
+const REPORT_EPOCH="2026-09-20";
 function reportAvailability(history,lastReportWindowStart){
   const activeDaysLogged=Object.keys(history||{}).filter(d=>history[d]&&history[d].length>0).length;
-  if(!lastReportWindowStart){
-    if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,activeDaysLogged,label:`First report available in ${x} day${x!==1?"s":""}`}}
+  // ISO dates compare correctly as strings.
+  const start=(lastReportWindowStart&&lastReportWindowStart>=REPORT_EPOCH)?lastReportWindowStart:null;
+  if(!start){
+    if(activeDaysLogged<REPORT_CADENCE_DAYS){const x=REPORT_CADENCE_DAYS-activeDaysLogged;return{enabled:false,activeDaysLogged,label:`First report available in ${x} day${x!==1?"s":""}`}}
     return{enabled:true,activeDaysLogged,label:"Report available — download now"};
   }
-  const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
-  if(daysSince<10){const z=10-daysSince;return{enabled:false,activeDaysLogged,label:`Next report available in ${z} day${z!==1?"s":""}`}}
-  if(daysSince<12){const y=12-daysSince;return{enabled:true,activeDaysLogged,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
+  const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(start+"T12:00:00"))/86400000);
+  if(daysSince<REPORT_CADENCE_DAYS){const z=REPORT_CADENCE_DAYS-daysSince;return{enabled:false,activeDaysLogged,label:`Next report available in ${z} day${z!==1?"s":""}`}}
+  if(daysSince<REPORT_CADENCE_DAYS+REPORT_GRACE_DAYS){const y=REPORT_CADENCE_DAYS+REPORT_GRACE_DAYS-daysSince;return{enabled:true,activeDaysLogged,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
   return{enabled:true,activeDaysLogged,label:"Report available — download now"};
 }
 function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
