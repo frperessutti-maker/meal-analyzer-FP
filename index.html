@@ -430,9 +430,13 @@
     const stopWords = ["with", "and", "the", "for", "cup", "some", "two", "one", "per", "from"];
     const extractKeywords = (meals) => {
       const words = new Set();
+      // Keywords come from the individual foods, not the plate: "pasta and shrimps"
+      // should let the report blame the shrimps rather than the whole meal.
       (meals || []).forEach((m) => {
-        const name = (m.mealName || "").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g, "");
-        name.split(/\s+/).filter((w) => w.length > 2 && !stopWords.includes(w)).forEach((w) => words.add(w));
+        itemsOf(m).forEach((it) => {
+          const name = (it.name || "").toLowerCase().replace(/[^a-zàèéìòùäöü\s]/g, "");
+          name.split(/\s+/).filter((w) => w.length > 2 && !stopWords.includes(w)).forEach((w) => words.add(w));
+        });
       });
       return words;
     };
@@ -475,6 +479,13 @@
     return { giDays: giDates.length, totalDays: daysWithData.length, triggers: triggers.slice(0, 5) };
   }
 
+  // The engine's own copy of the items accessor — it is meant to stand alone. A meal
+  // logged before items existed falls back to itself, so old history still analyses.
+  function itemsOf(m) {
+    if (!m) return [];
+    if (Array.isArray(m.items) && m.items.length) return m.items.filter((it) => it && it.name);
+    return [{ name: m.mealName || "meal", calories: m.calories, protein: m.protein, fat: m.fat, carbs: m.carbs, fiber: m.fiber }];
+  }
   const minsOfTime = (t) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return (isNaN(h) || isNaN(m)) ? null : h * 60 + m; };
 
   // ── Overnight fast ────────────────────────────────────────────────
@@ -530,13 +541,16 @@
     const meals = [];
     Object.keys(history || {}).forEach((d) => (history[d] || []).forEach((m) => meals.push(m)));
     if (meals.length < 10) return null;
-    const rows = meals.map((m) => ({ name: m.mealName || "meal", cls: classifyMeal(m.mealName), mins: minsOfTime(m.time) }));
+    // Rated per food, not per plate, so "pasta and ice cream" counts one whole food and
+    // one processed rather than condemning the whole meal. The denominator is items too.
+    const rows = [];
+    meals.forEach((m) => itemsOf(m).forEach((it) => rows.push({ name: it.name || "food", cls: classifyMeal(it.name), mins: minsOfTime(m.time) })));
     const processed = rows.filter((r) => r.cls === "processed");
     const whole = rows.filter((r) => r.cls === "whole");
     const late = rows.filter((r) => r.mins !== null && r.mins >= LATE_MEAL_MINUTES);
     // A late meal weighs half of an outright processed one.
     const penaltyUnits = processed.length + late.length * 0.5;
-    const share = penaltyUnits / meals.length;
+    const share = penaltyUnits / rows.length;
     const over = Math.max(0, share - CHEAT_ALLOWANCE);
     const stars = Math.round(Math.max(0, 5 * (1 - over / (1 - CHEAT_ALLOWANCE))) * 2) / 2;
     const tally = {};
@@ -544,10 +558,10 @@
     const lateTally = {};
     late.forEach((r) => { const k = r.name.toLowerCase(); lateTally[k] = lateTally[k] || { name: r.name, n: 0 }; lateTally[k].n++; });
     return {
-      stars, totalMeals: meals.length,
-      wholeCount: whole.length, wholePct: Math.round(whole.length / meals.length * 100),
-      processedCount: processed.length, processedPct: Math.round(processed.length / meals.length * 100),
-      lateCount: late.length, latePct: Math.round(late.length / meals.length * 100),
+      stars, totalItems: rows.length, totalMeals: meals.length,
+      wholeCount: whole.length, wholePct: Math.round(whole.length / rows.length * 100),
+      processedCount: processed.length, processedPct: Math.round(processed.length / rows.length * 100),
+      lateCount: late.length, latePct: Math.round(late.length / rows.length * 100),
       neutralCount: rows.filter((r) => r.cls === "neutral").length,
       penaltyPct: Math.round(share * 100),
       withinAllowance: share > 0 && share <= CHEAT_ALLOWANCE,
@@ -592,12 +606,20 @@
     const short = [...macros, ...micros].filter((r) => r.pct !== null && r.pct < 90);
     const opportunities = [];
     short.forEach((n) => {
+      // Attributed to the individual food where the items carry that nutrient, so the
+      // advice is "more shrimps" rather than "more pasta and shrimps". Items only carry
+      // calories and the macros, so micronutrients still fall back to the whole meal.
       const byName = {};
       days.forEach((d) => (history[d] || []).forEach((m) => {
-        const v = Number(m[n.key]); if (isNaN(v) || v <= 0) return;
-        const k = (m.mealName || "meal").trim().toLowerCase();
-        byName[k] = byName[k] || { name: m.mealName || "meal", total: 0, count: 0 };
-        byName[k].total += v; byName[k].count++;
+        const sources = itemsOf(m).some((it) => Number(it[n.key]) > 0)
+          ? itemsOf(m).map((it) => ({ name: it.name, v: Number(it[n.key]) }))
+          : [{ name: m.mealName || "meal", v: Number(m[n.key]) }];
+        sources.forEach((s) => {
+          if (isNaN(s.v) || s.v <= 0) return;
+          const k = (s.name || "meal").trim().toLowerCase();
+          byName[k] = byName[k] || { name: s.name || "meal", total: 0, count: 0 };
+          byName[k].total += s.v; byName[k].count++;
+        });
       }));
       const best = Object.values(byName)
         .map((e) => ({ ...e, per: e.total / e.count, share: n.target ? (e.total / e.count) / n.target : 0 }))
@@ -946,20 +968,20 @@
       const starText = "*".repeat(full) + (half ? " 1/2" : "");
       w.subheading(`${q.stars} / 5 stars   ${starText}`);
       const parts = [];
-      parts.push(`${q.wholeCount} of ${q.totalMeals} logged meals (${q.wholePct}%) read as whole foods`);
+      parts.push(`${q.wholeCount} of ${q.totalItems} foods across ${q.totalMeals} logged meals (${q.wholePct}%) read as whole foods`);
       if (q.processedCount) parts.push(`${q.processedCount} (${q.processedPct}%) matched processed or sugary items`);
       if (q.neutralCount) parts.push(`${q.neutralCount} could not be classified either way`);
       w.body(parts.join(", ") + ".", { size: 10 });
-      if (q.lateCount) w.body(`${q.lateCount} meal${q.lateCount !== 1 ? "s were" : " was"} eaten at or after 22:00 (${q.latePct}% of the total), which counts against the rating at half the weight of a processed meal.`, { size: 10 });
+      if (q.lateCount) w.body(`${q.lateCount} food${q.lateCount !== 1 ? "s were" : " was"} eaten at or after 22:00 (${q.latePct}% of the total), which counts against the rating at half the weight of a processed meal.`, { size: 10 });
       if (q.worstOffenders.length) w.body(`Weighing most against it: ${q.worstOffenders.map((o) => `${o.name}${o.n > 1 ? ` (x${o.n})` : ""}`).join(", ")}.`, { size: 10 });
       if (q.withinAllowance) {
-        w.body(`Those treats amount to ${q.penaltyPct}% of your meals, inside the 5% allowance — the rating is unaffected by them.`, { size: 10, color: COLORS.positive });
+        w.body(`Those treats amount to ${q.penaltyPct}% of what you ate, inside the 5% allowance — the rating is unaffected by them.`, { size: 10, color: COLORS.positive });
       } else if (q.stars >= 5) {
-        w.body(`Those treats come to ${q.penaltyPct}% of your meals, just past the 5% allowance but not enough to cost you a star.`, { size: 10, color: COLORS.positive });
+        w.body(`Those treats come to ${q.penaltyPct}% of what you ate, just past the 5% allowance but not enough to cost you a star.`, { size: 10, color: COLORS.positive });
       } else if (q.penaltyPct > 5) {
-        w.body(`Together they account for ${q.penaltyPct}% of your meals. The first 5% is free; everything above that scales the rating down, reaching zero stars if every meal were processed.`, { size: 10 });
+        w.body(`Together they account for ${q.penaltyPct}% of what you ate. The first 5% is free; everything above that scales the rating down, reaching zero stars if everything were processed.`, { size: 10 });
       }
-      w.body("Rated from the words in your meal names, so it is a rough guide rather than a nutritional audit. A dish it does not recognise counts as neither good nor bad.", { size: 8.5, color: COLORS.faint });
+      w.body("Rated food by food from the words you typed, so it is a rough guide rather than a nutritional audit. A food it does not recognise counts as neither good nor bad.", { size: 8.5, color: COLORS.faint });
       w.takeaway(q.stars >= 4.5 ? "Your food quality is where you want it — keep doing what you are doing."
         : q.stars >= 3 ? "Solid base of whole foods, with enough processed meals or late eating to cost you a star or more."
         : "Processed meals and late eating dominate enough to be the first thing worth changing.");
@@ -1166,8 +1188,14 @@ Always estimate amino acids based on these references. Do NOT return 0 for leuci
 
 Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/magnesium/potassium/calcium in mg, vitaminC in mg, vitaminA in mcg RAE, vitaminD in IU, B6 in mg, B12/folate/iodine in mcg. Amino acids (leucine/glutamine/betaAlanine) in grams.
 
+ITEMS: also split the meal into the separate foods it is made of.
+- Foods joined into one dish stay ONE item: "pasta with shrimps", "chicken and rice risotto", "salad with feta" -> one item each.
+- Foods listed as separate things are SEPARATE items: "pasta and shrimps" -> "pasta" + "shrimps"; "eggs, toast and orange juice" -> three items.
+- If the meal is a single food, return one item whose name is that food.
+- Every item needs its own calories and macros, and the items must add up to the meal totals.
+
 Respond ONLY with JSON:
-{"mealName":"description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0}`;
+{"mealName":"description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
 }
 
 function today(){return new Date().toISOString().slice(0,10)}
@@ -1182,6 +1210,17 @@ function minsOf(t){if(!t)return null;const[h,m]=String(t).split(":").map(Number)
 //     so an apple at 11:45 doesn't stop the real lunch from being placed at 12:30.
 // Snacks are detected by calories, which works regardless of the language meals are
 // typed in. Every time remains editable afterwards.
+// A meal's separate foods. Analyses before items existed have none, so they fall back to
+// the meal itself as a single item — every reader can then treat all meals the same way.
+// Meal-level totals stay the source of truth for targets and charts; items are for display
+// and for the report's name-based analysis.
+function mealItems(m){
+  if(!m)return[];
+  if(Array.isArray(m.items)&&m.items.length)return m.items.filter(it=>it&&it.name);
+  return[{name:m.mealName||"meal",calories:m.calories,protein:m.protein,fat:m.fat,carbs:m.carbs,fiber:m.fiber}];
+}
+const isSplitMeal=m=>Array.isArray(m&&m.items)&&m.items.length>1;
+
 const SNACK_MAX_CALORIES=250;
 const MEAL_WINDOWS=[
   {end:11*60+30,at:8*60},      // morning   -> breakfast 08:00
@@ -1326,8 +1365,19 @@ async function doAnalyze(text,img,prompt){
   const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
   const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
-  const match=allText.match(/\{[^{}]*"mealName"[^{}]*\}/);
-  if(match)return JSON.parse(match[0]);
+  // The response object now nests an items array, so scan for the matching brace rather
+  // than using a flat regex — a "no inner braces" pattern can no longer match it.
+  const start=allText.indexOf("{");
+  if(start!==-1){
+    let depth=0,inStr=false,esc=false;
+    for(let i=start;i<allText.length;i++){
+      const ch=allText[i];
+      if(inStr){ if(esc)esc=false; else if(ch==="\\")esc=true; else if(ch==='"')inStr=false; continue }
+      if(ch==='"')inStr=true;
+      else if(ch==="{")depth++;
+      else if(ch==="}"){ depth--; if(depth===0){ try{return JSON.parse(allText.slice(start,i+1))}catch{break} } }
+    }
+  }
   const broad=allText.match(/\{[\s\S]*\}/);
   if(broad)return JSON.parse(broad[0]);
   throw new Error("Analysis failed. Try describing the product manually.");
@@ -1701,6 +1751,13 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
             <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div>
+            {/* A plate of separate foods is listed out; a single dish has nothing to split. */}
+            {isSplitMeal(m)&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:3}}>
+              {mealItems(m).map((it,k)=><div key={k} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,color:"var(--ink-soft)"}}>
+                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {it.name}</span>
+                {it.calories!=null&&<span style={{flexShrink:0,color:"var(--gray)"}}>{Math.round(it.calories)}</span>}
+              </div>)}
+            </div>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
