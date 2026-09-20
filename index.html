@@ -1579,6 +1579,9 @@ function LogPage({meals,setMeals,history,templates,setTemplates,skipped,sun,togg
   // An analysed meal waits here until the user confirms its time — the analysis has
   // already cost a credit, so the prompt has no discard path, only OK.
   const[pendingMeal,setPendingMeal]=useState(null);
+  // Set when OK is pressed before the analysis lands, so the meal can file itself without
+  // the modal still being on screen.
+  const confirmedTime=useRef(null);
   // Same totals the Summary page shows: logged meals plus today's un-skipped recurring ones.
   const logTot=(()=>{const a=sum(meals),b=sum(templates.filter((_,i)=>!skipped.includes(i)));const t={};AK.forEach(k=>{t[k]=(a[k]||0)+(b[k]||0)});return t})();
   const logMacroRows=[
@@ -1594,20 +1597,68 @@ function LogPage({meals,setMeals,history,templates,setTemplates,skipped,sun,togg
   const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
   const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
-  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.date=today();setPendingMeal({meal:m,time:suggestMealTime(history,meals,m)});setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
+  // The time prompt opens straight away and the analysis runs behind it, so the wait is
+  // spent doing something instead of watching a spinner. `meal` arrives later; pressing OK
+  // before it lands closes the prompt and lets the meal file itself on arrival.
+  const handleAnalyze=async()=>{
+    if(mode==="text"&&!txt.trim())return;
+    if(mode==="photo"&&!img64)return;
+    const sentText=txt;
+    setLd(true);setErr(null);
+    // Suggested without the meal, so without the snack rule — it is re-checked on arrival.
+    setPendingMeal({meal:null,error:null,edited:false,time:suggestMealTime(history,meals,null)});
+    setTxt("");setImgP(null);setImg64(null);
+    try{
+      const m=await doAnalyze(mode==="text"?sentText:null,mode==="photo"?img64:null,prompt);
+      m.date=today();
+      if(confirmedTime.current!==null){
+        // OK was pressed while this was still running: file it and stay out of the way.
+        const t=confirmedTime.current||nowTime(); confirmedTime.current=null;
+        setMeals(prev=>[...prev,{...m,time:t}]);
+      }else{
+        setPendingMeal(p=>{
+          if(!p)return null;                                 // dismissed after a failure
+          // A snack should carry the clock, not the slot average — but never overrule a
+          // time the user has already set themselves.
+          return{...p,meal:m,time:(!p.edited&&isSnack(m))?nowTime():p.time};
+        });
+      }
+    }catch(e){
+      const msg="Failed: "+e.message;
+      setErr(msg);
+      // Put the description back so it is not lost, unless something new is being typed.
+      setTxt(prev=>prev||sentText);
+      const wasConfirmed=confirmedTime.current!==null; confirmedTime.current=null;
+      setPendingMeal(p=>(p&&!wasConfirmed)?{...p,error:msg}:null);
+    }finally{setLd(false);refreshQuota&&refreshQuota()}
+  };
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
   return<div>
-    {/* Time confirmation. Pre-filled with this user's own average for the slot the clock
-        is in, editable, and closable only by confirming — the meal is already analysed,
-        so there is no path here that throws the credit away. */}
+    {/* Opens the moment Analyze is pressed, with the analysis still running behind it, so
+        the wait is spent entering the time rather than watching a spinner. Pre-filled from
+        this user's own average for the slot the clock is in, and editable. OK is the only
+        way out once a meal exists, since it is already analysed and paid for; if the
+        analysis has not landed yet, OK closes and the meal files itself on arrival. A
+        failure is the one case with nothing to save, so that alone can be dismissed. */}
     {pendingMeal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
-        <div style={{fontSize:38,marginBottom:10}}>🍽️</div>
-        <div style={{fontSize:18,fontWeight:700,marginBottom:4,fontFamily:"var(--serif)"}}>What time did you eat?</div>
-        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:18,lineHeight:1.4}}>{pendingMeal.meal.mealName}</p>
-        <input type="time" value={pendingMeal.time} onChange={e=>setPendingMeal(p=>({...p,time:e.target.value}))} style={{fontSize:20,padding:"10px 12px",textAlign:"center",width:"100%",marginBottom:6}}/>
-        <div style={{fontSize:11.5,color:"var(--gray)",marginBottom:18}}>Suggested from your usual meal times</div>
-        <button className="btn" onClick={()=>{const t=pendingMeal.time||nowTime();setMeals(p=>[...p,{...pendingMeal.meal,time:t}]);setPendingMeal(null)}} style={{margin:0,width:"100%",fontSize:15}}>✓ OK</button>
+        <div style={{fontSize:38,marginBottom:10}}>{pendingMeal.error?"⚠️":"🍽️"}</div>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:4,fontFamily:"var(--serif)"}}>{pendingMeal.error?"Analysis failed":"What time did you eat?"}</div>
+        {pendingMeal.error
+          ?<p style={{fontSize:13,color:"var(--bad)",marginBottom:18,lineHeight:1.4}}>{pendingMeal.error}</p>
+          :<p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:18,lineHeight:1.4,minHeight:18}}>
+             {pendingMeal.meal?pendingMeal.meal.mealName:<span style={{color:"var(--gray)"}}>Analysing your meal…</span>}
+           </p>}
+        {!pendingMeal.error&&<>
+          <input type="time" value={pendingMeal.time} onChange={e=>setPendingMeal(p=>({...p,time:e.target.value,edited:true}))} style={{fontSize:20,padding:"10px 12px",textAlign:"center",width:"100%",marginBottom:6}}/>
+          <div style={{fontSize:11.5,color:"var(--gray)",marginBottom:18}}>Suggested from your usual meal times</div>
+          <button className="btn" style={{margin:0,width:"100%",fontSize:15}} onClick={()=>{
+            const t=pendingMeal.time||nowTime();
+            if(pendingMeal.meal){setMeals(p=>[...p,{...pendingMeal.meal,time:t}]);setPendingMeal(null)}
+            else{confirmedTime.current=t;setPendingMeal(null)}   // files itself when the analysis lands
+          }}>✓ OK</button>
+        </>}
+        {pendingMeal.error&&<button className="btn btn-o" style={{margin:0,width:"100%",fontSize:15}} onClick={()=>setPendingMeal(null)}>Close</button>}
       </div>
     </div>}
     {/* The report is only worth downloading in its window, so say so where the user
