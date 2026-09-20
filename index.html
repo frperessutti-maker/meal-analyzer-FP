@@ -997,10 +997,15 @@
     w.body(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} · Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
     w.space(2); w.hr();
 
-    w.section("Diet impact on performance");
+    // Sections with nothing to show are held back and listed together at the end, so the
+    // body of the report is findings only rather than a run of "not yet" placeholders.
+    const pending = [];
+    const skip = (title, reason) => pending.push({ title, reason });
+
     const t1Keys = Object.keys(report.tier1 || {});
-    if (t1Keys.length === 0) w.empty("Not enough training sessions per type yet. Each training type needs at least 5 logged sessions with a training-type set to surface patterns.");
+    if (t1Keys.length === 0) skip("Diet impact on performance", "each training type needs at least 5 logged sessions with a training type set");
     else {
+      w.section("Diet impact on performance");
       t1Keys.forEach((type) => {
         const data = report.tier1[type];
         w.subheading(`${iconOfType(type)}  ${labelOfType(type)} — ${data.n} sessions`);
@@ -1016,10 +1021,10 @@
       w.takeaway(tier1Takeaway(report.tier1));
     }
 
-    w.section("Lifestyle factors");
     const t2 = report.tier2 || {}; const t2Keys = Object.keys(t2);
-    if (t2Keys.length === 0) w.empty("No lifestyle factors showed a meaningful difference in RPP yet.");
+    if (t2Keys.length === 0) skip("Lifestyle factors", "needs at least 3 sessions with and 3 without each of sun, hydration and good sleep, and a clear gap between them");
     else {
+      w.section("Lifestyle factors");
       t2Keys.forEach((name) => {
         const d = t2[name]; const color = d.delta > 0 ? COLORS.positive : COLORS.negative;
         w.finding(tier2Sentence(name, d), d.confidence, { dotColor: color });
@@ -1027,10 +1032,10 @@
       w.takeaway(tier2Takeaway(report.tier2));
     }
 
-    w.section("Sleep data analysis");
     const t3 = report.tier3;
-    if (!t3 || !t3.factors || Object.keys(t3.factors).length === 0) w.empty("Not enough sleep data yet, or no factors showed a meaningful pattern.");
+    if (!t3 || !t3.factors || Object.keys(t3.factors).length === 0) skip("Sleep data analysis", "needs at least 6 nights logged as good or bad, with something that separates them");
     else {
+      w.section("Sleep data analysis");
       w.body(`Across ${t3.nWell} well-slept nights and ${t3.nPoor} poor-sleep nights:`, { color: COLORS.soft, size: 9 });
       Object.entries(t3.factors).forEach(([name, f]) => {
         w.finding(tier3Sentence(name, f), f.confidence, { dotColor: COLORS.accent });
@@ -1038,10 +1043,10 @@
       w.takeaway(tier3Takeaway(report.tier3));
     }
 
-    w.section("Habit changes over time");
     const t4 = report.tier4;
-    if (!t4 || t4.changes.length === 0) { if (t4 && t4.note) w.empty(t4.note); else w.empty("No sustained habit changes detected yet."); }
+    if (!t4 || t4.changes.length === 0) skip("Habit changes over time", (t4 && t4.note) ? t4.note.replace(/^Need /, "needs ").replace(/\.$/, "") : "no sustained change in your habits detected yet");
     else {
+      w.section("Habit changes over time");
       t4.changes.forEach((c) => {
         const color = c.rppDelta > 0 ? COLORS.positive : COLORS.negative;
         const confProxy = Math.round(Math.min(Math.abs(c.rppDelta) / 1.5, 1) * 100);
@@ -1050,9 +1055,10 @@
       w.takeaway(tier4Takeaway(report.tier4));
     }
 
-    if (report.gi) {
-      w.section("Digestive notes");
+    if (!report.gi) skip("Digestive notes", "no GI distress logged yet, so there is nothing to trace back to food");
+    else {
       if (report.gi.triggers && report.gi.triggers.length > 0) {
+        w.section("Digestive notes");
         w.body(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. The following food-name keywords appeared disproportionately on those days:`, { size: 10 });
         w.space(1);
         report.gi.triggers.forEach((t) => {
@@ -1062,13 +1068,14 @@
         w.body("This is a keyword pattern, not a diagnosis. Consider tracking further to confirm.", { color: COLORS.faint, size: 9 });
         w.takeaway(giTakeaway(report.gi));
       } else if (report.gi.belowThreshold) {
-        w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. At least ${report.gi.minDays} days with GI distress are needed before food keywords can be compared meaningfully, so no trigger analysis is shown yet.`);
+        skip("Digestive notes", `logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days; ${report.gi.minDays} days with GI distress are needed before food keywords mean anything`);
       } else {
-        w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days, but no food-name keyword appeared often enough yet to suggest a pattern. Keep tracking for more accurate correlations.`);
+        skip("Digestive notes", `logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days, but no food keyword has appeared often enough to stand out`);
       }
     }
 
-    if (report.fasting) {
+    if (!report.fasting) skip("Overnight fast", "needs two consecutive days with meals logged on both sides of a night");
+    else {
       const f = report.fasting;
       w.section("Overnight fast");
       w.body(`Across ${f.nights} night${f.nights !== 1 ? "s" : ""} with meals logged on both sides, your average overnight fast was ${f.avgText}, running from a last meal around ${f.avgLastMeal} to a first meal around ${f.avgFirstMeal}.`, { size: 10 });
@@ -1077,7 +1084,8 @@
       w.body("Nights where either day had nothing logged are left out, so gaps in tracking are not counted as fasts.", { size: 8.5, color: COLORS.faint });
     }
 
-    if (report.foodQuality) {
+    if (!report.foodQuality) skip("Food quality rating", "needs at least 10 logged meals");
+    else {
       const q = report.foodQuality;
       w.section("Food quality rating");
       const full = Math.floor(q.stars), half = q.stars % 1 >= 0.5;
@@ -1103,7 +1111,8 @@
         : "Processed meals and late eating dominate enough to be the first thing worth changing.");
     }
 
-    if (report.nutrients) {
+    if (!report.nutrients) skip("Macro and micronutrient tables", "needs at least 3 logged days");
+    else {
       const n = report.nutrients;
       const tone = (t) => t === "bad" ? COLORS.negative : t === "warn" ? COLORS.warn : t === "good" ? COLORS.positive : COLORS.soft;
       const cols = [
@@ -1140,6 +1149,16 @@
         const top = n.opportunities[0], topN = top.nutrients[0];
         w.takeaway(`The quickest fix: more ${top.meal.toLowerCase()}, whether a bigger portion or more often — one serving already covers ${topN.sharePct}% of your daily ${topN.label.toLowerCase()} target.`);
       }
+    }
+
+    // Everything that had nothing to say, gathered in one place at the end.
+    if (pending.length) {
+      w.section("Not enough data yet");
+      w.body("These sections are waiting on more logging. Each one appears on its own once the data is there:", { size: 9.5, color: COLORS.soft });
+      w.space(1);
+      pending.forEach((p) => {
+        w.body(`${p.title} — ${p.reason}.`, { size: 9.5, indent: 3, color: COLORS.faint });
+      });
     }
 
     const pageCount = doc.getNumberOfPages();
