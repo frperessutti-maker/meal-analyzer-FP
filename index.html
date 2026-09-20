@@ -106,7 +106,8 @@
    ───────────────────────────────────────────────────────────── */
 (function () {
   const MACROS = ["calories", "protein", "fat", "carbs", "fiber"];
-  const TRAINING_TYPES = ["strength", "hiit", "endurance", "skill", "recovery", "other"];
+  // Types are no longer a fixed list: users can add their own, so the engine reads whatever
+  // the sessions carry. Labels fall back to the raw id for a workout it has never seen.
   // Keyword lift needs several GI days to mean anything: with one or two, every
   // keyword eaten that day looks like a trigger simply because there is nothing
   // to contrast it against. Below this, the report reports no conclusions.
@@ -178,25 +179,32 @@
   }
 
   function extractSessions(history, rpp) {
-    const sessionDates = Object.keys(rpp)
-      .filter((d) => { const r = rpp[d]; if (!r || typeof r !== "object") return false; return r.score > 0 && r.trainingTime && r.trainingType; })
-      .sort();
+    // A day can hold several workouts, so flatten to a chronological list of sessions
+    // rather than one per date. Older data stores a single object, or a bare score.
+    const rppSessions = (v) => Array.isArray(v) ? v.filter((s) => s && typeof s === "object")
+      : (v && typeof v === "object") ? [v] : [];
+    const entries = [];
+    Object.keys(rpp).sort().forEach((d) => {
+      rppSessions(rpp[d])
+        .filter((r) => r.score > 0 && r.trainingTime && r.trainingType)
+        .forEach((r) => { const dt = parseDateTime(d, r.trainingTime); if (dt) entries.push({ date: d, r, dt }); });
+    });
+    entries.sort((a, b) => a.dt - b.dt);
     const sessions = [];
-    for (let i = 0; i < sessionDates.length; i++) {
-      const date = sessionDates[i];
-      const r = rpp[date];
-      const trainingDT = parseDateTime(date, r.trainingTime);
-      if (!trainingDT) continue;
+    for (let i = 0; i < entries.length; i++) {
+      const date = entries[i].date;
+      const r = entries[i].r;
+      const trainingDT = entries[i].dt;
       const W1_start = addHours(trainingDT, -3);
       const W1_end = trainingDT;
       const W2_start = addHours(trainingDT, -12);
       const W2_end = W1_start;
       let W3_start = null, W3_end = null;
       if (i > 0) {
-        const prevDate = sessionDates[i - 1];
-        const prevR = rpp[prevDate];
-        const prevDT = parseDateTime(prevDate, prevR.trainingTime);
-        if (prevDT && daysBetween(prevDT, trainingDT) <= 2) {
+        // The recovery window runs from the previous SESSION, which may be earlier the
+        // same day now that a day can hold more than one.
+        const prevDT = entries[i - 1].dt;
+        if (daysBetween(prevDT, trainingDT) <= 2) {
           W3_start = prevDT; W3_end = addHours(prevDT, 24);
         }
       }
@@ -229,7 +237,8 @@
 
   function tier1(sessions) {
     const findings = {};
-    TRAINING_TYPES.forEach((type) => {
+    // Grouped by the types actually present, so a users own workout is analysed like any other.
+    [...new Set(sessions.map((s) => s.trainingType).filter(Boolean))].forEach((type) => {
       const typeSessions = sessions.filter((s) => s.trainingType === type);
       if (typeSessions.length < 5) return;
       const perType = [];
@@ -294,7 +303,10 @@
     const nights = sleepDates.map((d) => {
       const dayMeals = history[d] || [];
       const dayR = rpp[d];
-      const trainingDT = dayR && typeof dayR === "object" && dayR.trainingTime ? parseDateTime(d, dayR.trainingTime) : null;
+      // With several workouts in a day, the one that can push into the night is the last.
+      const dayTimes = (Array.isArray(dayR) ? dayR : dayR && typeof dayR === "object" ? [dayR] : [])
+        .map((s) => s && s.trainingTime ? parseDateTime(d, s.trainingTime) : null).filter(Boolean);
+      const trainingDT = dayTimes.length ? new Date(Math.max(...dayTimes.map((x) => x.getTime()))) : null;
       const totals = {}; MACROS.forEach((k) => (totals[k] = 0));
       dayMeals.forEach((m) => { MACROS.forEach((k) => { const v = Number(m[k]); totals[k] += isNaN(v) ? 0 : v; }); });
       let lastMealHour = null;
@@ -362,7 +374,10 @@
       series.avg_carbs.push(hasMeals ? dm.carbs : null);
       series.avg_calories.push(hasMeals ? dm.calories : null);
       series.avg_fiber.push(hasMeals ? dm.fiber : null);
-      const r = rpp[d]; const score = r && typeof r === "object" ? r.score : (r || 0);
+      // A day with several workouts contributes their average score to the daily series.
+      const rs = Array.isArray(rpp[d]) ? rpp[d] : (rpp[d] && typeof rpp[d] === "object" ? [rpp[d]] : []);
+      const scores = rs.map((s) => Number(s && s.score)).filter((n) => n > 0);
+      const score = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : (typeof rpp[d] === "number" ? rpp[d] : 0);
       series.rpp.push(score > 0 ? score : null);
     });
     return { dates: full, series };
@@ -654,7 +669,7 @@
         generatedAt: new Date().toISOString(),
         totalDaysLogged: activeDays.length,
         totalSessions: sessions.length,
-        sessionsByType: TRAINING_TYPES.reduce((acc, t) => { acc[t] = sessions.filter((s) => s.trainingType === t).length; return acc; }, {}),
+        sessionsByType: sessions.reduce((acc, s) => { if (s.trainingType) acc[s.trainingType] = (acc[s.trainingType] || 0) + 1; return acc; }, {}),
       },
       tier1: tier1(sessions),
       tier2: tier2(sessions, sunlight, sleep, hydration),
@@ -669,6 +684,9 @@
 
   /* ─── PDF RENDERER ─── */
   const TRAINING_LABELS = { strength: "Strength", hiit: "HIIT / Conditioning", endurance: "Endurance", skill: "Skill / Technical", recovery: "Recovery / Mobility", other: "Other" };
+  // A workout the user invented has no entry here, so fall back to its own name.
+  const labelOfType = (t) => TRAINING_LABELS[t] || String(t || "").replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const iconOfType = (t) => TRAINING_ICONS[t] || String(t || "???").slice(0, 3).toUpperCase();
   const TRAINING_ICONS = { strength: "STR", hiit: "HIT", endurance: "END", skill: "SKL", recovery: "REC", other: "OTH" };
   const WINDOW_LABELS = { W1: "the 3 hours before training", W2: "the 3-12 hours before training", W3: "the 24-hour recovery window after the previous session" };
   const WINDOW_SHORT = { W1: "before the session", W2: "3-12 hours before the session", W3: "during the previous 24 hours of recovery" };
@@ -818,7 +836,7 @@
       // tier1Sentence uses — so the verb has to stay "improve". Swapping it to "hurt"
       // for negative correlations restated each finding as its exact opposite.
       const dir = s.direction === "positive" ? "higher" : "lower";
-      parts.push(`for ${type} workouts, ${dir} ${macro} ${win} seems to improve performance`);
+      parts.push(`for ${labelOfType(type).toLowerCase()} workouts, ${dir} ${macro} ${win} seems to improve performance`);
     });
     if (parts.length === 0) return null;
     const joined = parts.join("; ");
@@ -891,7 +909,7 @@
     else {
       t1Keys.forEach((type) => {
         const data = report.tier1[type];
-        w.subheading(`${TRAINING_ICONS[type]}  ${TRAINING_LABELS[type]} — ${data.n} sessions`);
+        w.subheading(`${iconOfType(type)}  ${labelOfType(type)} — ${data.n} sessions`);
         data.findings.forEach((f) => {
           const color = f.direction === "positive" ? COLORS.positive : COLORS.negative;
           w.finding(tier1Sentence(f), f.confidence, { dotColor: color });
@@ -1074,10 +1092,25 @@ const TRAINING_TYPES=[
   {id:"strength",label:"Strength",short:"Strength",icon:"🏋️",color:"#8b5cf6"},
   {id:"hiit",label:"HIIT / Conditioning",short:"HIIT",icon:"⚡",color:"#f59e0b"},
   {id:"endurance",label:"Endurance",short:"Endurance",icon:"🏃",color:"#3b82f6"},
-  {id:"skill",label:"Skill / Technical",short:"Skill",icon:"🎯",color:"#22c55e"},
-  {id:"recovery",label:"Recovery / Mobility",short:"Recovery",icon:"🧘",color:"#6b7280"},
-  {id:"other",label:"Other",short:"Other",icon:"🔘",color:"#94a3b8"},
 ];
+// Workouts the user added themselves, kept per user. Stored as {id,label}; the id is a
+// slug of the label so it survives in history even if the list is edited later.
+const CUSTOM_TYPE_COLOR="#64748b";
+const slugType=s=>String(s||"").toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32);
+function allTrainingTypes(custom){
+  return[...TRAINING_TYPES,...(custom||[]).map(c=>({id:c.id,label:c.label,short:c.label,icon:"⭐",color:CUSTOM_TYPE_COLOR,custom:true}))];
+}
+const typeLabel=(id,custom)=>{const t=allTrainingTypes(custom).find(x=>x.id===id);return t?t.label:(id||"")};
+
+// One day can hold several workouts, so rpp[date] is an array. Older data is a single
+// object, or a bare score from before types existed; every read normalises first.
+function sessionsOf(v){
+  if(Array.isArray(v))return v.filter(s=>s&&typeof s==="object");
+  if(v&&typeof v==="object")return[v];
+  if(typeof v==="number"&&v>0)return[{score:v,trainingTime:"",trainingType:""}];
+  return[];
+}
+const blankSession=()=>({score:0,trainingTime:"",trainingType:""});
 
 const NUTRIENT_INFO={
   calories:"Energy fuel for training and daily function. Too low impairs recovery, focus, and hormonal balance. Too high leads to fat gain.",
@@ -1570,7 +1603,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,history,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
+function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
@@ -1587,12 +1620,27 @@ function LogPage({meals,setMeals,history,templates,setTemplates,skipped,sun,togg
     {label:"Fat",key:"fat",value:Math.round(logTot.fat),target:DT.fat,color:"var(--gray)"},
     {label:"Fiber",key:"fiber",value:Math.round(logTot.fiber||0),target:DT.fiber,color:"var(--good)"},
   ];
-  const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
-  const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
-  const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
-  const setRppScore=(v)=>setRpp({score:v===rppScore?0:v,trainingTime:rppTime,trainingType:rppType});
-  const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
-  const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
+  // Workouts for today. rpp is an array now; older single-object days normalise on read.
+  const sessions=sessionsOf(rpp);
+  const writeSessions=(next)=>setRpp(next);
+  const patchSession=(i,patch)=>writeSessions(sessions.map((s,j)=>j===i?{...s,...patch}:s));
+  const addSession=()=>writeSessions([...sessions,blankSession()]);
+  const removeSession=(i)=>writeSessions(sessions.filter((_,j)=>j!==i));
+  const[addTypeFor,setAddTypeFor]=useState(null),[newType,setNewType]=useState(""),[typeErr,setTypeErr]=useState(null);
+  const confirmNewType=()=>{
+    const label=newType.trim();
+    if(!label)return;
+    const id=slugType(label);
+    if(!id){setTypeErr("Give it a name with at least one letter or number.");return}
+    const clash=allTrainingTypes(customTypes).find(t=>t.id===id);
+    if(clash){setTypeErr(`"${clash.label}" is already on the list.`);return}
+    setCustomTypes([...(customTypes||[]),{id,label}]);
+    if(addTypeFor!==null)patchSession(addTypeFor,{trainingType:id});   // select it straight away
+    setAddTypeFor(null);setNewType("");setTypeErr(null);
+  };
+  // Removing one only shortens the picker; workouts already logged with it keep their type,
+  // so past data and the report are never rewritten.
+  const removeCustomType=(id)=>setCustomTypes((customTypes||[]).filter(c=>c.id!==id));
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
   const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.date=today();setPendingMeal({meal:m,time:suggestMealTime(history,meals,m)});setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
@@ -1682,20 +1730,65 @@ function LogPage({meals,setMeals,history,templates,setTemplates,skipped,sun,togg
         </div>})()}
     </div>
     <div className="panel" style={{marginBottom:20}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <span style={{fontSize:14,fontWeight:600}}>💪 Rate of Perceived Performance</span>
-        {rppScore>0&&<span style={{fontSize:16,fontWeight:700,color:rppScore>=8?"var(--good)":rppScore>=5?"var(--warn)":"var(--bad)"}}>{rppScore}/10</span>}
+        {sessions.length>1&&<span style={{fontSize:12,color:"var(--ink-soft)"}}>{sessions.length} workouts</span>}
       </div>
-      <div style={{display:"flex",gap:4,marginBottom:12}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRppScore(n)} style={{flex:1,height:32,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:n===rppScore?700:500,border:`1px solid ${n===rppScore?"var(--rose)":n<=rppScore?"var(--rose-soft)":"var(--border)"}`,background:n===rppScore?"var(--rose)":n<=rppScore?"var(--rose-soft)":"#fff",color:n===rppScore?"#fff":n<=rppScore?"var(--rose)":"var(--gray)"}}>{n}</button>)}</div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-        <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
-        <input type="time" value={rppTime} onChange={e=>setRppTime(e.target.value)} style={{flex:1}}/>
-      </div>
-      <div>
+      {sessions.length===0&&<div style={{fontSize:13,color:"var(--gray)",marginBottom:10}}>No workout logged today.</div>}
+      {sessions.map((s,si)=><div key={si} style={{marginBottom:14,paddingBottom:sessions.length>1?14:0,borderBottom:sessions.length>1&&si<sessions.length-1?"1px solid var(--border-soft)":"none"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <span style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",textTransform:"uppercase",letterSpacing:.3}}>
+            {sessions.length>1?`Workout ${si+1}`:"Workout"}{s.trainingType?` · ${typeLabel(s.trainingType,customTypes)}`:""}
+          </span>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {s.score>0&&<span style={{fontSize:15,fontWeight:700,color:s.score>=8?"var(--good)":s.score>=5?"var(--warn)":"var(--bad)"}}>{s.score}/10</span>}
+            <button className="btn-x" title="Remove this workout" onClick={()=>removeSession(si)} style={{fontSize:15,color:"var(--bad)"}}>×</button>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:4,marginBottom:10}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
+          <button key={n} onClick={()=>patchSession(si,{score:n===s.score?0:n})} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:n<=s.score?(s.score>=8?"var(--good)":s.score>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:10,color:n<=s.score?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
+          <input type="time" value={s.trainingTime||""} onChange={e=>patchSession(si,{trainingTime:e.target.value})} style={{flex:1}}/>
+        </div>
         <label style={{fontSize:13,color:"var(--ink-soft)",display:"block",marginBottom:6}}>Training type:</label>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRppType(tt.id)} className={"chip"+(tt.id===rppType?" on":"")}>{tt.icon} {tt.short}</button>)}</div>
-      </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {allTrainingTypes(customTypes).map(tt=>
+            <button key={tt.id} onClick={()=>patchSession(si,{trainingType:tt.id===s.trainingType?"":tt.id})} className={"chip"+(tt.id===s.trainingType?" on":"")}>{tt.icon} {tt.short}</button>)}
+          {/* Stays available after adding: the list is meant to grow over time. */}
+          <button onClick={()=>{setAddTypeFor(si);setNewType("");setTypeErr(null)}} className="chip" style={{borderStyle:"dashed",color:"var(--ink-soft)"}}>+ Add your own</button>
+        </div>
+      </div>)}
+      <button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={addSession}>+ Add workout</button>
     </div>
+
+    {/* Naming a workout. Only recurring ones are worth adding: the report needs several
+        sessions of the same type before it can say anything about it. */}
+    {addTypeFor!==null&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)",textAlign:"center"}}>Add your own workout</div>
+        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:14,lineHeight:1.45,textAlign:"center"}}>
+          Only add a workout you do <strong>regularly</strong>. The report compares sessions of the same type, so it needs several of them before it can tell you anything.
+        </p>
+        <input type="text" autoFocus value={newType} placeholder="e.g. Boxing" maxLength={32}
+          onChange={e=>{setNewType(e.target.value);setTypeErr(null)}}
+          onKeyDown={e=>{if(e.key==="Enter")confirmNewType()}} style={{marginBottom:8}}/>
+        {typeErr&&<div className="err" style={{marginBottom:8}}>{typeErr}</div>}
+        <div className="fr">
+          <button className="btn btn-rose" style={{margin:0,flex:1}} onClick={confirmNewType} disabled={!newType.trim()}>Add</button>
+          <button className="btn btn-o" style={{margin:0,flex:1}} onClick={()=>{setAddTypeFor(null);setNewType("");setTypeErr(null)}}>Cancel</button>
+        </div>
+        {(customTypes||[]).length>0&&<div style={{marginTop:14}}>
+          <div style={{fontSize:11.5,color:"var(--gray)",marginBottom:6}}>Your workouts</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {customTypes.map(c=><span key={c.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:12,background:"var(--page-bg)",border:"1px solid var(--border)",borderRadius:100,padding:"4px 8px"}}>
+              ⭐ {c.label}
+              <span onClick={()=>removeCustomType(c.id)} title="Remove from the list (logged workouts keep it)" style={{cursor:"pointer",color:"var(--bad)",fontWeight:700}}>×</span>
+            </span>)}
+          </div>
+        </div>}
+      </div>
+    </div>}
   </div>
 }
 /* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
@@ -1807,7 +1900,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,customTypes,DT,prompt,profile}){
   const[editTimeKey,setEditTimeKey]=useState(null);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
@@ -1936,18 +2029,36 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
           {hasGi&&<span style={{color:"var(--bad)"}}>🤢 GI distress</span>}
           {sleepLevel(daySleep)&&<span style={{color:SLEEP_META[sleepLevel(daySleep)].color,fontWeight:500}}>😴 {SLEEP_META[sleepLevel(daySleep)].label} sleep</span>}
         </div>
-        {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
-        {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"var(--page-bg)",borderRadius:12,padding:"10px 12px"}}>
-          <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>setRpp(d.date,{score:n===s?0:n,trainingTime:t,trainingType:ty})} style={{flex:1,height:28,border:"none",borderRadius:5,background:n<=s?"var(--rose)":"var(--track)",color:n<=s?"#fff":"var(--ink-soft)",fontSize:11,fontWeight:n===s?700:500,cursor:"pointer"}}>{n}</button>)}</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <label style={{fontSize:12,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
-            <input type="time" value={t} onChange={e=>setRpp(d.date,{score:s,trainingTime:e.target.value,trainingType:ty})} style={{padding:"4px 8px",fontSize:12,flex:1}}/>
+        {(()=>{const ss=sessionsOf(rpp[d.date]);const isEditing=rppEditDate===d.date;
+          const best=ss.reduce((a,b)=>(Number(b.score)||0)>(Number(a&&a.score)||0)?b:a,null);
+          const s=Number(best&&best.score)||0;
+          const summary=ss.filter(x=>Number(x.score)>0).map(x=>`${x.score}/10${x.trainingTime?" @ "+x.trainingTime:""}${x.trainingType?" · "+typeLabel(x.trainingType,customTypes):""}`).join("   ");
+          return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{summary?`: ${summary}`:""} {isEditing?"▾":"▸"}</span>})()}
+        {rppEditDate===d.date&&(()=>{const ss=sessionsOf(rpp[d.date]);
+          const write=(next)=>setRpp(d.date,next);
+          const patch=(i,p)=>write(ss.map((x,j)=>j===i?{...x,...p}:x));
+          return<div style={{background:"var(--page-bg)",borderRadius:12,padding:"10px 12px"}}>
+          {ss.length===0&&<div style={{fontSize:12,color:"var(--gray)",marginBottom:8}}>No workout logged for this day.</div>}
+          {ss.map((sn,si)=>{const s=Number(sn.score)||0;const t=sn.trainingTime||"";const ty=sn.trainingType||"";
+            return<div key={si} style={{marginBottom:10,paddingBottom:ss.length>1&&si<ss.length-1?10:0,borderBottom:ss.length>1&&si<ss.length-1?"1px solid var(--border)":"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <span style={{fontSize:11,fontWeight:600,color:"var(--ink-soft)",textTransform:"uppercase",letterSpacing:.3}}>{ss.length>1?`Workout ${si+1}`:"Workout"}</span>
+              <button className="btn-x" title="Remove this workout" onClick={()=>write(ss.filter((_,j)=>j!==si))} style={{fontSize:14,color:"var(--bad)"}}>×</button>
+            </div>
+            <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>patch(si,{score:n===s?0:n})} style={{flex:1,height:26,borderRadius:6,border:"none",cursor:"pointer",background:n<=s?(s>=8?"var(--good)":s>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:9,color:n<=s?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <label style={{fontSize:12,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
+              <input type="time" value={t} onChange={e=>patch(si,{trainingTime:e.target.value})} style={{padding:"4px 8px",fontSize:12,flex:1}}/>
+            </div>
+            <div style={{marginBottom:8}}>
+              <label style={{fontSize:12,color:"var(--ink-soft)",display:"block",marginBottom:4}}>Training type:</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{allTrainingTypes(customTypes).map(tt=><button key={tt.id} onClick={()=>patch(si,{trainingType:tt.id===ty?"":tt.id})} className={"chip"+(tt.id===ty?" on":"")} style={{fontSize:11,padding:"4px 9px"}}>{tt.icon} {tt.short}</button>)}</div>
+            </div>
+          </div>})}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <button className="btn btn-o btn-s" onClick={()=>write([...ss,blankSession()])}>+ Add workout</button>
+            <button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button>
           </div>
-          <div style={{marginBottom:8}}>
-            <label style={{fontSize:12,color:"var(--ink-soft)",display:"block",marginBottom:4}}>Training type:</label>
-            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{TRAINING_TYPES.map(tt=><button key={tt.id} onClick={()=>setRpp(d.date,{score:s,trainingTime:t,trainingType:tt.id===ty?"":tt.id})} className={"chip"+(tt.id===ty?" on":"")} style={{fontSize:11,padding:"4px 10px"}}>{tt.icon} {tt.short}</button>)}</div>
-          </div>
-          <div style={{textAlign:"right"}}><button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button></div>
         </div>})()}
         {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
   ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
@@ -2092,6 +2203,8 @@ function App(){
   const[hydration,setHydration_]=useState(()=>ls("nt-hydration",{}));
   const[sleep,setSleep_]=useState(()=>ls("nt-sleep",{}));
   const[lastReportWindowStart,setLastReportWindowStart_]=useState(()=>ls("nt-last-report-window",null));
+  const[customTypes,setCustomTypes_]=useState(()=>ls("nt-custom-types",[]));
+  const setCustomTypes=(v)=>{const r=typeof v==="function"?v(customTypes):v;setCustomTypes_(r);lss("nt-custom-types",r);scheduleSync()};
   const[showWeightModal,setShowWeightModal]=useState(false);
   const[weightInput,setWeightInput]=useState("");
   const[weightErr,setWeightErr]=useState(null);
@@ -2167,8 +2280,9 @@ function App(){
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
         setSleep_(data.sleep||{});lss("nt-sleep",data.sleep||{});
+        setCustomTypes_(data.customTypes||[]);lss("nt-custom-types",data.customTypes||[]);
         setLastReportWindowStart_(data.lastReportWindow||null);lss("nt-last-report-window",data.lastReportWindow||null);
-        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{},lastReportWindow:data.lastReportWindow||null})
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{},customTypes:data.customTypes||[],lastReportWindow:data.lastReportWindow||null})
       }
       setSyncing(false);
     }).catch(function(){setSyncing(false)});
@@ -2197,7 +2311,7 @@ function App(){
   const prompt=profile?buildPrompt(profile):"";
 
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback((opts)=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),lastReportWindow:ls("nt-last-report-window",null)},opts)},[userKey_]);
+  const syncToCloud=useCallback((opts)=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),customTypes:ls("nt-custom-types",[]),lastReportWindow:ls("nt-last-report-window",null)},opts)},[userKey_]);
   const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
   // A change can be sitting in the 3s debounce when the tab is closed or backgrounded —
@@ -2334,9 +2448,9 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
-    {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
+    {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
     <div className="tabbar">
