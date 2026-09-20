@@ -938,6 +938,46 @@ function defaultMealTime(todayMeals,meal){
   }
   return nowTime();
 }
+// Slots used to learn this user's own habitual meal times. The first meal logged inside a
+// window is that day's instance of that slot. Deliberately separate from MEAL_WINDOWS,
+// which drives past-day backfill and stays as it is.
+const MEAL_SLOTS=[
+  {key:"breakfast",label:"Breakfast",from:4*60,    to:11*60+30,fallback:8*60},
+  {key:"lunch",    label:"Lunch",    from:11*60+30,to:17*60,   fallback:12*60+30},
+  {key:"dinner",   label:"Dinner",   from:17*60,   to:24*60,   fallback:19*60},
+];
+const slotForMinutes=mins=>MEAL_SLOTS.find(s=>mins>=s.from&&mins<s.to)||null;
+
+// Average time per slot across every logged day. A day contributes at most one meal to a
+// slot — the earliest inside that window — so a late snack can't drag the average, and a
+// day with nothing in a window simply doesn't count toward it. With no history for a slot
+// the fallback stands in, so a brand-new user still gets a sensible suggestion.
+function averageMealTimes(history){
+  const acc={};MEAL_SLOTS.forEach(s=>acc[s.key]={sum:0,n:0});
+  Object.keys(history||{}).forEach(d=>{
+    const firsts={};
+    (history[d]||[]).forEach(m=>{
+      const v=minsOf(m.time);if(v===null)return;
+      const slot=slotForMinutes(v);if(!slot)return;
+      if(firsts[slot.key]===undefined||v<firsts[slot.key])firsts[slot.key]=v;
+    });
+    Object.keys(firsts).forEach(k=>{acc[k].sum+=firsts[k];acc[k].n++});
+  });
+  const out={};
+  MEAL_SLOTS.forEach(s=>{out[s.key]=acc[s.key].n>0?Math.round(acc[s.key].sum/acc[s.key].n):s.fallback});
+  return out;
+}
+// What the time box is pre-filled with once a meal has been analysed. Snacks, and a slot
+// that already holds a main meal today, get the clock instead — the slot average would be
+// a poor guess for either. The user can always change it before confirming.
+function suggestMealTime(history,todayMeals,meal){
+  const d=new Date();const now=d.getHours()*60+d.getMinutes();
+  const slot=slotForMinutes(now);
+  if(!slot||isSnack(meal))return nowTime();
+  const taken=(todayMeals||[]).some(m=>{const v=minsOf(m.time);return v!==null&&v>=slot.from&&v<slot.to&&!isSnack(m)});
+  if(taken)return nowTime();
+  return hhmm(averageMealTimes(history)[slot.key]);
+}
 // Backfilling a past day has no meaningful "entry time", so main meals are placed by
 // position instead: first is breakfast, second lunch, third dinner. Anything beyond
 // that is left blank for the user to set. Snacks don't claim a main-meal slot (so a
@@ -1205,12 +1245,15 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
+function LogPage({meals,setMeals,history,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
   const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[addRecurringOpen,setAddRecurringOpen]=useState(false);
   const[macrosOpen,setMacrosOpen]=useState(false);
+  // An analysed meal waits here until the user confirms its time — the analysis has
+  // already cost a credit, so the prompt has no discard path, only OK.
+  const[pendingMeal,setPendingMeal]=useState(null);
   // Same totals the Summary page shows: logged meals plus today's un-skipped recurring ones.
   const logTot=(()=>{const a=sum(meals),b=sum(templates.filter((_,i)=>!skipped.includes(i)));const t={};AK.forEach(k=>{t[k]=(a[k]||0)+(b[k]||0)});return t})();
   const logMacroRows=[
@@ -1226,9 +1269,22 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
   const setRppTime=(v)=>setRpp({score:rppScore,trainingTime:v,trainingType:rppType});
   const setRppType=(v)=>setRpp({score:rppScore,trainingTime:rppTime,trainingType:v===rppType?"":v});
   const doPhoto=e=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setImg64(ev.target.result);setImgP(URL.createObjectURL(f))};r.readAsDataURL(f)};
-  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=defaultMealTime(meals,m);m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
+  const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.date=today();setPendingMeal({meal:m,time:suggestMealTime(history,meals,m)});setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
   return<div>
+    {/* Time confirmation. Pre-filled with this user's own average for the slot the clock
+        is in, editable, and closable only by confirming — the meal is already analysed,
+        so there is no path here that throws the credit away. */}
+    {pendingMeal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:20,padding:"26px 24px",maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
+        <div style={{fontSize:38,marginBottom:10}}>🍽️</div>
+        <div style={{fontSize:18,fontWeight:700,marginBottom:4,fontFamily:"var(--serif)"}}>What time did you eat?</div>
+        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:18,lineHeight:1.4}}>{pendingMeal.meal.mealName}</p>
+        <input type="time" value={pendingMeal.time} onChange={e=>setPendingMeal(p=>({...p,time:e.target.value}))} style={{fontSize:20,padding:"10px 12px",textAlign:"center",width:"100%",marginBottom:6}}/>
+        <div style={{fontSize:11.5,color:"var(--gray)",marginBottom:18}}>Suggested from your usual meal times</div>
+        <button className="btn" onClick={()=>{const t=pendingMeal.time||nowTime();setMeals(p=>[...p,{...pendingMeal.meal,time:t}]);setPendingMeal(null)}} style={{margin:0,width:"100%",fontSize:15}}>✓ OK</button>
+      </div>
+    </div>}
     {/* The report is only worth downloading in its window, so say so where the user
         actually lands rather than waiting for them to wander onto the Report tab. */}
     {reportState&&reportState.enabled&&<div onClick={onGoToReport} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",marginBottom:16,background:"var(--rose-soft)",border:"1px solid var(--rose)",borderRadius:12,cursor:"pointer"}}>
@@ -1939,7 +1995,7 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
