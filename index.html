@@ -178,6 +178,53 @@
     return Math.round(Math.min(nMin / 10, 1) * Math.min(Math.abs(delta) / 2, 1) * 100);
   }
 
+  // Nothing below this confidence is printed: every finding in the report clears it.
+  const MIN_CONFIDENCE = 50;
+
+  // Nothing in the app marks a meal as a supplement, so they are spotted by name in what
+  // the user logged — the same rough keyword approach the food rating uses. A supplement
+  // never logged is simply never tested.
+  const SUPPLEMENTS = [
+    { key: "bcaa",         label: "BCAA / EAA",      words: ["bcaa", "bcaas", "eaa", "eaas", "branched chain", "branched-chain"] },
+    { key: "creatine",     label: "Creatine",        words: ["creatine", "creatina"] },
+    { key: "omega3supp",   label: "Omega-3",         words: ["omega 3", "omega-3", "omega3", "fish oil", "krill oil"] },
+    { key: "electrolytes", label: "Electrolytes",    words: ["electrolyte", "electrolytes", "isotonic", "rehydration", "lmnt"] },
+    { key: "betaalanine",  label: "Beta-alanine",    words: ["beta alanine", "beta-alanine", "betaalanine"] },
+    { key: "preworkout",   label: "Pre-workout",     words: ["pre workout", "pre-workout", "preworkout"] },
+    { key: "caffeinesupp", label: "Caffeine",        words: ["caffeine", "caffeina"] },
+    { key: "wheysupp",     label: "Protein powder",  words: ["whey", "casein", "protein powder", "protein shake"] },
+    { key: "magnesiumsupp",label: "Magnesium",       words: ["magnesium", "magnesio"] },
+    { key: "vitdsupp",     label: "Vitamin D",       words: ["vitamin d", "vit d", "cholecalciferol"] },
+    { key: "ironsupp",     label: "Iron supplement", words: ["iron supplement", "iron tablet", "ferrous"] },
+    { key: "zincsupp",     label: "Zinc supplement", words: ["zinc supplement", "zinc tablet"] },
+  ];
+  // Things people take for sleep rather than for training. Tested against sleep only.
+  const SLEEP_AIDS = [
+    { key: "chamomile",     label: "Chamomile",     words: ["chamomile", "camomile", "camomilla", "kamille"] },
+    { key: "melatonin",     label: "Melatonin",     words: ["melatonin", "melatonina"] },
+    { key: "valerian",      label: "Valerian",      words: ["valerian", "valeriana"] },
+    { key: "theanine",      label: "L-theanine",    words: ["theanine", "l-theanine"] },
+    { key: "glycine",       label: "Glycine",       words: ["glycine"] },
+    { key: "lemonbalm",     label: "Lemon balm",    words: ["lemon balm", "melissa"] },
+    { key: "lavender",      label: "Lavender",      words: ["lavender", "lavanda"] },
+    { key: "passionflower", label: "Passionflower", words: ["passionflower", "passion flower", "passiflora"] },
+    { key: "tartcherry",    label: "Tart cherry",   words: ["tart cherry", "montmorency", "cherry juice"] },
+    { key: "herbaltea",     label: "Herbal tea",    words: ["herbal tea", "tisane", "infusion"] },
+  ];
+  const SUPP_LABEL = {};
+  [...SUPPLEMENTS, ...SLEEP_AIDS].forEach((s) => { SUPP_LABEL[s.key] = s.label; });
+
+  // Which of `catalogue` appear in this set of meals. Reads item names as well as the meal
+  // name, so a supplement listed alongside food is still found. Single words match whole
+  // tokens; phrases match as substrings.
+  function supplementsIn(meals, catalogue) {
+    const hay = (meals || []).map((m) => [m.mealName || ""].concat(itemsOf(m).map((it) => it.name || "")).join(" ")).join(" ").toLowerCase();
+    const tokens = new Set(hay.split(/[^a-z0-9]+/).filter(Boolean));
+    const found = new Set();
+    catalogue.forEach((s) => { if (s.words.some((w) => (w.includes(" ") ? hay.includes(w) : tokens.has(w)))) found.add(s.key); });
+    return found;
+  }
+
   function extractSessions(history, rpp) {
     // A day can hold several workouts, so flatten to a chronological list of sessions
     // rather than one per date. Older data stores a single object, or a bare score.
@@ -230,6 +277,9 @@
         date, score: r.score, trainingTime: r.trainingTime, trainingType: r.trainingType,
         W1: sumMacros(W1_meals), W2: sumMacros(W2_meals), W3: W3_start ? sumMacros(W3_meals) : null,
         W1_count: W1_meals.length, W2_count: W2_meals.length, W3_count: W3_meals.length,
+        // Which supplements were taken in each window, for the correlations below.
+        W1_supps: supplementsIn(W1_meals, SUPPLEMENTS), W2_supps: supplementsIn(W2_meals, SUPPLEMENTS),
+        W3_supps: W3_start ? supplementsIn(W3_meals, SUPPLEMENTS) : new Set(),
       });
     }
     return sessions;
@@ -251,7 +301,7 @@
           const rho = spearman(xs, ys);
           if (rho === null) return;
           const confidence = correlationConfidence(rho, valid.length);
-          if (Math.abs(rho) < 0.3 || confidence < 25) return;
+          if (Math.abs(rho) < 0.3 || confidence <= MIN_CONFIDENCE) return;
           const sortedByX = valid.slice().sort((a, b) => a[window][macro] - b[window][macro]);
           const mid = Math.floor(sortedByX.length / 2);
           const lowGroup = sortedByX.slice(0, mid);
@@ -268,7 +318,33 @@
         });
       });
       perType.sort((a, b) => Math.abs(b.rho) - Math.abs(a.rho));
-      if (perType.length > 0) findings[type] = { n: typeSessions.length, findings: perType.slice(0, 3) };
+      // Supplements are taken or not taken, so they are compared as two groups rather than
+      // correlated: mean RPP of the sessions that had one in the window against the rest.
+      const suppFindings = [];
+      ["W1", "W2", "W3"].forEach((window) => {
+        const valid = typeSessions.filter((s) => s[window] !== null);
+        if (valid.length < 5) return;
+        const seen = new Set();
+        valid.forEach((s) => (s[window + "_supps"] || new Set()).forEach((k) => seen.add(k)));
+        seen.forEach((key) => {
+          const withIt = valid.filter((s) => (s[window + "_supps"] || new Set()).has(key));
+          const without = valid.filter((s) => !(s[window + "_supps"] || new Set()).has(key));
+          if (withIt.length < 3 || without.length < 3) return;
+          const meanWith = mean(withIt.map((s) => s.score)), meanWithout = mean(without.map((s) => s.score));
+          const delta = meanWith - meanWithout;
+          if (Math.abs(delta) < 0.5) return;
+          const confidence = meanDiffConfidence(delta, Math.min(withIt.length, without.length));
+          if (confidence <= MIN_CONFIDENCE) return;
+          suppFindings.push({ window, supplement: key, label: SUPP_LABEL[key] || key,
+            meanWith: Math.round(meanWith * 10) / 10, meanWithout: Math.round(meanWithout * 10) / 10,
+            nWith: withIt.length, nWithout: without.length,
+            delta: Math.round(delta * 10) / 10, direction: delta > 0 ? "positive" : "negative", confidence });
+        });
+      });
+      suppFindings.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+      if (perType.length > 0 || suppFindings.length > 0) {
+        findings[type] = { n: typeSessions.length, findings: perType.slice(0, 3), supplements: suppFindings.slice(0, 3) };
+      }
     });
     return findings;
   }
@@ -289,6 +365,7 @@
       const delta = meanTrue - meanFalse;
       if (Math.abs(delta) < 0.5) return null;
       const confidence = meanDiffConfidence(delta, Math.min(withTrue.length, withFalse.length));
+      if (confidence <= MIN_CONFIDENCE) return null;
       return { meanTrue: Math.round(meanTrue * 10) / 10, meanFalse: Math.round(meanFalse * 10) / 10, nTrue: withTrue.length, nFalse: withFalse.length, delta: Math.round(delta * 10) / 10, confidence };
     };
     const sun = check("sun", (d) => !!sunlight[d]); if (sun) results.sun = sun;
@@ -314,7 +391,8 @@
         if (m.time) { const [h, mm] = m.time.split(":").map(Number); const total = h + mm / 60; if (lastMealHour === null || total > lastMealHour) lastMealHour = total; }
       });
       const lateTraining = trainingDT ? trainingDT.getHours() >= 20 : false;
-      return { date: d, slept_well: sleepLvl(sleep[d]) === "good", carbs: totals.carbs, calories: totals.calories, last_meal_hour: lastMealHour, late_training: lateTraining, sun: !!sunlight[d] };
+      return { date: d, slept_well: sleepLvl(sleep[d]) === "good", carbs: totals.carbs, calories: totals.calories, last_meal_hour: lastMealHour,
+        supps: supplementsIn(dayMeals, [...SUPPLEMENTS, ...SLEEP_AIDS]), late_training: lateTraining, sun: !!sunlight[d] };
     });
     const well = nights.filter((n) => n.slept_well);
     const poor = nights.filter((n) => !n.slept_well);
@@ -328,6 +406,8 @@
       const wellMean = mean(wellVals); const poorMean = mean(poorVals);
       const relDelta = poorMean === 0 ? 0 : (wellMean - poorMean) / poorMean;
       if (Math.abs(relDelta) < 0.15) return;
+      const cont_conf = Math.round(Math.min(Math.min(wellVals.length, poorVals.length) / 10, 1) * Math.min(Math.abs(relDelta) / 0.5, 1) * 100);
+      if (cont_conf <= MIN_CONFIDENCE) return;
       factors[key] = { label, wellMean: Math.round(wellMean), poorMean: Math.round(poorMean), nWell: wellVals.length, nPoor: poorVals.length, confidence: Math.round(Math.min(Math.min(wellVals.length, poorVals.length) / 10, 1) * Math.min(Math.abs(relDelta) / 0.5, 1) * 100) };
     });
     const lmhWell = well.map((n) => n.last_meal_hour).filter((v) => v !== null);
@@ -338,14 +418,22 @@
         factors.last_meal_hour = { label: "Last meal time (hour)", wellMean: Math.round(wm * 10) / 10, poorMean: Math.round(pm * 10) / 10, nWell: lmhWell.length, nPoor: lmhPoor.length, confidence: Math.round(Math.min(Math.min(lmhWell.length, lmhPoor.length) / 10, 1) * Math.min(Math.abs(wm - pm) / 2, 1) * 100) };
       }
     }
-    const checkBinary = (key, label) => {
-      const wellRate = well.filter((n) => n[key]).length / well.length;
-      const poorRate = poor.filter((n) => n[key]).length / poor.length;
+    const checkBinary = (key, label, pick) => {
+      const has = pick || ((n) => !!n[key]);
+      const wellRate = well.filter(has).length / well.length;
+      const poorRate = poor.filter(has).length / poor.length;
       if (Math.abs(wellRate - poorRate) < 0.15) return;
+      const bin_conf = Math.round(Math.min(Math.min(well.length, poor.length) / 10, 1) * Math.min(Math.abs(wellRate - poorRate) / 0.5, 1) * 100);
+      if (bin_conf <= MIN_CONFIDENCE) return;
       factors[key] = { label, wellRate: Math.round(wellRate * 100), poorRate: Math.round(poorRate * 100), nWell: well.length, nPoor: poor.length, confidence: Math.round(Math.min(Math.min(well.length, poor.length) / 10, 1) * Math.min(Math.abs(wellRate - poorRate) / 0.4, 1) * 100) };
     };
     checkBinary("late_training", "Late training (after 20:00)");
     checkBinary("sun", "Sun exposure that day");
+    // Supplements and sleep aids, each tested the same way: how often it was taken on
+    // well-slept nights against poor-slept ones. Only those actually logged are tested.
+    const suppsSeen = new Set();
+    nights.forEach((n) => (n.supps || new Set()).forEach((k) => suppsSeen.add(k)));
+    suppsSeen.forEach((k) => checkBinary("supp_" + k, SUPP_LABEL[k] || k, (n) => (n.supps || new Set()).has(k)));
     return { nWell: well.length, nPoor: poor.length, factors };
   }
 
@@ -488,7 +576,7 @@
       const giRate = giCount / total; const lift = giRate / baseRate;
       const sampleFactor = Math.min(total / 5, 1); const liftScore = Math.min((lift - 1) / 3, 1);
       const confidence = Math.round(sampleFactor * liftScore * 100);
-      if (lift > 1.5 && confidence > 15) triggers.push({ word, giCount, total, lift: Math.round(lift * 10) / 10, confidence });
+      if (lift > 1.5 && confidence > MIN_CONFIDENCE) triggers.push({ word, giCount, total, lift: Math.round(lift * 10) / 10, confidence });
     });
     triggers.sort((a, b) => b.confidence - a.confidence);
     return { giDays: giDates.length, totalDays: daysWithData.length, triggers: triggers.slice(0, 5) };
@@ -830,7 +918,13 @@
   function tier1Takeaway(tier1) {
     const parts = [];
     Object.entries(tier1 || {}).forEach(([type, data]) => {
-      const s = data.findings[0]; if (!s) return;
+      const s = data.findings[0];
+      if (!s) {
+        // A type may have turned up only a supplement result; still worth a takeaway.
+        const sup = (data.supplements || [])[0];
+        if (sup) parts.push(`for ${labelOfType(type).toLowerCase()} workouts, ${sup.label} ${WINDOW_SHORT[sup.window]} went with ${sup.direction === "positive" ? "better" : "worse"} sessions`);
+        return;
+      }
       const macro = MACRO_LABELS[s.macro]; const win = WINDOW_SHORT[s.window];
       // `dir` names the condition the BEST sessions followed — the same convention
       // tier1Sentence uses — so the verb has to stay "improve". Swapping it to "hurt"
@@ -913,6 +1007,10 @@
         data.findings.forEach((f) => {
           const color = f.direction === "positive" ? COLORS.positive : COLORS.negative;
           w.finding(tier1Sentence(f), f.confidence, { dotColor: color });
+        });
+        (data.supplements || []).forEach((f) => {
+          const color = f.direction === "positive" ? COLORS.positive : COLORS.negative;
+          w.finding(`Sessions where you had ${f.label} ${WINDOW_SHORT[f.window]} averaged RPP ${f.meanWith} (n=${f.nWith}); the ${f.nWithout} sessions without it averaged ${f.meanWithout}.`, f.confidence, { dotColor: color });
         });
       });
       w.takeaway(tier1Takeaway(report.tier1));
