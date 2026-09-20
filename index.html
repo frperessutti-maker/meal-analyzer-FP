@@ -468,6 +468,154 @@
     return { giDays: giDates.length, totalDays: daysWithData.length, triggers: triggers.slice(0, 5) };
   }
 
+  const minsOfTime = (t) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return (isNaN(h) || isNaN(m)) ? null : h * 60 + m; };
+
+  // ── Overnight fast ────────────────────────────────────────────────
+  // Measured between consecutive logged days only: last meal of one day to first meal of
+  // the next. A gap spanning a day with nothing logged is missing data rather than a fast,
+  // so those pairs are skipped instead of counting as very long fasts.
+  function fastingSection(history) {
+    const days = Object.keys(history || {}).filter((d) => (history[d] || []).some((m) => minsOfTime(m.time) !== null)).sort();
+    const nights = [];
+    for (let i = 1; i < days.length; i++) {
+      if (daysBetween(new Date(days[i - 1] + "T12:00:00"), new Date(days[i] + "T12:00:00")) !== 1) continue;
+      const prev = (history[days[i - 1]] || []).map((m) => minsOfTime(m.time)).filter((v) => v !== null);
+      const next = (history[days[i]] || []).map((m) => minsOfTime(m.time)).filter((v) => v !== null);
+      if (!prev.length || !next.length) continue;
+      const last = Math.max(...prev), first = Math.min(...next);
+      nights.push({ from: days[i - 1], to: days[i], hours: (1440 - last + first) / 60, lastMeal: last, firstMeal: first });
+    }
+    if (nights.length < 2) return null;
+    const avg = nights.reduce((s, n) => s + n.hours, 0) / nights.length;
+    const longest = nights.reduce((a, b) => (b.hours > a.hours ? b : a));
+    const shortest = nights.reduce((a, b) => (b.hours < a.hours ? b : a));
+    const fmtH = (h) => `${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}m`;
+    return {
+      nights: nights.length,
+      avgHours: Math.round(avg * 10) / 10,
+      avgText: fmtH(avg),
+      longestText: fmtH(longest.hours), longestDate: longest.to,
+      shortestText: fmtH(shortest.hours), shortestDate: shortest.to,
+      avgLastMeal: hourToClock(nights.reduce((s, n) => s + n.lastMeal, 0) / nights.length / 60),
+      avgFirstMeal: hourToClock(nights.reduce((s, n) => s + n.firstMeal, 0) / nights.length / 60),
+    };
+  }
+
+  // ── Food quality rating ───────────────────────────────────────────
+  // Judged from the words in the meal names the user typed, the only signal available
+  // without another model call. It is a rough classifier, not a nutritional audit, and the
+  // section says so on the page.
+  const WHOLE_FOOD_WORDS = ["vegetable","vegetables","veg","salad","spinach","broccoli","kale","carrot","carrots","tomato","tomatoes","cucumber","pepper","peppers","courgette","zucchini","aubergine","eggplant","cauliflower","cabbage","lettuce","rocket","onion","onions","garlic","mushroom","mushrooms","beans","bean","lentil","lentils","chickpea","chickpeas","quinoa","oats","oatmeal","porridge","wholegrain","wholemeal","barley","buckwheat","fruit","apple","banana","berries","blueberries","strawberries","raspberries","orange","pear","peach","grapes","kiwi","melon","avocado","nuts","almond","almonds","walnut","walnuts","cashew","cashews","seeds","chia","flax","yoghurt","yogurt","kefir","egg","eggs","chicken","turkey","beef","lamb","fish","salmon","tuna","cod","mackerel","sardines","shrimp","prawns","tofu","tempeh","rice","potato","potatoes","soup","stew","broth","hummus"];
+  const PROCESSED_WORDS = ["pizza","burger","cheeseburger","hamburger","fries","chips","crisps","nuggets","kebab","hotdog","hot dog","sausage","sausages","bacon","salami","pepperoni","ham","candy","sweets","chocolate","donut","doughnut","cake","cookie","cookies","biscuit","biscuits","brownie","muffin","croissant","pastry","pastries","ice cream","gelato","soda","cola","coke","pepsi","fanta","sprite","energy drink","milkshake","syrup","nutella","white bread","cereal bar","protein bar","granola bar","instant noodles","takeaway","fast food","deep fried","mayonnaise","ketchup","beer","wine","cocktail","vodka","whisky","whiskey","rum","liqueur","crackers","pretzels","wafer","marshmallow","pudding","custard","nachos","churros","waffle","pancakes"];
+  const LATE_MEAL_MINUTES = 22 * 60;   // meals at or after this count against the rating
+  const CHEAT_ALLOWANCE = 0.05;        // up to 5% of meals can be treats with no penalty
+  function classifyMeal(name) {
+    const n = (name || "").toLowerCase();
+    const tokens = n.split(/[^a-z]+/).filter(Boolean);
+    // Single words match whole tokens, so "cola" cannot fire inside "chocolate"; entries
+    // containing a space match as substrings.
+    const hit = (list) => list.some((w) => (w.includes(" ") ? n.includes(w) : tokens.includes(w)));
+    if (hit(PROCESSED_WORDS)) return "processed";   // a burger with salad is still a burger
+    if (hit(WHOLE_FOOD_WORDS)) return "whole";
+    return "neutral";
+  }
+  function foodQualitySection(history) {
+    const meals = [];
+    Object.keys(history || {}).forEach((d) => (history[d] || []).forEach((m) => meals.push(m)));
+    if (meals.length < 10) return null;
+    const rows = meals.map((m) => ({ name: m.mealName || "meal", cls: classifyMeal(m.mealName), mins: minsOfTime(m.time) }));
+    const processed = rows.filter((r) => r.cls === "processed");
+    const whole = rows.filter((r) => r.cls === "whole");
+    const late = rows.filter((r) => r.mins !== null && r.mins >= LATE_MEAL_MINUTES);
+    // A late meal weighs half of an outright processed one.
+    const penaltyUnits = processed.length + late.length * 0.5;
+    const share = penaltyUnits / meals.length;
+    const over = Math.max(0, share - CHEAT_ALLOWANCE);
+    const stars = Math.round(Math.max(0, 5 * (1 - over / (1 - CHEAT_ALLOWANCE))) * 2) / 2;
+    const tally = {};
+    processed.forEach((r) => { const k = r.name.toLowerCase(); tally[k] = tally[k] || { name: r.name, n: 0 }; tally[k].n++; });
+    const lateTally = {};
+    late.forEach((r) => { const k = r.name.toLowerCase(); lateTally[k] = lateTally[k] || { name: r.name, n: 0 }; lateTally[k].n++; });
+    return {
+      stars, totalMeals: meals.length,
+      wholeCount: whole.length, wholePct: Math.round(whole.length / meals.length * 100),
+      processedCount: processed.length, processedPct: Math.round(processed.length / meals.length * 100),
+      lateCount: late.length, latePct: Math.round(late.length / meals.length * 100),
+      neutralCount: rows.filter((r) => r.cls === "neutral").length,
+      penaltyPct: Math.round(share * 100),
+      withinAllowance: share > 0 && share <= CHEAT_ALLOWANCE,
+      worstOffenders: Object.values(tally).sort((a, b) => b.n - a.n).slice(0, 4),
+      lateOffenders: Object.values(lateTally).sort((a, b) => b.n - a.n).slice(0, 3),
+    };
+  }
+
+  // ── Nutrient tables ───────────────────────────────────────────────
+  // `targets` is supplied by the app ({macros:[{key,label,unit,target}], micros:[...]}) so
+  // the engine stays agnostic about which nutrients exist. `dailyExtras` carries non-food
+  // contributions the app knows about, currently vitamin D from sun exposure.
+  function nutrientStatus(pct) {
+    if (pct === null) return { word: "-", tone: "neutral" };
+    if (pct < 70) return { word: "Deficient", tone: "bad" };
+    if (pct < 90) return { word: "Low", tone: "warn" };
+    if (pct <= 110) return { word: "On target", tone: "good" };
+    if (pct <= 200) return { word: "High", tone: "warn" };
+    return { word: "Excess", tone: "bad" };
+  }
+  function nutrientSection(history, targets, dailyExtras) {
+    if (!targets || (!targets.macros && !targets.micros)) return null;
+    const days = Object.keys(history || {}).filter((d) => history[d] && history[d].length > 0);
+    if (days.length < 3) return null;
+    const dailyTotal = (d, key) => {
+      let t = 0;
+      (history[d] || []).forEach((m) => { const v = Number(m[key]); if (!isNaN(v)) t += v; });
+      const ex = dailyExtras && dailyExtras[d] ? Number(dailyExtras[d][key]) : 0;
+      if (!isNaN(ex)) t += ex;
+      return t;
+    };
+    const buildRows = (list) => (list || []).map((n) => {
+      const avg = days.reduce((s, d) => s + dailyTotal(d, n.key), 0) / days.length;
+      const pct = n.target ? Math.round((avg / n.target) * 100) : null;
+      return { key: n.key, label: n.label, unit: n.unit || "", target: n.target, avg: Math.round(avg * 10) / 10, pct, status: nutrientStatus(pct) };
+    });
+    const macros = buildRows(targets.macros), micros = buildRows(targets.micros);
+    // For each nutrient that falls short, which meal the user already eats is its best
+    // source? Ranked by what one serving delivers rather than by the weekly total, so a
+    // staple contributing a little every day cannot crowd out the meal that would
+    // actually move the number.
+    const short = [...macros, ...micros].filter((r) => r.pct !== null && r.pct < 90);
+    const opportunities = [];
+    short.forEach((n) => {
+      const byName = {};
+      days.forEach((d) => (history[d] || []).forEach((m) => {
+        const v = Number(m[n.key]); if (isNaN(v) || v <= 0) return;
+        const k = (m.mealName || "meal").trim().toLowerCase();
+        byName[k] = byName[k] || { name: m.mealName || "meal", total: 0, count: 0 };
+        byName[k].total += v; byName[k].count++;
+      }));
+      const best = Object.values(byName)
+        .map((e) => ({ ...e, per: e.total / e.count, share: n.target ? (e.total / e.count) / n.target : 0 }))
+        .sort((a, b) => b.per - a.per)[0];
+      if (best && best.share >= 0.15) {
+        opportunities.push({ nutrient: n.label, unit: n.unit, pct: n.pct, meal: best.name,
+          per: Math.round(best.per * 10) / 10, sharePct: Math.round(best.share * 100), count: best.count });
+      }
+    });
+    // One meal is usually the best source of several things at once, so group by meal
+    // rather than listing "eat more salmon" once per nutrient.
+    const byMeal = {};
+    opportunities.forEach((o) => {
+      const k = o.meal.toLowerCase();
+      byMeal[k] = byMeal[k] || { meal: o.meal, count: o.count, nutrients: [] };
+      byMeal[k].nutrients.push({ label: o.nutrient, unit: o.unit, pct: o.pct, per: o.per, sharePct: o.sharePct });
+    });
+    const grouped = Object.values(byMeal).map((g) => ({
+      ...g,
+      nutrients: g.nutrients.sort((a, b) => a.pct - b.pct),
+      lowestPct: Math.min(...g.nutrients.map((x) => x.pct)),
+    })).sort((a, b) => a.lowestPct - b.lowestPct).slice(0, 4);
+    return { days: days.length, macros, micros, opportunities: grouped };
+  }
+
   function buildReport(state) {
     const { history = {}, rpp = {}, sunlight = {}, sleep = {}, hydration = {}, giDistress = {} } = state;
     const sessions = extractSessions(history, rpp);
@@ -484,6 +632,9 @@
       tier3: tier3(history, sleep, sunlight, rpp),
       tier4: tier4(history, rpp, sunlight, sleep, hydration),
       gi: giSection(history, giDistress),
+      fasting: fastingSection(history),
+      foodQuality: foodQualitySection(history),
+      nutrients: nutrientSection(history, state.targets, state.dailyExtras),
     };
   }
 
@@ -511,7 +662,7 @@
   function hourToClock(h) { if (h === null || h === undefined) return ""; const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return `${hh.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`; }
 
   const PAGE_W = 210, PAGE_H = 297, MARGIN = 20, CONTENT_W = PAGE_W - MARGIN * 2;
-  const COLORS = { ink: [26,26,26], soft: [90,90,90], faint: [150,150,150], rule: [220,220,220], positive: [22,163,74], negative: [220,38,38], neutral: [100,100,100], accent: [59,130,246] };
+  const COLORS = { ink: [26,26,26], soft: [90,90,90], faint: [150,150,150], rule: [220,220,220], positive: [22,163,74], negative: [220,38,38], neutral: [100,100,100], accent: [59,130,246], warn: [202,138,4] };
 
   function createWriter(doc) {
     let y = MARGIN;
@@ -542,6 +693,41 @@
         const wrapped = doc.splitTextToSize(text, CONTENT_W - indent);
         wrapped.forEach((line) => { ensureSpace(5); doc.text(line, MARGIN + indent, y); y += 4.2; });
         y += 3;
+      },
+      // cols: [{label, width (mm), align}] — widths should sum to CONTENT_W.
+      // rows: [{cells:[{text, color, bold}]}]. Re-draws the header after a page break so
+      // a table split across pages still has column labels on the second half.
+      table(cols, rows) {
+        const rowH = 4.8;
+        const drawHeader = () => {
+          doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...COLORS.soft);
+          let x = MARGIN;
+          cols.forEach((c) => {
+            const right = c.align === "right";
+            doc.text(c.label, right ? x + c.width : x, y, right ? { align: "right" } : undefined);
+            x += c.width;
+          });
+          y += 2;
+          doc.setDrawColor(...COLORS.rule); doc.setLineWidth(0.2); doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+          y += 3.8;
+        };
+        ensureSpace(16); drawHeader();
+        rows.forEach((r) => {
+          if (y + rowH > PAGE_H - MARGIN) { doc.addPage(); y = MARGIN; drawHeader(); }
+          let x = MARGIN;
+          cols.forEach((c, i) => {
+            const cell = r.cells[i] || { text: "" };
+            const right = c.align === "right";
+            doc.setFont("helvetica", cell.bold ? "bold" : "normal"); doc.setFontSize(9);
+            doc.setTextColor(...(cell.color || COLORS.ink));
+            let t = String(cell.text);
+            while (t && doc.getTextWidth(t) > c.width - 2) t = t.slice(0, -1);
+            doc.text(t, right ? x + c.width : x, y, right ? { align: "right" } : undefined);
+            x += c.width;
+          });
+          y += rowH;
+        });
+        y += 2;
       },
       takeaway(text) {
         if (!text) return;
@@ -734,6 +920,80 @@
         w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days. At least ${report.gi.minDays} days with GI distress are needed before food keywords can be compared meaningfully, so no trigger analysis is shown yet.`);
       } else {
         w.empty(`GI distress was logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days, but no food-name keyword appeared often enough yet to suggest a pattern. Keep tracking for more accurate correlations.`);
+      }
+    }
+
+    if (report.fasting) {
+      const f = report.fasting;
+      w.section("Overnight fast");
+      w.body(`Across ${f.nights} night${f.nights !== 1 ? "s" : ""} with meals logged on both sides, your average overnight fast was ${f.avgText}, running from a last meal around ${f.avgLastMeal} to a first meal around ${f.avgFirstMeal}.`, { size: 10 });
+      w.space(1);
+      w.body(`Longest: ${f.longestText} (ending ${formatDate(f.longestDate)}).   Shortest: ${f.shortestText} (ending ${formatDate(f.shortestDate)}).`, { size: 9, color: COLORS.soft });
+      w.body("Nights where either day had nothing logged are left out, so gaps in tracking are not counted as fasts.", { size: 8.5, color: COLORS.faint });
+    }
+
+    if (report.foodQuality) {
+      const q = report.foodQuality;
+      w.section("Food quality rating");
+      const full = Math.floor(q.stars), half = q.stars % 1 >= 0.5;
+      const starText = "*".repeat(full) + (half ? " 1/2" : "");
+      w.subheading(`${q.stars} / 5 stars   ${starText}`);
+      const parts = [];
+      parts.push(`${q.wholeCount} of ${q.totalMeals} logged meals (${q.wholePct}%) read as whole foods`);
+      if (q.processedCount) parts.push(`${q.processedCount} (${q.processedPct}%) matched processed or sugary items`);
+      if (q.neutralCount) parts.push(`${q.neutralCount} could not be classified either way`);
+      w.body(parts.join(", ") + ".", { size: 10 });
+      if (q.lateCount) w.body(`${q.lateCount} meal${q.lateCount !== 1 ? "s were" : " was"} eaten at or after 22:00 (${q.latePct}% of the total), which counts against the rating at half the weight of a processed meal.`, { size: 10 });
+      if (q.worstOffenders.length) w.body(`Weighing most against it: ${q.worstOffenders.map((o) => `${o.name}${o.n > 1 ? ` (x${o.n})` : ""}`).join(", ")}.`, { size: 10 });
+      if (q.withinAllowance) {
+        w.body(`Those treats amount to ${q.penaltyPct}% of your meals, inside the 5% allowance — the rating is unaffected by them.`, { size: 10, color: COLORS.positive });
+      } else if (q.stars >= 5) {
+        w.body(`Those treats come to ${q.penaltyPct}% of your meals, just past the 5% allowance but not enough to cost you a star.`, { size: 10, color: COLORS.positive });
+      } else if (q.penaltyPct > 5) {
+        w.body(`Together they account for ${q.penaltyPct}% of your meals. The first 5% is free; everything above that scales the rating down, reaching zero stars if every meal were processed.`, { size: 10 });
+      }
+      w.body("Rated from the words in your meal names, so it is a rough guide rather than a nutritional audit. A dish it does not recognise counts as neither good nor bad.", { size: 8.5, color: COLORS.faint });
+      w.takeaway(q.stars >= 4.5 ? "Your food quality is where you want it — keep doing what you are doing."
+        : q.stars >= 3 ? "Solid base of whole foods, with enough processed meals or late eating to cost you a star or more."
+        : "Processed meals and late eating dominate enough to be the first thing worth changing.");
+    }
+
+    if (report.nutrients) {
+      const n = report.nutrients;
+      const tone = (t) => t === "bad" ? COLORS.negative : t === "warn" ? COLORS.warn : t === "good" ? COLORS.positive : COLORS.soft;
+      const cols = [
+        { label: "Nutrient", width: 46 }, { label: "Daily avg", width: 28, align: "right" },
+        { label: "Target", width: 28, align: "right" }, { label: "%", width: 18, align: "right" },
+        { label: "Status", width: 50 },
+      ];
+      const toRows = (rows) => rows.map((r) => ({ cells: [
+        { text: r.label },
+        { text: `${r.avg}${r.unit}` },
+        { text: `${r.target}${r.unit}` },
+        { text: r.pct === null ? "-" : `${r.pct}%`, bold: true, color: tone(r.status.tone) },
+        { text: r.status.word, color: tone(r.status.tone) },
+      ] }));
+
+      w.section("Macronutrients");
+      w.body(`Daily averages across ${n.days} logged day${n.days !== 1 ? "s" : ""}.`, { size: 9, color: COLORS.soft });
+      w.table(cols, toRows(n.macros));
+
+      w.section("Micronutrients");
+      w.table(cols, toRows(n.micros));
+      w.body("Deficient is below 70% of target, Low 70-89%, On target 90-110%, High 111-200%, Excess above 200%.", { size: 8.5, color: COLORS.faint });
+
+      if (n.opportunities.length) {
+        w.section("Closing the gaps");
+        w.body("Meals you already eat that are the strongest sources of what you are short on. Eating them more often, or in bigger portions, moves these numbers fastest.", { size: 10 });
+        w.space(1);
+        n.opportunities.forEach((o) => {
+          w.subheading(`${o.meal} — logged ${o.count} time${o.count !== 1 ? "s" : ""}`);
+          o.nutrients.forEach((x) => {
+            w.body(`${x.label} sits at ${x.pct}% of target; one serving supplies ${x.per}${x.unit}, or ${x.sharePct}% of a day's worth.`, { size: 9.5, indent: 4, color: COLORS.soft });
+          });
+        });
+        const top = n.opportunities[0], topN = top.nutrients[0];
+        w.takeaway(`The quickest fix: more ${top.meal.toLowerCase()}, whether a bigger portion or more often — one serving already covers ${topN.sharePct}% of your daily ${topN.label.toLowerCase()} target.`);
       }
     }
 
@@ -1645,20 +1905,27 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
 }
 
 /* ── WEEKLY REPORT ── */
-function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportWindowStart,setLastReportWindowStart}){
+function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastReportWindowStart,setLastReportWindowStart}){
+  // The engine has no idea which nutrients exist or what this user targets, so hand it
+  // both. dailyExtras carries what is not in the food itself — vitamin D from sunlight.
+  const reportTargets={
+    macros:[{key:"calories",label:"Calories",unit:" Cal",target:DT.calories},{key:"protein",label:"Protein",unit:"g",target:DT.protein},{key:"carbs",label:"Carbs",unit:"g",target:DT.carbs},{key:"fat",label:"Fat",unit:"g",target:DT.fat},{key:"fiber",label:"Fiber",unit:"g",target:DT.fiber}],
+    micros:MICROS.map(m=>({key:m.key,label:m.name,unit:m.unit,target:DT[m.key]})),
+  };
+  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{if(sunlight[d])a[d]={vitaminD:sunVitD(d)};return a},{});
   const[showToast,setShowToast]=useState(false);
   const toastTimer=useRef(null);
   const reportState=reportAvailability(history,lastReportWindowStart);
   const downloadReport=()=>{
     try{
-      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress});
+      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,targets:reportTargets,dailyExtras});
       const doc=window.renderReportPDF(report);
       doc.save(`performance-report-${today()}.pdf`);
       setLastReportWindowStart(today());
       setShowToast(true);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setShowToast(false),2600);
     }catch(e){alert("Couldn't generate the report: "+e.message)}
   };
-  const preview=(()=>{try{return window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress})}catch{return null}})();
+  const preview=(()=>{try{return window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,targets:reportTargets,dailyExtras})}catch{return null}})();
   const t2Label={sun:"sun exposure",hydration:"hydration",sleep:"a well-slept night"};
   const bestT2=preview&&preview.tier2?Object.entries(preview.tier2).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
   const bestT3=preview&&preview.tier3&&preview.tier3.factors?Object.entries(preview.tier3.factors).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
@@ -1998,7 +2265,7 @@ function App(){
     {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
-    {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
+    {tab==="report"&&<ReportPage history={history} rpp={rpp} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
     <div className="tabbar">
       {tabsDef.map(([key,label])=><button key={key} className={"tab"+(tab===key?" on":"")} onClick={()=>setTab(key)}>
