@@ -107,7 +107,7 @@
   const HABIT_VARS = [
     { key: "sun_freq",       label: "Sun exposure frequency" },
     { key: "hydration_freq", label: "Hydration frequency" },
-    { key: "sleep_quality",  label: "Sleep quality (% well-slept)" },
+    { key: "sleep_quality",  label: "Sleep quality (0-1)" },
     { key: "avg_protein",    label: "Average daily protein" },
     { key: "avg_carbs",      label: "Average daily carbs" },
     { key: "avg_calories",   label: "Average daily calories" },
@@ -257,6 +257,11 @@
     return findings;
   }
 
+  // Sleep is a three-level scale ("bad" | "mediocre" | "good"). Nights logged before the
+  // middle level existed are booleans, so everything reads through this.
+  const sleepLvl = (v) => v === true ? "good" : v === false ? "bad"
+    : (v === "good" || v === "mediocre" || v === "bad") ? v : undefined;
+
   function tier2(sessions, sunlight, sleep, hydration) {
     const results = {};
     const check = (name, predicate) => {
@@ -272,12 +277,12 @@
     };
     const sun = check("sun", (d) => !!sunlight[d]); if (sun) results.sun = sun;
     const hyd = check("hydration", (d) => !!hydration[d]); if (hyd) results.hydration = hyd;
-    const slp = check("sleep", (d) => sleep[d] === true); if (slp) results.sleep = slp;
+    const slp = check("sleep", (d) => sleepLvl(sleep[d]) === "good"); if (slp) results.sleep = slp;
     return results;
   }
 
   function tier3(history, sleep, sunlight, rpp) {
-    const sleepDates = Object.keys(sleep).filter((d) => sleep[d] === true || sleep[d] === false);
+    const sleepDates = Object.keys(sleep).filter((d) => { const l = sleepLvl(sleep[d]); return l === "good" || l === "bad"; });  // mediocre sits out: tier3 contrasts the two ends
     if (sleepDates.length < 6) return null;
     const nights = sleepDates.map((d) => {
       const dayMeals = history[d] || [];
@@ -290,7 +295,7 @@
         if (m.time) { const [h, mm] = m.time.split(":").map(Number); const total = h + mm / 60; if (lastMealHour === null || total > lastMealHour) lastMealHour = total; }
       });
       const lateTraining = trainingDT ? trainingDT.getHours() >= 20 : false;
-      return { date: d, slept_well: sleep[d] === true, carbs: totals.carbs, calories: totals.calories, last_meal_hour: lastMealHour, late_training: lateTraining, sun: !!sunlight[d] };
+      return { date: d, slept_well: sleepLvl(sleep[d]) === "good", carbs: totals.carbs, calories: totals.calories, last_meal_hour: lastMealHour, late_training: lateTraining, sun: !!sunlight[d] };
     });
     const well = nights.filter((n) => n.slept_well);
     const poor = nights.filter((n) => !n.slept_well);
@@ -341,7 +346,7 @@
     full.forEach((d) => {
       series.sun_freq.push(sunlight[d] === true ? 1 : 0);
       series.hydration_freq.push(hydration[d] === true ? 1 : 0);
-      series.sleep_quality.push(sleep[d] === true ? 1 : sleep[d] === false ? 0 : null);
+      series.sleep_quality.push((l => l === "good" ? 1 : l === "mediocre" ? 0.5 : l === "bad" ? 0 : null)(sleepLvl(sleep[d])));
       const meals = history[d] || [];
       const dm = { protein: 0, carbs: 0, calories: 0, fiber: 0 };
       meals.forEach((m) => { dm.protein += Number(m.protein) || 0; dm.carbs += Number(m.carbs) || 0; dm.calories += Number(m.calories) || 0; dm.fiber += Number(m.fiber) || 0; });
@@ -946,6 +951,37 @@ function defaultPastMealTime(dayMeals,meal){
   if(isSnack(meal))return hhmm(PAST_SNACK_SLOTS[Math.min(Math.max(mains-1,0),PAST_SNACK_SLOTS.length-1)]);
   return mains<MEAL_WINDOWS.length?hhmm(MEAL_WINDOWS[mains].at):"";
 }
+// Sleep quality is a three-level scale. Stored as "bad" | "mediocre" | "good"; nights
+// logged before the middle level existed are booleans, so every read normalises first.
+const SLEEP_LEVELS=["bad","mediocre","good"];
+const SLEEP_META={
+  bad:     {label:"Bad",      color:"var(--bad)",  soft:"var(--bad-soft)"},
+  mediocre:{label:"Mediocre", color:"var(--warn)", soft:"var(--warn-soft)"},
+  good:    {label:"Good",     color:"var(--good)", soft:"var(--good-soft)"},
+};
+function sleepLevel(v){
+  if(v===true)return"good";
+  if(v===false)return"bad";
+  return SLEEP_LEVELS.includes(v)?v:undefined;
+}
+// Tapping the check-in box walks bad -> mediocre -> good -> bad; an unlogged box starts at bad.
+function nextSleepLevel(v){
+  const cur=sleepLevel(v);
+  return cur===undefined?SLEEP_LEVELS[0]:SLEEP_LEVELS[(SLEEP_LEVELS.indexOf(cur)+1)%SLEEP_LEVELS.length];
+}
+// Report cadence, shared: the Report page shows it as a button label, the Log page as a
+// banner. One source so the two can never disagree about whether a report is due.
+function reportAvailability(history,lastReportWindowStart){
+  const activeDaysLogged=Object.keys(history||{}).filter(d=>history[d]&&history[d].length>0).length;
+  if(!lastReportWindowStart){
+    if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,activeDaysLogged,label:`First report available in ${x} day${x!==1?"s":""}`}}
+    return{enabled:true,activeDaysLogged,label:"Report available — download now"};
+  }
+  const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
+  if(daysSince<10){const z=10-daysSince;return{enabled:false,activeDaysLogged,label:`Next report available in ${z} day${z!==1?"s":""}`}}
+  if(daysSince<12){const y=12-daysSince;return{enabled:true,activeDaysLogged,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
+  return{enabled:true,activeDaysLogged,label:"Report available — download now"};
+}
 function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
 function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
@@ -1169,11 +1205,20 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota}){
+function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
   const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[addRecurringOpen,setAddRecurringOpen]=useState(false);
+  const[macrosOpen,setMacrosOpen]=useState(false);
+  // Same totals the Summary page shows: logged meals plus today's un-skipped recurring ones.
+  const logTot=(()=>{const a=sum(meals),b=sum(templates.filter((_,i)=>!skipped.includes(i)));const t={};AK.forEach(k=>{t[k]=(a[k]||0)+(b[k]||0)});return t})();
+  const logMacroRows=[
+    {label:"Protein",key:"protein",value:Math.round(logTot.protein),target:DT.protein,color:"var(--rose)"},
+    {label:"Carbs",key:"carbs",value:Math.round(logTot.carbs),target:DT.carbs,color:"var(--ink)"},
+    {label:"Fat",key:"fat",value:Math.round(logTot.fat),target:DT.fat,color:"var(--gray)"},
+    {label:"Fiber",key:"fiber",value:Math.round(logTot.fiber||0),target:DT.fiber,color:"var(--good)"},
+  ];
   const rppScore=typeof rpp==="object"?rpp.score||0:rpp||0;
   const rppTime=typeof rpp==="object"?rpp.trainingTime||"":"";
   const rppType=typeof rpp==="object"?rpp.trainingType||"":"";
@@ -1184,6 +1229,16 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
   const handleAnalyze=async()=>{if(mode==="text"&&!txt.trim())return;if(mode==="photo"&&!img64)return;setLd(true);setErr(null);try{const m=await doAnalyze(mode==="text"?txt:null,mode==="photo"?img64:null,prompt);m.time=defaultMealTime(meals,m);m.date=today();setMeals(p=>[...p,m]);setTxt("");setImgP(null);setImg64(null)}catch(e){setErr("Failed: "+e.message)}finally{setLd(false);refreshQuota&&refreshQuota()}};
   const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
   return<div>
+    {/* The report is only worth downloading in its window, so say so where the user
+        actually lands rather than waiting for them to wander onto the Report tab. */}
+    {reportState&&reportState.enabled&&<div onClick={onGoToReport} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",marginBottom:16,background:"var(--rose-soft)",border:"1px solid var(--rose)",borderRadius:12,cursor:"pointer"}}>
+      <span style={{fontSize:18,flexShrink:0}}>📄</span>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>Your report is ready</div>
+        <div style={{fontSize:12,color:"var(--ink-soft)"}}>{reportState.label.replace(/^Report available — download now$/,"Tap to open the Report page")}</div>
+      </div>
+      <span style={{fontSize:16,color:"var(--rose)",flexShrink:0}}>›</span>
+    </div>}
 
     <div className="panel" style={{marginBottom:16}}>
       <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Type it in":"📷 Photo"}</button>)}</div>
@@ -1203,6 +1258,22 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
       {rErr&&<div className="err" style={{marginTop:12,marginBottom:0}}>{rErr}</div>}
     </div>}
 
+    {/* Macros overview — same figures and format as the Summary page, collapsed by default
+        so the page still opens on meal entry. */}
+    <button className="collapse-btn" onClick={()=>setMacrosOpen(!macrosOpen)} style={{marginBottom:macrosOpen?10:18,fontSize:15,textTransform:"uppercase",letterSpacing:.4}}>{macrosOpen?"▾":"▸"} Macros today</button>
+    {macrosOpen&&<div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:34,fontWeight:700,color:"var(--ink)"}}>{Math.round(logTot.calories)}</div>
+        <div style={{fontSize:14,color:"var(--ink-soft)"}}>/ {DT.calories} Cal</div>
+        <div style={{fontSize:13,color:"var(--good)",fontWeight:600}}>· {GOALS.find(g=>g.id===profile.goal)?.label||"Maintain weight"}</div>
+      </div>
+      {logMacroRows.map(row=><div key={row.key}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"var(--ink-soft)",marginBottom:5}}>
+          <span>{row.label}</span><span>{row.value}g / {row.target}g</span>
+        </div>
+        <PB value={row.value} max={row.target} color={row.color}/>
+      </div>)}
+    </div>}
     <h3 className="stit" style={{marginTop:6}}>Daily check-in</h3>
     {/* All four share one grid so the columns line up between rows. As two separate
         flex rows, each row split itself by its own content — the sleep box needs room
@@ -1221,13 +1292,13 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
         <input type="checkbox" checked={gi} readOnly style={{width:16,height:16,accentColor:"var(--bad)",pointerEvents:"none",flexShrink:0}}/>
         <span style={{fontSize:13,fontWeight:500}}>🤢 GI distress</span>
       </div>
-      <div style={{minWidth:0,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"9px 12px",background:sleep===true?"var(--good-soft)":sleep===false?"var(--bad-soft)":"#fff",border:`1px solid ${sleep===true?"var(--good)":sleep===false?"var(--bad)":"var(--border)"}`,borderRadius:12}}>
-        <span style={{fontSize:13,fontWeight:500}}>😴 Sleep quality</span>
-        <div style={{display:"flex",gap:4,flexShrink:0}}>
-          <button onClick={()=>setSleep(sleep===true?undefined:true)} style={{padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:sleep===true?700:500,border:`1px solid ${sleep===true?"var(--good)":"var(--border)"}`,background:sleep===true?"var(--good)":"#fff",color:sleep===true?"#fff":"var(--ink-soft)"}}>Good</button>
-          <button onClick={()=>setSleep(sleep===false?undefined:false)} style={{padding:"5px 11px",borderRadius:8,fontSize:12,cursor:"pointer",fontWeight:sleep===false?700:500,border:`1px solid ${sleep===false?"var(--bad)":"var(--border)"}`,background:sleep===false?"var(--bad)":"#fff",color:sleep===false?"#fff":"var(--ink-soft)"}}>Bad</button>
-        </div>
-      </div>
+      {/* One tap cycles bad -> mediocre -> good -> bad, the box taking that level's colour.
+          It reads "Sleep quality" until the first tap, so an untouched box isn't mistaken
+          for a logged "Bad". */}
+      {(()=>{const lvl=sleepLevel(sleep);const meta=lvl?SLEEP_META[lvl]:null;
+        return<div onClick={()=>setSleep(nextSleepLevel(sleep))} title="Tap to cycle: Bad, Mediocre, Good" style={{minWidth:0,display:"flex",alignItems:"center",gap:8,padding:"12px",background:meta?meta.soft:"#fff",border:`1px solid ${meta?meta.color:"var(--border)"}`,borderRadius:12,cursor:"pointer"}}>
+          <span style={{fontSize:13,fontWeight:500,minWidth:0}}>😴 Sleep quality{meta?": ":""}{meta&&<strong style={{color:meta.color,textTransform:"uppercase",letterSpacing:.3}}>{meta.label}</strong>}</span>
+        </div>})()}
     </div>
     <div className="panel" style={{marginBottom:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -1248,7 +1319,7 @@ function LogPage({meals,setMeals,templates,setTemplates,skipped,sun,toggleSun,hy
 }
 /* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
 function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
-  const[mealsOpen,setMealsOpen]=useState(false);
+  const[mealsOpen,setMealsOpen]=useState(true);
   const[aminoOpen,setAminoOpen]=useState(false);
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
@@ -1392,15 +1463,20 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
     </select>
     {chartNutrient&&<div className="panel" style={{marginBottom:24}}>
       <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--ink-soft)",marginBottom:10}}><span>{chartN.label} per day</span><span>goal {chartN.target}{chartN.unit}</span></div>
+      {/* The plot area holds ONLY the bars and the goal line, so both measure from the same
+          baseline. The day labels used to sit inside it, which lifted every bar 24px above
+          the line's zero and made sub-target bars look like they cleared the goal. A bar is
+          green exactly when it reaches the line — same comparison that positions the line. */}
       <div style={{position:"relative",display:"flex",alignItems:"flex-end",gap:6,height:120}}>
         <div style={{position:"absolute",left:0,right:0,bottom:`${goalLinePct}%`,borderTop:"2px dashed var(--gray)",pointerEvents:"none"}}/>
         {chartDays.map(d=>{
-          const pct=d.v!=null?Math.max(4,Math.round(100*d.v/maxV)):0;
-          return<div key={d.date} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",height:"100%",justifyContent:"flex-end"}}>
-            <div style={{width:"100%",borderRadius:"6px 6px 2px 2px",background:d.v==null?"var(--track)":(d.v>=chartN.target*0.9?"var(--good)":"var(--bad)"),height:`${pct}%`}}/>
-            <div style={{height:24,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:6,fontSize:9,lineHeight:1.2,textAlign:"center",color:d.isToday?"var(--ink)":"var(--gray)",fontWeight:d.isToday?700:500}}>{d.shortLabel}</div>
-          </div>;
+          const pct=d.v!=null?Math.max(2,Math.round(100*d.v/maxV)):0;
+          const met=d.v!=null&&d.v>=chartN.target;
+          return<div key={d.date} title={d.v!=null?`${Math.round(d.v)}${chartN.unit} of ${chartN.target}${chartN.unit}`:"no data"} style={{flex:1,height:`${pct}%`,borderRadius:"6px 6px 2px 2px",background:d.v==null?"var(--track)":(met?"var(--good)":"var(--bad)")}}/>;
         })}
+      </div>
+      <div style={{display:"flex",gap:6,marginTop:6}}>
+        {chartDays.map(d=><div key={d.date} style={{flex:1,textAlign:"center",fontSize:9,lineHeight:1.2,color:d.isToday?"var(--ink)":"var(--gray)",fontWeight:d.isToday?700:400}}>{d.shortLabel}</div>)}
       </div>
     </div>}
 
@@ -1470,7 +1546,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
           {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
           {hasHydration&&<span>💧 Hydrated</span>}
           {hasGi&&<span style={{color:"var(--bad)"}}>🤢 GI distress</span>}
-          {daySleep!==undefined&&<span style={{color:daySleep===true?"var(--good)":"var(--bad)",fontWeight:500}}>😴 {daySleep===true?"Slept well":"Poor sleep"}</span>}
+          {sleepLevel(daySleep)&&<span style={{color:SLEEP_META[sleepLevel(daySleep)].color,fontWeight:500}}>😴 {SLEEP_META[sleepLevel(daySleep)].label} sleep</span>}
         </div>
         {(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType:"";const tt=TRAINING_TYPES.find(x=>x.id===ty);const isEditing=rppEditDate===d.date;return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{s>0?`: ${s}/10${t?" @ "+t:""}${tt?" · "+tt.icon+" "+tt.short:""}`:": tap to set"}</span>})()}
         {rppEditDate===d.date&&(()=>{const r=rpp[d.date];const s=typeof r==="object"?r.score:r||0;const t=typeof r==="object"?r.trainingTime:"";const ty=typeof r==="object"?r.trainingType||"":"";return<div style={{background:"var(--page-bg)",borderRadius:12,padding:"10px 12px"}}>
@@ -1488,6 +1564,20 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
   ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
   :<span onClick={()=>setEditTimeKey(d.date+"#"+mi)} title="Edit time" style={{fontSize:11.5,fontWeight:600,color:m.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
+        {/* Recurring meals are already counted in this day's totals below, so they have to
+            be listed here as well — otherwise the numbers include food that isn't shown.
+            They're managed on the Summary page, so these rows are read-only. */}
+        {(templates||[]).filter((_,i)=>!(skipped[d.date]||[]).includes(i)).map((t,ti)=>
+          <div key={"rt"+ti} className="panel" style={{padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{t.mealName}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <span style={{fontSize:11.5,color:"var(--ink-soft)"}}>{Math.round(t.calories)} Cal</span>
+                <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
+              </div>
+            </div>
+            {t.time&&<span style={{fontSize:11.5,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"4px 9px",borderRadius:100,whiteSpace:"nowrap",flexShrink:0}}>{t.time}</span>}
+          </div>)}
         {d.totals&&<>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
@@ -1502,17 +1592,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
 function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportWindowStart,setLastReportWindowStart}){
   const[showToast,setShowToast]=useState(false);
   const toastTimer=useRef(null);
-  const activeDaysLogged=Object.keys(history).filter(d=>history[d]&&history[d].length>0).length;
-  const reportState=(()=>{
-    if(!lastReportWindowStart){
-      if(activeDaysLogged<10){const x=10-activeDaysLogged;return{enabled:false,label:`First report available in ${x} day${x!==1?"s":""}`}}
-      return{enabled:true,label:"Report available — download now"};
-    }
-    const daysSince=Math.floor((new Date(today()+"T12:00:00")-new Date(lastReportWindowStart+"T12:00:00"))/86400000);
-    if(daysSince<10){const z=10-daysSince;return{enabled:false,label:`Next report available in ${z} day${z!==1?"s":""}`}}
-    if(daysSince<12){const y=12-daysSince;return{enabled:true,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
-    return{enabled:true,label:"Report available — download now"};
-  })();
+  const reportState=reportAvailability(history,lastReportWindowStart);
   const downloadReport=()=>{
     try{
       const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress});
@@ -1529,7 +1609,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,lastReportW
   const bestGi=preview&&preview.gi&&preview.gi.triggers&&preview.gi.triggers.length>0?preview.gi.triggers[0]:null;
   return<div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:20}}>
-      <p className="sub" style={{marginTop:0}}>Based on {activeDaysLogged} logged day{activeDaysLogged!==1?"s":""}</p>
+      <p className="sub" style={{marginTop:0}}>Based on {reportState.activeDaysLogged} logged day{reportState.activeDaysLogged!==1?"s":""}</p>
       <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:0}}>⬇ Full report</button>
     </div>
     {!reportState.enabled&&<div className="info" style={{fontSize:13}}>{reportState.label}</div>}
@@ -1828,11 +1908,10 @@ function App(){
     {showSleepPrompt&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#fff",borderRadius:20,padding:28,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
         <div style={{fontSize:44,marginBottom:12}}>😴</div>
-        <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>Did you sleep well tonight?</div>
+        <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>How did you sleep?</div>
         <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:24}}>This helps correlate rest with your performance over time.</p>
-        <div style={{display:"flex",gap:12}}>
-          <button onClick={()=>{setSleep(today(),true);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--good)",margin:0,flex:1}}>✓ Yes</button>
-          <button onClick={()=>{setSleep(today(),false);setShowSleepPrompt(false)}} className="btn" style={{background:"var(--bad)",margin:0,flex:1}}>✗ No</button>
+        <div style={{display:"flex",gap:8}}>
+          {SLEEP_LEVELS.map(l=><button key={l} onClick={()=>{setSleep(today(),l);setShowSleepPrompt(false)}} className="btn" style={{background:SLEEP_META[l].color,margin:0,flex:1,padding:"12px 6px"}}>{SLEEP_META[l].label}</button>)}
         </div>
         <button onClick={()=>setShowSleepPrompt(false)} style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:16}}>Ask me later</button>
       </div>
@@ -1860,7 +1939,7 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
