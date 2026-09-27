@@ -1579,11 +1579,14 @@ async function doAnalyze(text,img,prompt){
 function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
 function MC({name,value,target,unit,infoKey}){
   const p=Math.round((value/target)*100),met=p>=100;
-  return<div style={{background:met?"#f0fdf4":"#fafafa",border:`1px solid ${met?"#86efac":"#e5e5e5"}`,borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
+  // Out of range either way — too little or far too much — reads red, matching the
+  // thresholds the History averages use.
+  const off=p<75||p>200;
+  return<div style={{background:off?"var(--bad-soft)":met?"#f0fdf4":"#fafafa",border:`1px solid ${off?"var(--bad)":met?"#86efac":"#e5e5e5"}`,borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
     <div style={{fontSize:12,color:"#666",fontWeight:500,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>{name}{infoKey&&<InfoBtn id={infoKey}/>}</div>
     <div style={{fontSize:15,fontWeight:600}}>{Math.round(value*10)/10}</div>
     <div style={{fontSize:11,color:"#999",marginTop:2}}>/ {target} {unit}</div>
-    <div style={{fontSize:11,color:met?"#16a34a":p>=70?"#ca8a04":"#dc2626",marginTop:4,fontWeight:500}}>{p}%</div>
+    <div style={{fontSize:11,color:off?"var(--bad)":met?"#16a34a":"#ca8a04",marginTop:4,fontWeight:500}}>{p}%</div>
   </div>
 }
 
