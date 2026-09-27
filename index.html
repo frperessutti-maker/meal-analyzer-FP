@@ -1917,21 +1917,16 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
         <PB value={row.value} max={row.target} color={row.color}/>
       </div>)}
     </div>}
-    {/* Just what was entered, for a quick "have I logged that yet?" check. The full view
-        with calories, times and editing lives on the Summary page. */}
+    {/* Only meals actually entered today. Recurring ones are deliberately left out: they
+        add themselves, so listing them here would read as "already logged" for food the
+        user has not thought about. The full picture is on the Summary page. */}
     <button className="collapse-btn" onClick={()=>setMealsSumOpen(!mealsSumOpen)} style={{marginBottom:mealsSumOpen?10:18,fontSize:15,textTransform:"uppercase",letterSpacing:.4}}>{mealsSumOpen?"▾":"▸"} Meals summary</button>
     {mealsSumOpen&&<div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:8}}>
-      {meals.length===0&&templates.filter((_,i)=>!skipped.includes(i)).length===0
+      {meals.length===0
         ?<div style={{fontSize:13,color:"var(--gray)"}}>Nothing logged yet today.</div>
-        :<>
-          {meals.map((m,i)=><div key={"lm"+i} style={{fontSize:13.5,color:"var(--ink)",display:"flex",gap:8}}>
-            <span style={{color:"var(--gray)",flexShrink:0}}>·</span><span>{m.mealName}</span>
-          </div>)}
-          {templates.filter((_,i)=>!skipped.includes(i)).map((t,i)=><div key={"lt"+i} style={{fontSize:13.5,color:"var(--ink-soft)",display:"flex",gap:8,alignItems:"center"}}>
-            <span style={{color:"var(--gray)",flexShrink:0}}>·</span><span>{t.mealName}</span>
-            <span style={{fontSize:9.5,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"1px 6px",borderRadius:100,flexShrink:0}}>RECURRING</span>
-          </div>)}
-        </>}
+        :meals.map((m,i)=><div key={"lm"+i} style={{fontSize:13.5,color:"var(--ink)",display:"flex",gap:8}}>
+           <span style={{color:"var(--gray)",flexShrink:0}}>·</span><span>{m.mealName}</span>
+         </div>)}
     </div>}
     <h3 className="stit" style={{marginTop:6}}>Daily check-in</h3>
     {/* All four share one grid so the columns line up between rows. As two separate
