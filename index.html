@@ -225,16 +225,42 @@
     return found;
   }
 
+  const rppSessions = (v) => Array.isArray(v) ? v.filter((s) => s && typeof s === "object")
+    : (v && typeof v === "object") ? [v] : [];
+  const toHHMM = (mins) => String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(Math.round(mins % 60)).padStart(2, "0");
+
+  // What to assume when a session was logged with only a score — easy to do, since the
+  // score is the first thing asked for. The user's own habits are the best guess there
+  // is: the type they log most often, and their average training time. A session that
+  // used to be dropped for being incomplete now counts, and the report says how many did.
+  function rppDefaults(rpp) {
+    const all = [];
+    Object.keys(rpp || {}).forEach((d) => rppSessions(rpp[d]).forEach((r) => all.push(r)));
+    const tally = {};
+    all.forEach((r) => { if (r && r.trainingType) tally[r.trainingType] = (tally[r.trainingType] || 0) + 1; });
+    const type = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || null;
+    const mins = all.map((r) => (r && r.trainingTime) ? minsOfTime(r.trainingTime) : null).filter((v) => v !== null);
+    const time = mins.length ? toHHMM(mins.reduce((a, b) => a + b, 0) / mins.length) : null;
+    return { type, time };
+  }
+
   function extractSessions(history, rpp) {
     // A day can hold several workouts, so flatten to a chronological list of sessions
     // rather than one per date. Older data stores a single object, or a bare score.
-    const rppSessions = (v) => Array.isArray(v) ? v.filter((s) => s && typeof s === "object")
-      : (v && typeof v === "object") ? [v] : [];
+    const def = rppDefaults(rpp);
     const entries = [];
     Object.keys(rpp).sort().forEach((d) => {
       rppSessions(rpp[d])
-        .filter((r) => r.score > 0 && r.trainingTime && r.trainingType)
-        .forEach((r) => { const dt = parseDateTime(d, r.trainingTime); if (dt) entries.push({ date: d, r, dt }); });
+        .filter((r) => r.score > 0)
+        .forEach((r) => {
+          const trainingTime = r.trainingTime || def.time;
+          const trainingType = r.trainingType || def.type;
+          if (!trainingTime) return;                       // no time anywhere: cannot place it
+          const dt = parseDateTime(d, trainingTime);
+          if (dt) entries.push({ date: d, dt,
+            r: { ...r, trainingTime, trainingType,
+                 assumedTime: !r.trainingTime, assumedType: !r.trainingType } });
+        });
     });
     entries.sort((a, b) => a.dt - b.dt);
     const sessions = [];
@@ -275,6 +301,7 @@
       const W3_meals = W3_start ? meals.filter((m) => inRange(m._dt, W3_start, W3_end)) : [];
       sessions.push({
         date, score: r.score, trainingTime: r.trainingTime, trainingType: r.trainingType,
+        assumedTime: !!r.assumedTime, assumedType: !!r.assumedType,
         W1: sumMacros(W1_meals), W2: sumMacros(W2_meals), W3: W3_start ? sumMacros(W3_meals) : null,
         W1_count: W1_meals.length, W2_count: W2_meals.length, W3_count: W3_meals.length,
         // Which supplements were taken in each window, for the correlations below.
@@ -589,7 +616,8 @@
     if (Array.isArray(m.items) && m.items.length) return m.items.filter((it) => it && it.name);
     return [{ name: m.mealName || "meal", calories: m.calories, protein: m.protein, fat: m.fat, carbs: m.carbs, fiber: m.fiber }];
   }
-  const minsOfTime = (t) => { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return (isNaN(h) || isNaN(m)) ? null : h * 60 + m; };
+  // A declaration, not a const: rppDefaults above is defined before this point.
+  function minsOfTime(t) { if (!t) return null; const [h, m] = String(t).split(":").map(Number); return (isNaN(h) || isNaN(m)) ? null : h * 60 + m; }
 
   // ── Overnight fast ────────────────────────────────────────────────
   // Measured between consecutive logged days only: last meal of one day to first meal of
@@ -757,6 +785,7 @@
         generatedAt: new Date().toISOString(),
         totalDaysLogged: activeDays.length,
         totalSessions: sessions.length,
+        assumedSessions: sessions.filter((s) => s.assumedTime || s.assumedType).length,
         sessionsByType: sessions.reduce((acc, s) => { if (s.trainingType) acc[s.trainingType] = (acc[s.trainingType] || 0) + 1; return acc; }, {}),
       },
       tier1: tier1(sessions),
@@ -1000,6 +1029,7 @@
 
     w.title("Performance Report");
     w.body(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} · Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
+    if (report.meta.assumedSessions) w.body(`${report.meta.assumedSessions} of those had no training type or time entered, so your usual ones were assumed.`, { color: COLORS.faint, size: 8.5 });
     w.space(2); w.hr();
 
     // Sections with nothing to show are held back and listed together at the end, so the
@@ -1725,7 +1755,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
+function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
@@ -1783,6 +1813,14 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
   ];
   // Workouts for today. rpp is an array now; older single-object days normalise on read.
   const sessions=sessionsOf(rpp);
+  // What the report will assume for anything left blank, shown so it is not a surprise.
+  const rppFallback=(()=>{
+    const all=[];Object.keys(allRpp||{}).forEach(d=>sessionsOf(allRpp[d]).forEach(s=>all.push(s)));
+    const tally={};all.forEach(s=>{if(s&&s.trainingType)tally[s.trainingType]=(tally[s.trainingType]||0)+1});
+    const type=Object.keys(tally).sort((a,b)=>tally[b]-tally[a])[0]||null;
+    const mins=all.map(s=>s&&s.trainingTime?minsOf(s.trainingTime):null).filter(v=>v!==null);
+    return{type,time:mins.length?hhmm(Math.round(mins.reduce((a,b)=>a+b,0)/mins.length)):null};
+  })();
   const writeSessions=(next)=>setRpp(next);
   const patchSession=(i,patch)=>writeSessions(sessions.map((s,j)=>j===i?{...s,...patch}:s));
   const removeSession=(i)=>writeSessions(sessions.filter((_,j)=>j!==i));
@@ -1980,6 +2018,7 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
           </div>
           <div style={{display:"flex",gap:4,marginBottom:showTime?10:0}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
             <button key={n} onClick={()=>patchSession(si,{score:n===score?0:n})} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:n<=score?(score>=8?"var(--good)":score>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:10,color:n<=score?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+          {showTime&&(!s.trainingTime||!s.trainingType)&&(rppFallback.time||rppFallback.type)&&<div style={{fontSize:11.5,color:"var(--gray)",marginBottom:8}}>Left blank, the report will assume{!s.trainingTime&&rppFallback.time?` ${rppFallback.time}`:""}{!s.trainingTime&&rppFallback.time&&!s.trainingType&&rppFallback.type?" and":""}{!s.trainingType&&rppFallback.type?` ${typeLabel(rppFallback.type,customTypes)}`:""} — your usual.</div>}
           {showTime&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:showType?10:0}}>
             <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
             <input type="time" autoFocus={!s.trainingTime&&!s.trainingType} value={s.trainingTime||""} onChange={e=>patchSession(si,{trainingTime:e.target.value})} style={{flex:1}}/>
@@ -2692,7 +2731,7 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} allRpp={rpp} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
