@@ -1216,6 +1216,7 @@ const TRAINING_TYPES=[
 ];
 // Workouts the user added themselves, kept per user. Stored as {id,label}; the id is a
 // slug of the label so it survives in history even if the list is edited later.
+const ORDINALS=["First","Second","Third","Fourth","Fifth","Sixth"];
 const CUSTOM_TYPE_COLOR="#64748b";
 const slugType=s=>String(s||"").toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32);
 function allTrainingTypes(custom){
@@ -1784,7 +1785,6 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
   const sessions=sessionsOf(rpp);
   const writeSessions=(next)=>setRpp(next);
   const patchSession=(i,patch)=>writeSessions(sessions.map((s,j)=>j===i?{...s,...patch}:s));
-  const addSession=()=>writeSessions([...sessions,blankSession()]);
   const removeSession=(i)=>writeSessions(sessions.filter((_,j)=>j!==i));
   const[addTypeFor,setAddTypeFor]=useState(null),[newType,setNewType]=useState(""),[typeErr,setTypeErr]=useState(null);
   const confirmNewType=()=>{
@@ -1954,37 +1954,55 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
           <span style={{fontSize:13,fontWeight:500,minWidth:0}}>😴 Sleep quality{meta?": ":""}{meta&&<strong style={{color:meta.color,textTransform:"uppercase",letterSpacing:.3}}>{meta.label}</strong>}</span>
         </div>})()}
     </div>
+    {/* Logged sessions first, each a full editable card. Then always one empty box that
+        asks for the next score. Within a card the fields appear as they become answerable:
+        the score alone at first, then the time, then the type — so a new entry is one
+        question at a time, while a finished one shows everything for editing. */}
     <div className="panel" style={{marginBottom:20}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <span style={{fontSize:14,fontWeight:600}}>💪 Rate of Perceived Performance</span>
-        {sessions.length>1&&<span style={{fontSize:12,color:"var(--ink-soft)"}}>{sessions.length} workouts</span>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:sessions.length?12:10}}>
+        <span style={{fontSize:14,fontWeight:600}}>💪 {sessions.length?"Rate of Perceived Performance":"Log your rate of perceived performance"}</span>
+        {sessions.length>1&&<span style={{fontSize:12,color:"var(--ink-soft)"}}>{sessions.length} sessions</span>}
       </div>
-      {sessions.length===0&&<div style={{fontSize:13,color:"var(--gray)",marginBottom:10}}>No workout logged today.</div>}
-      {sessions.map((s,si)=><div key={si} style={{marginBottom:14,paddingBottom:sessions.length>1?14:0,borderBottom:sessions.length>1&&si<sessions.length-1?"1px solid var(--border-soft)":"none"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <span style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",textTransform:"uppercase",letterSpacing:.3}}>
-            {sessions.length>1?`Workout ${si+1}`:"Workout"}{s.trainingType?` · ${typeLabel(s.trainingType,customTypes)}`:""}
-          </span>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {s.score>0&&<span style={{fontSize:15,fontWeight:700,color:s.score>=8?"var(--good)":s.score>=5?"var(--warn)":"var(--bad)"}}>{s.score}/10</span>}
-            <button className="btn-x" title="Remove this workout" onClick={()=>removeSession(si)} style={{fontSize:15,color:"var(--bad)"}}>×</button>
+
+      {sessions.map((s,si)=>{
+        const score=Number(s.score)||0;
+        const showTime=score>0;                              // answerable once there is a score
+        const showType=score>0&&(s.trainingTime||s.trainingType);
+        return<div key={si} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid var(--border-soft)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",textTransform:"uppercase",letterSpacing:.3}}>
+              {ORDINALS[si]||`Session ${si+1}`} session{s.trainingType?` · ${typeLabel(s.trainingType,customTypes)}`:""}
+            </span>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {score>0&&<span style={{fontSize:15,fontWeight:700,color:score>=8?"var(--good)":score>=5?"var(--warn)":"var(--bad)"}}>{score}/10</span>}
+              <button className="btn-x" title="Remove this session" onClick={()=>removeSession(si)} style={{fontSize:15,color:"var(--bad)"}}>×</button>
+            </div>
           </div>
-        </div>
-        <div style={{display:"flex",gap:4,marginBottom:10}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
-          <button key={n} onClick={()=>patchSession(si,{score:n===s.score?0:n})} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:n<=s.score?(s.score>=8?"var(--good)":s.score>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:10,color:n<=s.score?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
-          <input type="time" value={s.trainingTime||""} onChange={e=>patchSession(si,{trainingTime:e.target.value})} style={{flex:1}}/>
-        </div>
-        <label style={{fontSize:13,color:"var(--ink-soft)",display:"block",marginBottom:6}}>Training type:</label>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {allTrainingTypes(customTypes).map(tt=>
-            <button key={tt.id} onClick={()=>patchSession(si,{trainingType:tt.id===s.trainingType?"":tt.id})} className={"chip"+(tt.id===s.trainingType?" on":"")}>{tt.icon} {tt.short}</button>)}
-          {/* Stays available after adding: the list is meant to grow over time. */}
-          <button onClick={()=>{setAddTypeFor(si);setNewType("");setTypeErr(null)}} className="chip" style={{borderStyle:"dashed",color:"var(--ink-soft)"}}>+ Add your own</button>
-        </div>
-      </div>)}
-      <button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={addSession}>+ Add workout</button>
+          <div style={{display:"flex",gap:4,marginBottom:showTime?10:0}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
+            <button key={n} onClick={()=>patchSession(si,{score:n===score?0:n})} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:n<=score?(score>=8?"var(--good)":score>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:10,color:n<=score?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+          {showTime&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:showType?10:0}}>
+            <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
+            <input type="time" autoFocus={!s.trainingTime&&!s.trainingType} value={s.trainingTime||""} onChange={e=>patchSession(si,{trainingTime:e.target.value})} style={{flex:1}}/>
+          </div>}
+          {showType&&<>
+            <label style={{fontSize:13,color:"var(--ink-soft)",display:"block",marginBottom:6}}>Training type:</label>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {allTrainingTypes(customTypes).map(tt=>
+                <button key={tt.id} onClick={()=>patchSession(si,{trainingType:tt.id===s.trainingType?"":tt.id})} className={"chip"+(tt.id===s.trainingType?" on":"")}>{tt.icon} {tt.short}</button>)}
+              {/* Stays available after adding: the list is meant to grow over time. */}
+              <button onClick={()=>{setAddTypeFor(si);setNewType("");setTypeErr(null)}} className="chip" style={{borderStyle:"dashed",color:"var(--ink-soft)"}}>+ Add your own</button>
+            </div>
+          </>}
+        </div>;
+      })}
+
+      {/* The next one. Picking a score turns it into a card, and a fresh box appears below. */}
+      {sessions.length>0&&<div style={{fontSize:12,fontWeight:600,color:"var(--gray)",textTransform:"uppercase",letterSpacing:.3,marginBottom:6}}>
+        {ORDINALS[sessions.length]||`Session ${sessions.length+1}`} session
+      </div>}
+      {sessions.length>0&&<div style={{fontSize:13,color:"var(--ink-soft)",marginBottom:8}}>Log your rate of perceived performance</div>}
+      <div style={{display:"flex",gap:4}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
+        <button key={"new"+n} onClick={()=>writeSessions([...sessions,{...blankSession(),score:n}])} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:"var(--track)",fontSize:10,color:"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
     </div>
 
     {/* Naming a workout. Only recurring ones are worth adding: the report needs several
