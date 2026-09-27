@@ -809,7 +809,12 @@
       hr() { ensureSpace(6); doc.setDrawColor(...COLORS.rule); doc.setLineWidth(0.2); doc.line(MARGIN, y, PAGE_W - MARGIN, y); y += 4; },
       title(text) { ensureSpace(12); doc.setFont("helvetica","bold"); doc.setFontSize(20); doc.setTextColor(...COLORS.ink); doc.text(text, MARGIN, y); y += 8; },
       section(text) { ensureSpace(14); y += 4; doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(...COLORS.ink); doc.text(text.toUpperCase(), MARGIN, y); y += 2; doc.setDrawColor(...COLORS.ink); doc.setLineWidth(0.4); doc.line(MARGIN, y, MARGIN + 20, y); y += 6; },
-      subheading(text) { ensureSpace(10); y += 2; doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...COLORS.ink); doc.text(text, MARGIN, y); y += 5; },
+      // Wraps: a meal name can be a whole sentence, and an unwrapped one runs off the page.
+      subheading(text) {
+        ensureSpace(10); y += 2;
+        doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(...COLORS.ink);
+        doc.splitTextToSize(String(text), CONTENT_W).forEach((line) => { ensureSpace(6); doc.text(line, MARGIN, y); y += 5; });
+      },
       body(text, opts = {}) {
         const size = opts.size || 10; const color = opts.color || COLORS.ink; const indent = opts.indent || 0;
         doc.setFont("helvetica", opts.bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(...color);
@@ -1089,26 +1094,24 @@
       const q = report.foodQuality;
       w.section("Food quality rating");
       const full = Math.floor(q.stars), half = q.stars % 1 >= 0.5;
-      const starText = "*".repeat(full) + (half ? " 1/2" : "");
-      w.subheading(`${q.stars} / 5 stars   ${starText}`);
-      const parts = [];
-      parts.push(`${q.wholeCount} of ${q.totalItems} foods across ${q.totalMeals} logged meals (${q.wholePct}%) read as whole foods`);
-      if (q.processedCount) parts.push(`${q.processedCount} (${q.processedPct}%) matched processed or sugary items`);
-      if (q.neutralCount) parts.push(`${q.neutralCount} could not be classified either way`);
-      w.body(parts.join(", ") + ".", { size: 10 });
-      if (q.lateCount) w.body(`${q.lateCount} food${q.lateCount !== 1 ? "s were" : " was"} eaten at or after 22:00 (${q.latePct}% of the total), which counts against the rating at half the weight of a processed meal.`, { size: 10 });
-      if (q.worstOffenders.length) w.body(`Weighing most against it: ${q.worstOffenders.map((o) => `${o.name}${o.n > 1 ? ` (x${o.n})` : ""}`).join(", ")}.`, { size: 10 });
-      if (q.withinAllowance) {
-        w.body(`Those treats amount to ${q.penaltyPct}% of what you ate, inside the 5% allowance — the rating is unaffected by them.`, { size: 10, color: COLORS.positive });
-      } else if (q.stars >= 5) {
-        w.body(`Those treats come to ${q.penaltyPct}% of what you ate, just past the 5% allowance but not enough to cost you a star.`, { size: 10, color: COLORS.positive });
-      } else if (q.penaltyPct > 5) {
-        w.body(`Together they account for ${q.penaltyPct}% of what you ate. The first 5% is free; everything above that scales the rating down, reaching zero stars if everything were processed.`, { size: 10 });
+      w.subheading(`${q.stars} / 5 stars   ${"*".repeat(full)}${half ? " 1/2" : ""}`);
+      // What counted against it, and nothing else. Meal names can be whole sentences, so
+      // they are clipped — the point is to recognise the dish, not re-read it.
+      const shortName = (s) => { const t = String(s || "").trim(); return t.length > 38 ? t.slice(0, 36).replace(/[,\s]+$/, "") + "…" : t; };
+      const against = [];
+      if (q.processedCount) against.push(`${q.processedCount} processed or sugary (${q.worstOffenders.slice(0, 3).map((o) => `${shortName(o.name)}${o.n > 1 ? ` x${o.n}` : ""}`).join(", ")})`);
+      if (q.lateCount) against.push(`${q.lateCount} eaten at or after 22:00${q.lateOffenders && q.lateOffenders.length ? ` (${q.lateOffenders.slice(0, 2).map((o) => shortName(o.name)).join(", ")})` : ""}`);
+      if (against.length === 0) {
+        w.body(`All ${q.totalItems} foods you logged came through clean.`, { size: 10 });
+      } else {
+        w.body(`${against.join("; ")} — out of ${q.totalItems} foods logged.`, { size: 10 });
       }
-      w.body("Rated food by food from the words you typed, so it is a rough guide rather than a nutritional audit. A food it does not recognise counts as neither good nor bad.", { size: 8.5, color: COLORS.faint });
-      w.takeaway(q.stars >= 4.5 ? "Your food quality is where you want it — keep doing what you are doing."
-        : q.stars >= 3 ? "Solid base of whole foods, with enough processed meals or late eating to cost you a star or more."
-        : "Processed meals and late eating dominate enough to be the first thing worth changing.");
+      // And what to do about it.
+      w.takeaway(
+        q.stars >= 4.5 ? "Nothing to change — keep the balance you have."
+        : q.processedCount >= q.lateCount
+          ? `Swapping out ${q.worstOffenders[0] ? shortName(q.worstOffenders[0].name).toLowerCase() : "the processed items"} would move this rating the most.`
+          : "Moving your last meal earlier than 22:00 would move this rating the most.");
     }
 
     if (!report.nutrients) skip("Macro and micronutrient tables", "needs at least 3 logged days");
@@ -1141,7 +1144,8 @@
         w.body("Meals you already eat that are the strongest sources of what you are short on. Eating them more often, or in bigger portions, moves these numbers fastest.", { size: 10 });
         w.space(1);
         n.opportunities.forEach((o) => {
-          w.subheading(`${o.meal} — logged ${o.count} time${o.count !== 1 ? "s" : ""}`);
+          const gapName = String(o.meal || "").trim();
+          w.subheading(`${gapName.length > 60 ? gapName.slice(0, 58).replace(/[,s]+$/, "") + "…" : gapName} — logged ${o.count} time${o.count !== 1 ? "s" : ""}`);
           o.nutrients.forEach((x) => {
             w.body(`${x.label} sits at ${x.pct}% of target; one serving supplies ${x.per}${x.unit}, or ${x.sharePct}% of a day's worth.`, { size: 9.5, indent: 4, color: COLORS.soft });
           });
@@ -1726,12 +1730,48 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
   // recurring-meal state
   const[rTxt,setRTxt]=useState(""),[rLd,setRLd]=useState(false),[rErr,setRErr]=useState(null),[addRecurringOpen,setAddRecurringOpen]=useState(false);
   const[macrosOpen,setMacrosOpen]=useState(false);
+  const[mealsSumOpen,setMealsSumOpen]=useState(false);
   // An analysed meal waits here until the user confirms its time — the analysis has
   // already cost a credit, so the prompt has no discard path, only OK.
   const[pendingMeal,setPendingMeal]=useState(null);
   // Set when OK is pressed before the analysis lands, so the meal can file itself without
   // the modal still being on screen.
   const confirmedTime=useRef(null);
+  // ── Losing a meal to a closed app ────────────────────────────────
+  // An analysed meal waiting on the time prompt lives only in memory, so closing the app
+  // there used to throw it away — analysis paid for, nothing logged. Two nets:
+  //   1. it is written to localStorage the moment it arrives, and recovered on next open;
+  //   2. hiding the app (switching away, locking the phone) files it immediately at the
+  //      time currently shown, because a saved meal with an editable time beats no meal.
+  // The description typed before an analysis is stashed too, so a request still in flight
+  // when the app closes at least comes back as text rather than vanishing.
+  const stashPending=(p)=>{try{p?lss("nt-pending-meal",{meal:p.meal,time:p.time}):localStorage.removeItem("nt-pending-meal")}catch{}};
+  const commitPending=useCallback((p)=>{
+    if(!p||!p.meal)return false;
+    setMeals(prev=>[...prev,{...p.meal,time:p.time||nowTime()}]);
+    stashPending(null);
+    return true;
+  },[setMeals]);
+  // Recover anything the last session left behind.
+  useEffect(()=>{
+    let saved=null;try{saved=ls("nt-pending-meal",null)}catch{}
+    if(saved&&saved.meal){setMeals(prev=>[...prev,{...saved.meal,time:saved.time||nowTime()}]);stashPending(null)}
+    let draft=null;try{draft=ls("nt-pending-text",null)}catch{}
+    if(draft&&!txtRef.current){setTxt(draft);setErr("That description came back from last time — the analysis didn't finish.")}
+    try{localStorage.removeItem("nt-pending-text")}catch{}
+  },[]);
+  // Keep a ref so the hide handler always sees the latest pending meal.
+  const pendingRef=useRef(null);
+  const txtRef=useRef("");
+  useEffect(()=>{pendingRef.current=pendingMeal},[pendingMeal]);
+  useEffect(()=>{txtRef.current=txt},[txt]);
+  useEffect(()=>{
+    const rescue=()=>{const p=pendingRef.current;if(p&&p.meal){commitPending(p);setPendingMeal(null)}};
+    const onHide=()=>{if(document.visibilityState==="hidden")rescue()};
+    document.addEventListener("visibilitychange",onHide);
+    window.addEventListener("pagehide",rescue);
+    return()=>{document.removeEventListener("visibilitychange",onHide);window.removeEventListener("pagehide",rescue)};
+  },[commitPending]);
   // Same totals the Summary page shows: logged meals plus today's un-skipped recurring ones.
   const logTot=(()=>{const a=sum(meals),b=sum(templates.filter((_,i)=>!skipped.includes(i)));const t={};AK.forEach(k=>{t[k]=(a[k]||0)+(b[k]||0)});return t})();
   const logMacroRows=[
@@ -1770,12 +1810,15 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
     if(mode==="photo"&&!img64)return;
     const sentText=txt;
     setLd(true);setErr(null);
+    // Stashed so a request still in flight when the app closes comes back as text.
+    try{if(mode==="text")lss("nt-pending-text",sentText)}catch{}
     // Suggested without the meal, so without the snack rule — it is re-checked on arrival.
     setPendingMeal({meal:null,error:null,edited:false,time:suggestMealTime(history,meals,null)});
     setTxt("");setImgP(null);setImg64(null);
     try{
       const m=await doAnalyze(mode==="text"?sentText:null,mode==="photo"?img64:null,prompt);
       m.date=today();
+      try{localStorage.removeItem("nt-pending-text")}catch{}
       if(confirmedTime.current!==null){
         // OK was pressed while this was still running: file it and stay out of the way.
         const t=confirmedTime.current||nowTime(); confirmedTime.current=null;
@@ -1785,7 +1828,9 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
           if(!p)return null;                                 // dismissed after a failure
           // A snack should carry the clock, not the slot average — but never overrule a
           // time the user has already set themselves.
-          return{...p,meal:m,time:(!p.edited&&isSnack(m))?nowTime():p.time};
+          const next={...p,meal:m,time:(!p.edited&&isSnack(m))?nowTime():p.time};
+          stashPending(next);                                // survives the app being killed
+          return next;
         });
       }
     }catch(e){
@@ -1794,6 +1839,7 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
       // Put the description back so it is not lost, unless something new is being typed.
       setTxt(prev=>prev||sentText);
       const wasConfirmed=confirmedTime.current!==null; confirmedTime.current=null;
+      stashPending(null);try{localStorage.removeItem("nt-pending-text")}catch{}
       setPendingMeal(p=>(p&&!wasConfirmed)?{...p,error:msg}:null);
     }finally{setLd(false);refreshQuota&&refreshQuota()}
   };
@@ -1815,11 +1861,11 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
              {pendingMeal.meal?pendingMeal.meal.mealName:<span style={{color:"var(--gray)"}}>Analysing your meal…</span>}
            </p>}
         {!pendingMeal.error&&<>
-          <input type="time" value={pendingMeal.time} onChange={e=>setPendingMeal(p=>({...p,time:e.target.value,edited:true}))} style={{fontSize:20,padding:"10px 12px",textAlign:"center",width:"100%",marginBottom:6}}/>
+          <input type="time" value={pendingMeal.time} onChange={e=>setPendingMeal(p=>{const n={...p,time:e.target.value,edited:true};stashPending(n);return n})} style={{fontSize:20,padding:"10px 12px",textAlign:"center",width:"100%",marginBottom:6}}/>
           <div style={{fontSize:11.5,color:"var(--gray)",marginBottom:18}}>Suggested from your usual meal times</div>
           <button className="btn" style={{margin:0,width:"100%",fontSize:15}} onClick={()=>{
             const t=pendingMeal.time||nowTime();
-            if(pendingMeal.meal){setMeals(p=>[...p,{...pendingMeal.meal,time:t}]);setPendingMeal(null)}
+            if(pendingMeal.meal){setMeals(p=>[...p,{...pendingMeal.meal,time:t}]);stashPending(null);setPendingMeal(null)}
             else{confirmedTime.current=t;setPendingMeal(null)}   // files itself when the analysis lands
           }}>✓ OK</button>
         </>}
@@ -1870,6 +1916,22 @@ function LogPage({meals,setMeals,history,customTypes,setCustomTypes,templates,se
         </div>
         <PB value={row.value} max={row.target} color={row.color}/>
       </div>)}
+    </div>}
+    {/* Just what was entered, for a quick "have I logged that yet?" check. The full view
+        with calories, times and editing lives on the Summary page. */}
+    <button className="collapse-btn" onClick={()=>setMealsSumOpen(!mealsSumOpen)} style={{marginBottom:mealsSumOpen?10:18,fontSize:15,textTransform:"uppercase",letterSpacing:.4}}>{mealsSumOpen?"▾":"▸"} Meals summary</button>
+    {mealsSumOpen&&<div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:8}}>
+      {meals.length===0&&templates.filter((_,i)=>!skipped.includes(i)).length===0
+        ?<div style={{fontSize:13,color:"var(--gray)"}}>Nothing logged yet today.</div>
+        :<>
+          {meals.map((m,i)=><div key={"lm"+i} style={{fontSize:13.5,color:"var(--ink)",display:"flex",gap:8}}>
+            <span style={{color:"var(--gray)",flexShrink:0}}>·</span><span>{m.mealName}</span>
+          </div>)}
+          {templates.filter((_,i)=>!skipped.includes(i)).map((t,i)=><div key={"lt"+i} style={{fontSize:13.5,color:"var(--ink-soft)",display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{color:"var(--gray)",flexShrink:0}}>·</span><span>{t.mealName}</span>
+            <span style={{fontSize:9.5,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"1px 6px",borderRadius:100,flexShrink:0}}>RECURRING</span>
+          </div>)}
+        </>}
     </div>}
     <h3 className="stit" style={{marginTop:6}}>Daily check-in</h3>
     {/* All four share one grid so the columns line up between rows. As two separate
@@ -2086,7 +2148,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const breakdownDD=dd.filter(d=>d.date!==today());
   const wd=dd.filter(d=>d.totals);
   const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
-  const def=allN.filter(n=>Math.round((avg[n.key]/n.target)*100)<70&&wd.length>=2);
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
@@ -2129,7 +2190,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
       </div>
     </div>}
 
-    {def.length>0&&<div className="defb"><div className="deft">Consistent deficiencies detected</div><p style={{fontSize:13,color:"#991b1b",margin:"0 0 10px"}}>Based on {wd.length}-day average:</p><div className="deftags">{def.map(n=><span key={n.key} className="deftag">{n.label}: {Math.round((avg[n.key]/n.target)*100)}% avg</span>)}</div></div>}
     <h3 className="stit" style={{marginTop:8}}>Lifestyle suggestions</h3>
     {(()=>{
       const days=last10();const wd=days.filter(d=>history[d]);
@@ -2172,7 +2232,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
       <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>
         {avgOpen?"▾":"▸"} {wd.length}-day averages
       </button>
-      {avgOpen&&<div className="gm">{allN.filter(n=>{if(MACRO_KEYS.includes(n.key))return true;const p=Math.round((avg[n.key]/n.target)*100);return p<90}).map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fff",border:`1px solid ${p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"}`,borderRadius:14,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:11,color:"var(--ink-soft)",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div>}
+      {avgOpen&&<div className="gm">{allN.filter(n=>{if(MACRO_KEYS.includes(n.key))return true;const p=Math.round((avg[n.key]/n.target)*100);return p<75||p>200}).map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fff",border:`1px solid ${MACRO_KEYS.includes(n.key)?(p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"):"var(--bad)"}`,borderRadius:14,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:11,color:"var(--ink-soft)",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div>}
     </div>}
     <h3 className="slab">Past 6 days</h3>
     {breakdownDD.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const isExpanded=ex===d.date;return<div key={d.date} className="dc">
@@ -2372,6 +2432,9 @@ function App(){
   const[sleep,setSleep_]=useState(()=>ls("nt-sleep",{}));
   const[lastReportWindowStart,setLastReportWindowStart_]=useState(()=>ls("nt-last-report-window",null));
   const[customTypes,setCustomTypes_]=useState(()=>ls("nt-custom-types",[]));
+  // Which report cycle the Log banner was dismissed for. Keyed by the window start, so
+  // downloading (which moves that date on) lets the next one through on its own.
+  const[bannerSeen,setBannerSeen_]=useState(()=>ls("nt-report-banner-seen",null));
   const setCustomTypes=(v)=>{const r=typeof v==="function"?v(customTypes):v;setCustomTypes_(r);lss("nt-custom-types",r);scheduleSync()};
   const[showWeightModal,setShowWeightModal]=useState(false);
   const[weightInput,setWeightInput]=useState("");
@@ -2616,7 +2679,7 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={reportAvailability(history,lastReportWindowStart)} onGoToReport={()=>setTab("report")}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
