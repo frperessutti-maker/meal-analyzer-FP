@@ -1467,7 +1467,10 @@ function suggestMealTime(history,todayMeals,meal){
   if(!slot||isSnack(meal))return nowTime();
   const taken=(todayMeals||[]).some(m=>{const v=minsOf(m.time);return v!==null&&v>=slot.from&&v<slot.to&&!isSnack(m)});
   if(taken)return nowTime();
-  return hhmm(averageMealTimes(history)[slot.key]);
+  // The usual time is only a sensible guess once it has passed. Logging at 11:45 when
+  // lunch is normally 12:30 would otherwise suggest a time that hasn't happened yet.
+  const avg=averageMealTimes(history)[slot.key];
+  return now>=avg?hhmm(avg):nowTime();
 }
 // Backfilling a past day has no meaningful "entry time", so main meals are placed by
 // position instead: first is breakfast, second lunch, third dinner. Anything beyond
@@ -1531,7 +1534,9 @@ function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
 function userKey(fn,ln,pin){return(fn.trim()+"-"+ln.trim()+"-"+(pin||"0000")).toLowerCase().replace(/\s+/g,"-")}
 async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);return await r.json()}catch{return null}}
-async function cloudPut(key,data,opts={}){try{await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data}),...opts})}catch{}}
+// Returns whether the write actually landed, so the caller can tell a synced device from
+// one that only tried. Silently swallowing this is how local changes got overwritten.
+async function cloudPut(key,data,opts={}){try{const r=await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data}),...opts});return!!(r&&r.ok)}catch{return false}}
 
 function cleanUrl(text){
   return text.replace(/https?:\/\/www\.amazon\.[a-z.]+\/[^\s]*?(\/dp\/[A-Z0-9]+)[^\s]*/g,"https://www.amazon.it$1");
@@ -2500,6 +2505,10 @@ function App(){
   // Pull the latest data from the cloud and merge it in. Runs on login/mount, and
   // again whenever the app comes back into view — otherwise a device left open in the
   // background would never see changes made on another device.
+  // Set the moment a local change is queued, cleared only when a sync for it succeeds.
+  // While it is set the cloud copy is older than this device, so a refetch must not apply
+  // it — doing so is exactly how a just-logged meal disappeared.
+  const dirty=useRef(false);
   const fetchAndMergeCloud=useCallback(()=>{
     if(!userKey_)return;
     setSyncing(true);
@@ -2513,6 +2522,9 @@ function App(){
       return null;
     };
     tryKey(userKey_).then(data=>{
+      // This device has changes the cloud has not accepted yet, so the cloud copy is the
+      // older one. Applying it would undo them; push instead and keep what is here.
+      if(dirty.current){setSyncing(false);syncToCloud();return}
       if(data&&data.profile){
         setProfile(data.profile);lss("nt-profile",data.profile);
         const m=data.meals||{};
@@ -2597,8 +2609,8 @@ function App(){
   const prompt=profile?buildPrompt(profile):"";
 
   const syncTimer=useRef(null);
-  const syncToCloud=useCallback((opts)=>{if(!userKey_)return;cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),customTypes:ls("nt-custom-types",[]),lastReportWindow:ls("nt-last-report-window",null)},opts)},[userKey_]);
-  const scheduleSync=()=>{if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
+  const syncToCloud=useCallback(async(opts)=>{if(!userKey_)return false;const ok=await cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),customTypes:ls("nt-custom-types",[]),lastReportWindow:ls("nt-last-report-window",null)},opts);if(ok)dirty.current=false;return ok},[userKey_]);
+  const scheduleSync=()=>{dirty.current=true;if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
 
   // A change can be sitting in the 3s debounce when the tab is closed or backgrounded —
   // very common right after logging a meal — and that pending write would otherwise be
