@@ -1215,6 +1215,414 @@
   }
 
   window.buildPerformanceReport = buildReport;
+  /* ─── HTML RENDERER ───
+     The report is a styled HTML document rather than a drawn PDF: the design depends on
+     cards, gradients and dumbbell charts that jsPDF cannot produce. Open it in a browser
+     and print to PDF from there if a PDF is wanted. Every number here comes from the same
+     report object the PDF used — nothing is invented for the layout. */
+  const H = {
+    bg: "#F4F1EA", card: "#FFFFFF", line: "#E2DDD1", rule: "#D8D2C4", hair: "#EEEAE0",
+    ink: "#1C1B19", soft: "#3A3731", muted: "#57534B", faint: "#8A857B",
+    green: "#1F5E4A", greenDeep: "#24453A", greenPale: "#EEF3F0", greenBar: "#B9CBC3",
+    dark: "#1F2A24", darkCard: "#2A3830", darkText: "#D9D4C8", darkMuted: "#C9C3B5",
+    orange: "#C2570C", orangeDeep: "#B4460C", orangePale: "#FBEBDD", orangeText: "#9A3F0A",
+    blue: "#2F5FB3", bluePale: "#E1E9F6", track: "#EEEAE0", trackSoft: "#F2EFE8",
+  };
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const num = (n) => Number(n || 0).toLocaleString("en-US");
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const serif = "font-family:Fraunces,Georgia,serif";
+  const CARD = `background:${H.card};border:1px solid ${H.line};border-radius:20px;padding:40px;display:flex;flex-direction:column;gap:28px`;
+  const H2 = `font-size:32px`;
+  const SUB = `font-size:16px;color:${H.muted}`;
+  const LABEL = `font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}`;
+
+  // Confidence pill, matching the bands the rest of the report uses.
+  function pill(c) {
+    const label = confidenceLabel(c);
+    const col = c >= 75 ? H.green : c >= 50 ? H.blue : H.orangeText;
+    const bg = c >= 75 ? H.greenPale : c >= 50 ? H.bluePale : H.orangePale;
+    return `<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">
+      <span style="padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;color:${col};background:${bg}">${label} · ${c}%</span>
+      <div style="width:110px;height:5px;border-radius:3px;background:${H.track};overflow:hidden"><div style="height:5px;width:${clamp(c, 0, 100)}%;background:${col}"></div></div>
+    </div>`;
+  }
+  // The dumbbell used throughout: two RPP values on a 6-10 rail.
+  function dumbbell(worse, better) {
+    const pos = (v) => clamp(((v - 6) / 4) * 100, 0, 100);
+    const a = pos(worse), b = pos(better), lo = Math.min(a, b), hi = Math.max(a, b);
+    return `<div style="position:relative;height:28px">
+      <div style="position:absolute;left:0;right:0;top:13px;height:2px;background:${H.hair}"></div>
+      <div style="position:absolute;top:12px;height:4px;border-radius:2px;background:${H.greenBar};left:${lo}%;width:${hi - lo}%"></div>
+      <div style="position:absolute;top:7px;width:14px;height:14px;border-radius:7px;background:${H.card};border:2px solid ${H.faint};box-sizing:border-box;transform:translateX(-7px);left:${a}%"></div>
+      <div style="position:absolute;top:4px;width:20px;height:20px;border-radius:10px;transform:translateX(-10px);left:${b}%;background:${H.green}"></div>
+    </div>`;
+  }
+  const statusColor = (tone) => tone === "bad" ? H.orange : tone === "warn" ? "#B7791F" : tone === "good" ? H.green : H.muted;
+  const statusChip = (st) => `<span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;color:${statusColor(st.tone)};background:${st.tone === "good" ? H.greenPale : st.tone === "bad" ? H.orangePale : "#FAF2E2"}">${esc(st.word)}</span>`;
+
+  // The four or fewer things most worth doing, drawn from the strongest findings the
+  // report already produced — ranked, not restated in full.
+  function buildPriorities(report) {
+    const out = [];
+    const t2 = report.tier2 || {};
+    if (t2.sleep && t2.sleep.delta > 0) {
+      const sun = report.tier3 && report.tier3.factors && report.tier3.factors.sun;
+      out.push({ title: "Protect your sleep, get daylight",
+        text: `Your strongest lifestyle signal: ${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta} RPP after good sleep (${t2.sleep.meanTrue} vs ${t2.sleep.meanFalse}).` +
+              (sun ? ` Sun exposure showed up on ${sun.wellRate}% of good nights vs ${sun.poorRate}% of poor ones.` : "") });
+    }
+    Object.entries(report.tier1 || {}).forEach(([type, d]) => {
+      const f = (d.findings || [])[0];
+      if (!f || out.length >= 4) return;
+      const better = f.direction === "positive" ? f.groups.high : f.groups.low;
+      const worse = f.direction === "positive" ? f.groups.low : f.groups.high;
+      out.push({ title: `${f.direction === "positive" ? "More" : "Less"} ${MACRO_LABELS[f.macro]} ${WINDOW_SHORT[f.window]} for ${labelOfType(type).toLowerCase()}`,
+        text: `Best sessions followed ${better.macroAvg}${MACRO_UNITS[f.macro]} (vs ${worse.macroAvg}${MACRO_UNITS[f.macro]}), scoring RPP ${better.rppAvg} against ${worse.rppAvg}.` });
+    });
+    const n = report.nutrients;
+    if (n && out.length < 4) {
+      const worstShort = [...n.macros, ...n.micros].filter((r) => r.pct !== null && r.pct < 90).sort((a, b) => a.pct - b.pct)[0];
+      if (worstShort) {
+        const opp = (n.opportunities || []).find((g) => g.nutrients.some((x) => x.label === worstShort.label));
+        out.push({ title: `Bring ${worstShort.label.toLowerCase()} back up`,
+          text: `At ${worstShort.pct}% of target.` + (opp ? ` ${esc(opp.meal)} supplies ${opp.nutrients.find((x) => x.label === worstShort.label).sharePct}% of a day's worth per serving, and you logged it ${opp.count} time${opp.count !== 1 ? "s" : ""}.` : "") });
+      }
+    }
+    const q = report.foodQuality;
+    if (q && q.stars < 4.5 && out.length < 4) {
+      out.push({ title: "Trim what costs you a star",
+        text: `${q.processedPct}% of what you ate read as processed or sugary${q.worstOffenders[0] ? ` — ${esc(q.worstOffenders[0].name)} recurs` : ""}. Only what sits above 5% counts against the rating.` });
+    }
+    return out.slice(0, 4);
+  }
+
+  function renderHTML(report) {
+    const meta = report.meta || {};
+    const n = report.nutrients, q = report.foodQuality, f = report.fasting;
+    const t2 = report.tier2 || {}, t3 = report.tier3;
+    const cal = n && n.macros.find((r) => r.key === "calories");
+    const onTarget = n ? [...n.macros, ...n.micros].filter((r) => r.status.word === "On target").length : 0;
+    const totalN = n ? n.macros.length + n.micros.length : 0;
+    const lowN = n ? [...n.macros, ...n.micros].filter((r) => r.pct !== null && r.pct < 90).length : 0;
+    const highN = n ? [...n.macros, ...n.micros].filter((r) => r.pct !== null && r.pct > 110).length : 0;
+    const pending = [];
+    const parts = [];
+
+    // ── header ──
+    const kpi = (label, value, note, color) => `<div style="background:${H.card};border:1px solid ${H.line};border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:14px;color:${H.muted};font-weight:500">${label}</div>
+      <div style="${serif};font-size:40px;font-weight:600;line-height:1${color ? `;color:${color}` : ""}">${value}</div>
+      <div style="font-size:13px;color:${H.muted}">${note}</div></div>`;
+    const cards = [];
+    if (t2.sleep) cards.push(kpi("Good-sleep boost", `${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta}`, `RPP after a well-slept night (${t2.sleep.meanTrue} vs ${t2.sleep.meanFalse})`, t2.sleep.delta > 0 ? H.green : H.orange));
+    if (f) cards.push(kpi("Avg overnight fast", esc(f.avgText), `across ${f.nights} fully logged night${f.nights !== 1 ? "s" : ""}`));
+    if (q) cards.push(kpi("Food quality", `${q.stars}<span style="font-size:18px;color:${H.muted}"> / 5</span>`, `${q.wholePct}% of ${q.totalItems} foods are whole foods`));
+    if (cal) cards.push(kpi("Energy intake", `<span style="color:${cal.pct < 90 || cal.pct > 110 ? H.orangeDeep : H.green}">${cal.pct}%</span><span style="font-size:15px;color:${H.muted}"> of target</span>`, `${num(cal.avg)} of ${num(cal.target)} Cal`));
+    if (n) cards.push(kpi("Nutrients on target", `${onTarget}<span style="font-size:18px;color:${H.muted}"> / ${totalN}</span>`, `${lowN} low · ${highN} above target`));
+    parts.push(`<div style="display:flex;flex-direction:column;gap:28px">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:14px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#1F5E4A">Nutrition, sleep &amp; training · ${meta.totalDaysLogged}-day review</div>
+        <h1 style="${serif};font-size:60px;line-height:1.05;letter-spacing:-0.01em;margin:0">Performance Report</h1>
+        <p style="font-size:18px;color:${H.muted};margin:0">Generated ${esc(formatDate(new Date().toISOString().slice(0, 10)))} · ${meta.totalDaysLogged} days of logging · ${meta.totalSessions} training session${meta.totalSessions !== 1 ? "s" : ""}${meta.assumedSessions ? ` (${meta.assumedSessions} with an assumed type or time)` : ""}</p>
+      </div>
+      ${cards.length ? `<div style="display:grid;grid-template-columns:repeat(${cards.length},minmax(0,1fr));gap:16px">${cards.join("")}</div>` : ""}
+    </div>`);
+
+    // ── what to do next ──
+    const prio = buildPriorities(report);
+    if (prio.length) parts.push(`<div style="background:${H.dark};color:${H.bg};border-radius:20px;padding:40px;display:flex;flex-direction:column;gap:28px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <h2 style="${serif};font-size:32px;color:${H.bg};margin:0">What to do next</h2>
+        <div style="font-size:15px;color:${H.darkMuted}">Ranked by expected impact</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px">
+        ${prio.map((p, i) => `<div style="background:${H.darkCard};border-radius:14px;padding:24px;display:flex;gap:18px">
+          <div style="flex-shrink:0;width:40px;height:40px;border-radius:20px;background:${H.bg};color:${H.dark};display:flex;align-items:center;justify-content:center;font-weight:600;font-size:18px">${i + 1}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h3 style="${serif};font-size:21px;color:#FFFFFF;margin:0">${esc(p.title)}</h3>
+            <p style="font-size:16px;line-height:1.55;color:${H.darkText};margin:0">${p.text}</p>
+          </div></div>`).join("")}
+      </div></div>`);
+
+    // ── diet impact ──
+    const t1Keys = Object.keys(report.tier1 || {});
+    if (!t1Keys.length) pending.push({ t: "Diet impact on performance", r: "each training type needs at least 5 logged sessions with a training type set" });
+    else {
+      const blocks = t1Keys.map((type) => {
+        const d = report.tier1[type];
+        const rows = [];
+        (d.findings || []).forEach((x) => {
+          const better = x.direction === "positive" ? x.groups.high : x.groups.low;
+          const worse = x.direction === "positive" ? x.groups.low : x.groups.high;
+          const u = MACRO_UNITS[x.macro];
+          rows.push({ label: `${WINDOW_SHORT[x.window]} · ${MACRO_LABELS[x.macro]}`,
+            text: `<span style="font-weight:600;color:${H.green}">${better.macroAvg === 0 ? "Nothing eaten" : `${x.direction === "positive" ? "Higher" : "Lower"} ${MACRO_LABELS[x.macro]}`} (${better.macroAvg} ${u})</span> → RPP ${better.rppAvg} &nbsp; <span style="color:${H.muted}">vs ${worse.macroAvg} ${u} → RPP ${worse.rppAvg}</span>`,
+            worse: worse.rppAvg, better: better.rppAvg, conf: x.confidence });
+        });
+        (d.supplements || []).forEach((x) => {
+          rows.push({ label: `${WINDOW_SHORT[x.window]} · supplement`,
+            text: `<span style="font-weight:600;color:${H.green}">${esc(x.label)}</span> → RPP ${x.meanWith} &nbsp; <span style="color:${H.muted}">without → RPP ${x.meanWithout}</span>`,
+            worse: x.meanWithout, better: x.meanWith, conf: x.confidence });
+        });
+        return `<div style="display:flex;flex-direction:column;gap:0">
+          <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid ${H.rule}">
+            <span style="padding:4px 10px;border-radius:6px;background:${H.dark};color:${H.bg};font-size:13px;font-weight:600;letter-spacing:0.06em">${esc(iconOfType(type))}</span>
+            <h3 style="${serif};font-size:22px;margin:0">${esc(labelOfType(type))}</h3>
+            <span style="font-size:15px;color:${H.muted}">· ${d.n} session${d.n !== 1 ? "s" : ""}</span>
+            <div style="flex-grow:1"></div>
+            <div style="position:relative;width:360px;height:16px;font-size:12px;color:${H.muted};margin-right:150px">
+              <span style="position:absolute;left:0">6</span><span style="position:absolute;left:25%;transform:translateX(-50%)">7</span><span style="position:absolute;left:50%;transform:translateX(-50%)">RPP 8</span><span style="position:absolute;left:75%;transform:translateX(-50%)">9</span><span style="position:absolute;right:0">10</span>
+            </div>
+          </div>
+          ${rows.map((r) => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 360px 126px;gap:24px;align-items:center;min-height:78px;padding:10px 0;border-bottom:1px solid ${H.hair}">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="${LABEL}">${esc(r.label)}</div>
+              <div style="font-size:16px;line-height:1.45">${r.text}</div>
+            </div>
+            ${dumbbell(r.worse, r.better)}
+            ${pill(r.conf)}
+          </div>`).join("")}
+        </div>`;
+      }).join("");
+      parts.push(`<div style="${CARD}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <h2 style="${serif};${H2};margin:0">Diet impact on performance</h2>
+            <p style="${SUB};margin:0">RPP of your best sessions against the rest, split by what you ate beforehand.</p>
+          </div>
+          <div style="display:flex;gap:16px;font-size:14px;color:${H.muted};flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:7px;background:${H.green}"></span>Best sessions</div>
+            <div style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:7px;background:${H.card};border:2px solid ${H.faint};box-sizing:border-box"></span>Other sessions</div>
+          </div>
+        </div>${blocks}</div>`);
+    }
+
+    // ── sleep, sun & performance ──
+    const t3f = t3 && t3.factors ? t3.factors : null;
+    if (!t3f || !Object.keys(t3f).length) pending.push({ t: "Sleep data analysis", r: "needs at least 6 nights logged as good or bad, with something that separates them" });
+    else {
+      const bar = (label, pctA, pctB, aLabel, bLabel) => `<div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;justify-content:space-between;font-size:14px"><span>${esc(label)}</span><span style="font-weight:600">${pctA}%</span></div>
+        <div style="height:10px;border-radius:5px;background:${H.track};overflow:hidden"><div style="height:10px;width:${clamp(pctA, 0, 100)}%;background:${H.green}"></div></div></div>`;
+      const cells = Object.entries(t3f).map(([k, x]) => {
+        const isRate = x.wellRate !== undefined;
+        return `<div style="border:1px solid ${H.line};border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:14px">
+          <h3 style="${serif};font-size:20px;margin:0">${esc(x.label)}</h3>
+          ${isRate
+            ? `${bar("Before a good night", x.wellRate)}${bar("Before a poor night", x.poorRate)}`
+            : `<div style="display:flex;gap:12px;align-items:flex-end;height:104px">
+                 <div style="flex-grow:1;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font-size:22px;font-weight:600;color:${H.green}">${x.wellMean}</span><div style="width:100%;background:${H.green};height:${clamp(Math.abs(x.wellMean) / Math.max(Math.abs(x.wellMean), Math.abs(x.poorMean), 1) * 80, 8, 80)}px;border-radius:6px 6px 0 0"></div></div>
+                 <div style="flex-grow:1;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font-size:22px;font-weight:600;color:${H.muted}">${x.poorMean}</span><div style="width:100%;background:${H.greenBar};height:${clamp(Math.abs(x.poorMean) / Math.max(Math.abs(x.wellMean), Math.abs(x.poorMean), 1) * 80, 8, 80)}px;border-radius:6px 6px 0 0"></div></div>
+               </div>
+               <div style="display:flex;gap:12px;font-size:14px;color:${H.muted}"><span style="flex-grow:1;text-align:center">well-slept</span><span style="flex-grow:1;text-align:center">poor sleep</span></div>`}
+          ${pill(x.confidence)}
+        </div>`;
+      }).join("");
+      const sleepKpi = t2.sleep ? `<div style="border:1px solid ${H.line};border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:10px">
+          <h3 style="${serif};font-size:20px;margin:0">Next-day RPP</h3>
+          <div style="${serif};font-size:44px;font-weight:600;color:${H.green};line-height:1">${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta}</div>
+          <p style="font-size:14px;color:${H.muted};margin:0">${t2.sleep.meanTrue} after a good night (n=${t2.sleep.nTrue}) vs ${t2.sleep.meanFalse} after a poor one (n=${t2.sleep.nFalse})</p>
+          ${pill(t2.sleep.confidence)}</div>` : "";
+      parts.push(`<div style="${CARD}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2 style="${serif};${H2};margin:0">Sleep, sun &amp; performance</h2>
+          <p style="${SUB};margin:0">Across ${t3.nWell} well-slept and ${t3.nPoor} poor-sleep nights.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(${Math.min(3, Object.keys(t3f).length + (sleepKpi ? 1 : 0))},minmax(0,1fr));gap:20px">${cells}${sleepKpi}</div></div>`);
+    }
+
+    // ── fasting + food quality, side by side ──
+    const half = [];
+    if (!f) pending.push({ t: "Overnight fast", r: "needs two consecutive days with meals logged on both sides of a night" });
+    else {
+      const toPct = (clock) => { const [h, m] = String(clock).split(":").map(Number); return ((h * 60 + m) / 1440) * 100; };
+      const s = toPct(f.avgFirstMeal), e = toPct(f.avgLastMeal);
+      half.push(`<div style="background:${H.card};border:1px solid ${H.line};border-radius:20px;padding:36px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2 style="${serif};font-size:28px;margin:0">Overnight fast</h2>
+          <p style="font-size:15px;color:${H.muted};margin:0">${f.nights} night${f.nights !== 1 ? "s" : ""} with meals logged on both sides</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="${LABEL}">Your typical day</div>
+          <div style="position:relative;height:44px;border-radius:10px;background:#DDE5E1;overflow:hidden">
+            <div style="position:absolute;left:${s}%;width:${Math.max(e - s, 2)}%;top:0;height:44px;background:${H.green}"></div>
+            <div style="position:absolute;left:${s}%;width:${Math.max(e - s, 2)}%;top:0;height:44px;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-size:14px;font-weight:600">eating window</div>
+          </div>
+          <div style="position:relative;height:18px;font-size:13px;color:${H.muted}">
+            <span style="position:absolute;left:0">00:00</span>
+            <span style="position:absolute;left:${s}%;transform:translateX(-50%);font-weight:600;color:${H.ink}">${esc(f.avgFirstMeal)}</span>
+            <span style="position:absolute;left:${e}%;transform:translateX(-50%);font-weight:600;color:${H.ink}">${esc(f.avgLastMeal)}</span>
+            <span style="position:absolute;right:0">24:00</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Shortest</div><div style="${serif};font-size:22px;font-weight:600">${esc(f.shortestText)}</div></div>
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Average</div><div style="${serif};font-size:22px;font-weight:600;color:${H.green}">${esc(f.avgText)}</div></div>
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Longest</div><div style="${serif};font-size:22px;font-weight:600">${esc(f.longestText)}</div></div>
+        </div>
+        <p style="font-size:13px;color:${H.faint};margin:0">Nights where either day had nothing logged are left out, so gaps in tracking are not counted as fasts.</p>
+      </div>`);
+    }
+    if (!q) pending.push({ t: "Food quality rating", r: "needs at least 10 logged meals" });
+    else {
+      const against = [];
+      if (q.processedCount) against.push(`${q.processedCount} processed or sugary`);
+      if (q.lateCount) against.push(`${q.lateCount} eaten at or after 22:00`);
+      const stars = Math.round(q.stars * 2) / 2;
+      half.push(`<div style="background:${H.card};border:1px solid ${H.line};border-radius:20px;padding:36px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2 style="${serif};font-size:28px;margin:0">Food quality</h2>
+          <p style="font-size:15px;color:${H.muted};margin:0">Read from the words in your meal names — a guide, not an audit</p>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="${serif};font-size:56px;font-weight:600;line-height:1;color:${stars >= 4 ? H.green : stars >= 2.5 ? "#B7791F" : H.orange}">${stars}</span>
+          <span style="font-size:20px;color:${H.muted}">/ 5 stars</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;justify-content:space-between;font-size:14px"><span>Whole foods</span><span style="font-weight:600">${q.wholePct}%</span></div>
+          <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(q.wholePct, 0, 100)}%;background:${H.green}"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:14px"><span>Processed or sugary</span><span style="font-weight:600;color:${H.orange}">${q.processedPct}%</span></div>
+          <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(q.processedPct, 0, 100)}%;background:${H.orange}"></div></div>
+        </div>
+        ${against.length ? `<p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${against.join("; ")} — out of ${q.totalItems} foods logged${q.worstOffenders.length ? `. Most often: ${q.worstOffenders.slice(0, 3).map((o) => esc(o.name) + (o.n > 1 ? ` ×${o.n}` : "")).join(", ")}` : ""}.</p>` : `<p style="font-size:15px;color:${H.green};margin:0">All ${q.totalItems} foods came through clean.</p>`}
+        <div style="display:flex;gap:14px;align-items:flex-start;background:${H.greenPale};border-radius:12px;padding:16px 18px">
+          <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${H.greenDeep};padding-top:2px;flex-shrink:0">Do</div>
+          <p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${q.stars >= 4.5 ? "Nothing to change — keep the balance you have." : q.processedCount >= q.lateCount ? `Swapping out ${q.worstOffenders[0] ? esc(q.worstOffenders[0].name.toLowerCase()) : "the processed items"} would move this rating the most.` : "Moving your last meal earlier than 22:00 would move this rating the most."}</p>
+        </div>
+      </div>`);
+    }
+    if (half.length) parts.push(`<div style="display:grid;grid-template-columns:repeat(${half.length},minmax(0,1fr));gap:24px">${half.join("")}</div>`);
+
+    // ── nutrient tables ──
+    if (!n) pending.push({ t: "Macro and micronutrient tables", r: "needs at least 3 logged days" });
+    else {
+      const row = (r, big) => {
+        const col = statusColor(r.status.tone);
+        const w = clamp((r.pct || 0) / 1.25, 0, 100);       // 125% of target fills the bar
+        return `<div style="display:grid;grid-template-columns:${big ? "180px minmax(0,1fr) 150px 110px" : "150px minmax(0,1fr) 190px 110px"};gap:24px;align-items:center;height:${big ? 64 : 46}px;border-bottom:1px solid ${H.hair}">
+          <div style="font-size:${big ? 18 : 16}px;font-weight:600">${esc(r.label)}</div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="position:relative;flex-grow:1;height:${big ? 16 : 14}px;background:${big ? H.track : H.trackSoft};border-radius:8px">
+              <div style="position:absolute;left:0;top:0;height:${big ? 16 : 14}px;border-radius:8px;width:${w}%;background:${col}"></div>
+              <div style="position:absolute;left:80%;top:-5px;width:2px;height:${big ? 26 : 22}px;background:${H.ink}"></div>
+            </div>
+            <div style="width:52px;font-size:${big ? 18 : 16}px;font-weight:600;text-align:right;color:${col}">${r.pct === null ? "—" : r.pct + "%"}</div>
+          </div>
+          <div style="text-align:right;font-size:15px;color:${H.soft}">${num(r.avg)} / ${num(r.target)}${esc(r.unit)}</div>
+          <div>${statusChip(r.status)}</div>
+        </div>`;
+      };
+      const head = (cols) => `<div style="display:grid;grid-template-columns:${cols};gap:24px;padding:0 0 10px;border-bottom:1px solid ${H.rule};font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}"><div>Nutrient</div><div>% of target</div><div style="text-align:right">Avg / target</div><div>Status</div></div>`;
+      parts.push(`<div style="${CARD}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2 style="${serif};${H2};margin:0">Macronutrients</h2>
+          <p style="${SUB};margin:0">Daily averages across ${n.days} logged day${n.days !== 1 ? "s" : ""}. The marker sits at 80% of target.</p>
+        </div>
+        <div style="display:flex;flex-direction:column">${head("180px minmax(0,1fr) 150px 110px")}${n.macros.map((r) => row(r, true)).join("")}</div></div>`);
+      parts.push(`<div style="${CARD}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2 style="${serif};${H2};margin:0">Micronutrients</h2>
+          <p style="${SUB};margin:0">Deficient below 70%, low 70–89%, on target 90–110%, high 111–200%, excess above 200%.</p>
+        </div>
+        <div style="display:flex;flex-direction:column">${head("150px minmax(0,1fr) 190px 110px")}${n.micros.map((r) => row(r, false)).join("")}</div></div>`);
+
+      if (n.opportunities.length) parts.push(`<div style="${CARD}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <h2 style="${serif};${H2};margin:0">Closing the gaps with meals you already eat</h2>
+          <p style="${SUB};margin:0">Strongest sources of what you are short on. More often, or bigger portions, moves these fastest.</p>
+        </div>
+        <div style="display:flex;flex-direction:column">
+          <div style="display:grid;grid-template-columns:minmax(0,1.5fr) 150px 120px minmax(0,1fr);gap:24px;padding:0 0 10px;border-bottom:1px solid ${H.rule};font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}"><div>Meal</div><div>Fills</div><div style="text-align:right">Per serving</div><div>Share of daily target</div></div>
+          ${n.opportunities.map((g) => g.nutrients.map((x, j) => `<div style="display:grid;grid-template-columns:minmax(0,1.5fr) 150px 120px minmax(0,1fr);gap:24px;align-items:center;min-height:60px;border-bottom:1px solid ${H.hair};padding:8px 0">
+            <div style="font-size:15px;font-weight:600;line-height:1.4">${j === 0 ? `${esc(g.meal)} <span style="font-weight:400;color:${H.muted}">(logged ${g.count}×)</span>` : ""}</div>
+            <div style="font-size:15px"><span style="font-weight:600">${esc(x.label)}</span> <span style="color:${H.muted}">· now ${x.pct}%</span></div>
+            <div style="text-align:right;font-size:15px">${num(x.per)}${esc(x.unit)}</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="position:relative;flex-grow:1;height:12px;background:${H.track};border-radius:6px;overflow:hidden"><div style="position:absolute;left:0;top:0;height:12px;width:${clamp(x.sharePct, 0, 100)}%;background:${H.green}"></div></div>
+              <div style="width:48px;text-align:right;font-size:15px;font-weight:600">${x.sharePct}%</div>
+            </div></div>`).join("")).join("")}
+        </div></div>`);
+    }
+
+    // ── lifestyle factors that did not fit elsewhere ──
+    const t2Rest = Object.entries(t2).filter(([k]) => k !== "sleep");
+    if (!Object.keys(t2).length) pending.push({ t: "Lifestyle factors", r: "needs at least 3 sessions with and 3 without each of sun, hydration and good sleep, and a clear gap between them" });
+    else if (t2Rest.length) parts.push(`<div style="${CARD}">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h2 style="${serif};${H2};margin:0">Lifestyle factors</h2>
+        <p style="${SUB};margin:0">Average session performance on the days you logged each, against the days you did not.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(3, t2Rest.length)},minmax(0,1fr));gap:20px">
+        ${t2Rest.map(([k, d]) => `<div style="border:1px solid ${H.line};border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="${serif};font-size:20px;margin:0">${esc(k === "sun" ? "Sun exposure" : k === "hydration" ? "Hydration" : k)}</h3>
+          <div style="${serif};font-size:40px;font-weight:600;line-height:1;color:${d.delta > 0 ? H.green : H.orange}">${d.delta > 0 ? "+" : ""}${d.delta}</div>
+          <p style="font-size:14px;color:${H.muted};margin:0">${d.meanTrue} on the ${d.nTrue} days you logged it vs ${d.meanFalse} on the ${d.nFalse} without</p>
+          ${pill(d.confidence)}</div>`).join("")}
+      </div></div>`);
+
+    // ── habit changes ──
+    const t4 = report.tier4;
+    if (!t4 || !t4.changes.length) pending.push({ t: "Habit changes over time", r: (t4 && t4.note) ? t4.note.replace(/^Need /, "needs ").replace(/\.$/, "") : "no sustained change in your habits detected yet" });
+    else parts.push(`<div style="${CARD}">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h2 style="${serif};${H2};margin:0">Habit changes over time</h2>
+        <p style="${SUB};margin:0">Sustained shifts in what you log, and what your performance did across them.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        ${t4.changes.map((c) => `<div style="border-left:3px solid ${c.rppDelta > 0 ? H.green : H.orange};padding:6px 0 6px 18px">
+          <div style="${LABEL}">${esc(formatDate(c.date))}</div>
+          <p style="font-size:16px;line-height:1.5;margin:4px 0 0">${esc(tier4Sentence(c))}</p></div>`).join("")}
+      </div></div>`);
+
+    // ── digestive ──
+    if (!report.gi) pending.push({ t: "Digestive notes", r: "no GI distress logged yet, so there is nothing to trace back to food" });
+    else if (report.gi.triggers && report.gi.triggers.length) parts.push(`<div style="${CARD}">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h2 style="${serif};${H2};margin:0">Digestive notes</h2>
+        <p style="${SUB};margin:0">Food words that appeared disproportionately in the 24 hours before you logged GI distress, on ${report.gi.giDays} of ${report.gi.totalDays} tracked days.</p>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        ${report.gi.triggers.map((t) => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 200px 126px;gap:24px;align-items:center;min-height:54px;border-bottom:1px solid ${H.hair}">
+          <div style="font-size:16px"><span style="font-weight:600">“${esc(t.word)}”</span> <span style="color:${H.muted}">appeared in ${t.total} meals</span></div>
+          <div style="font-size:15px;color:${H.soft}">${t.giCount} of those (${Math.round((t.giCount / t.total) * 100)}%) on GI days</div>
+          ${pill(t.confidence)}</div>`).join("")}
+      </div>
+      <p style="font-size:13px;color:${H.faint};margin:0">A keyword pattern, not a diagnosis.</p></div>`);
+    else pending.push({ t: "Digestive notes", r: report.gi.belowThreshold ? `logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days; ${report.gi.minDays} days with GI distress are needed before food keywords mean anything` : `logged on ${report.gi.giDays} of ${report.gi.totalDays} tracked days, but no food keyword has appeared often enough to stand out` });
+
+    // ── still waiting ──
+    if (pending.length) parts.push(`<div style="${CARD}">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <h2 style="${serif};${H2};margin:0">Still waiting on data</h2>
+        <p style="${SUB};margin:0">These unlock on their own as you keep logging.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+        ${pending.map((p) => `<div style="border:1px solid ${H.line};border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:10px">
+          <h3 style="${serif};font-size:19px;margin:0">${esc(p.t)}</h3>
+          <p style="font-size:15px;line-height:1.5;color:${H.soft};margin:0">${esc(p.r)}.</p></div>`).join("")}
+      </div></div>`);
+
+    parts.push(`<div style="display:flex;justify-content:space-between;font-size:13px;color:${H.muted};border-top:1px solid ${H.rule};padding-top:20px">
+      <span>Performance Report · ${esc(formatDate(new Date().toISOString().slice(0, 10)))} · Confidence: high · medium · low</span>
+      <span>Every figure is measured from what you logged. Associations, not causes.</span></div>`);
+
+    return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Performance Report — ${esc(formatDate(new Date().toISOString().slice(0, 10)))}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:${H.bg};font-family:'IBM Plex Sans',system-ui,sans-serif;color:${H.ink};font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0;text-wrap:balance}
+p{margin:0;text-wrap:pretty}
+@media print{body{background:#fff}.sheet{padding:24px 28px!important}}
+</style></head>
+<body><div class="sheet" style="width:1280px;box-sizing:border-box;padding:72px 80px;display:flex;flex-direction:column;gap:40px;background:${H.bg};margin:0 auto">
+${parts.join("\n")}
+</div></body></html>`;
+  }
+  window.renderReportHTML = renderHTML;
   window.renderReportPDF = renderPDF;
 })();
 </script>
@@ -2390,8 +2798,14 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastRepo
   const downloadReport=()=>{
     try{
       const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,targets:reportTargets,dailyExtras});
-      const doc=window.renderReportPDF(report);
-      doc.save(`performance-report-${today()}.pdf`);
+      // An HTML document rather than a drawn PDF: the layout depends on CSS the PDF
+      // renderer cannot reproduce. Opening it and printing to PDF gives the same page.
+      const html=window.renderReportHTML(report);
+      const url=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
+      const a=document.createElement("a");
+      a.href=url;a.download=`performance-report-${today()}.html`;
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
       setLastReportWindowStart(today());
       setShowToast(true);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setShowToast(false),2600);
     }catch(e){alert("Couldn't generate the report: "+e.message)}
