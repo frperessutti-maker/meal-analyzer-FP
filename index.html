@@ -442,7 +442,7 @@
     if (lmhWell.length >= 3 && lmhPoor.length >= 3) {
       const wm = mean(lmhWell); const pm = mean(lmhPoor);
       if (Math.abs(wm - pm) >= 0.5) {
-        factors.last_meal_hour = { label: "Last meal time (hour)", wellMean: Math.round(wm * 10) / 10, poorMean: Math.round(pm * 10) / 10, nWell: lmhWell.length, nPoor: lmhPoor.length, confidence: Math.round(Math.min(Math.min(lmhWell.length, lmhPoor.length) / 10, 1) * Math.min(Math.abs(wm - pm) / 2, 1) * 100) };
+        factors.last_meal_hour = { label: "Last meal time", clock: true, wellClock: hourToClock(wm), poorClock: hourToClock(pm), wellMean: Math.round(wm * 10) / 10, poorMean: Math.round(pm * 10) / 10, nWell: lmhWell.length, nPoor: lmhPoor.length, confidence: Math.round(Math.min(Math.min(lmhWell.length, lmhPoor.length) / 10, 1) * Math.min(Math.abs(wm - pm) / 2, 1) * 100) };
       }
     }
     const checkBinary = (key, label, pick) => {
@@ -937,7 +937,7 @@
   }
   function tier3Sentence(name, f) {
     if (f.wellRate !== undefined) return `${f.label} occurred on ${f.wellRate}% of well-slept nights (n=${f.nWell}) and ${f.poorRate}% of poor-sleep nights (n=${f.nPoor}).`;
-    if (name === "last_meal_hour") return `Nights of good sleep followed days for which the average last meal time was ${hourToClock(f.wellMean)}. Poor-sleep nights followed days for which last meal was on average at ${hourToClock(f.poorMean)}.`;
+    if (name === "last_meal_hour") return `Well-slept nights followed meals at ${f.wellClock || hourToClock(f.wellMean)} on average, while poor sleep followed ${f.wellMean < f.poorMean ? "later" : "earlier"} meals at ${f.poorClock || hourToClock(f.poorMean)}.`;
     const unit = SLEEP_FACTOR_UNITS[name] || ""; const unitStr = unit ? ` ${unit}` : "";
     return `Nights you slept well followed days averaging ${f.wellMean}${unitStr} for ${f.label.toLowerCase()} (n=${f.nWell}). Poor-sleep nights followed days averaging ${f.poorMean}${unitStr} (n=${f.nPoor}).`;
   }
@@ -1412,10 +1412,11 @@
           ${isRate
             ? `${bar("Before a good night", x.wellRate)}${bar("Before a poor night", x.poorRate)}`
             : `<div style="display:flex;gap:12px;align-items:flex-end;height:104px">
-                 <div style="flex-grow:1;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font-size:22px;font-weight:600;color:${H.green}">${x.wellMean}</span><div style="width:100%;background:${H.green};height:${clamp(Math.abs(x.wellMean) / Math.max(Math.abs(x.wellMean), Math.abs(x.poorMean), 1) * 80, 8, 80)}px;border-radius:6px 6px 0 0"></div></div>
-                 <div style="flex-grow:1;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font-size:22px;font-weight:600;color:${H.muted}">${x.poorMean}</span><div style="width:100%;background:${H.greenBar};height:${clamp(Math.abs(x.poorMean) / Math.max(Math.abs(x.wellMean), Math.abs(x.poorMean), 1) * 80, 8, 80)}px;border-radius:6px 6px 0 0"></div></div>
+                 <div style="flex-grow:1;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font-size:22px;font-weight:600;color:${H.green}">${x.clock?x.wellClock:x.wellMean}</span><div style="width:100%;background:${H.green};height:${clamp(Math.abs(x.wellMean) / Math.max(Math.abs(x.wellMean), Math.abs(x.poorMean), 1) * 80, 8, 80)}px;border-radius:6px 6px 0 0"></div></div>
+                 <div style="flex-grow:1;display:flex;flex-direction:column;gap:6px;align-items:center"><span style="font-size:22px;font-weight:600;color:${H.muted}">${x.clock?x.poorClock:x.poorMean}</span><div style="width:100%;background:${H.greenBar};height:${clamp(Math.abs(x.poorMean) / Math.max(Math.abs(x.wellMean), Math.abs(x.poorMean), 1) * 80, 8, 80)}px;border-radius:6px 6px 0 0"></div></div>
                </div>
                <div style="display:flex;gap:12px;font-size:14px;color:${H.muted}"><span style="flex-grow:1;text-align:center">well-slept</span><span style="flex-grow:1;text-align:center">poor sleep</span></div>`}
+          <p style="font-size:14px;line-height:1.5;color:${H.soft};margin:0">${esc(tier3Sentence(k, x))}</p>
           ${pill(x.confidence)}
         </div>`;
       }).join("");
@@ -2793,19 +2794,18 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastRepo
   };
   const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{if(sunlight[d])a[d]={vitaminD:sunVitD(d)};return a},{});
   const[showToast,setShowToast]=useState(false);
+  const[reportHtml,setReportHtml]=useState(null);
+  const reportFrame=useRef(null);
   const toastTimer=useRef(null);
   const reportState=reportAvailability(history,lastReportWindowStart);
   const downloadReport=()=>{
     try{
       const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,targets:reportTargets,dailyExtras});
-      // An HTML document rather than a drawn PDF: the layout depends on CSS the PDF
-      // renderer cannot reproduce. Opening it and printing to PDF gives the same page.
-      const html=window.renderReportHTML(report);
-      const url=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
-      const a=document.createElement("a");
-      a.href=url;a.download=`performance-report-${today()}.html`;
-      document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),4000);
+      // Shown inside the app rather than downloaded. Handing iOS a .html file makes it a
+      // document for some other installed app to open, which is how this ended up in an
+      // "Open in Alibaba.com" sheet. Nothing leaves the app now; Save as PDF is reached
+      // through the viewer's own print button.
+      setReportHtml(window.renderReportHTML(report));
       setLastReportWindowStart(today());
       setShowToast(true);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setShowToast(false),2600);
     }catch(e){alert("Couldn't generate the report: "+e.message)}
@@ -2816,12 +2816,28 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastRepo
   const bestT3=preview&&preview.tier3&&preview.tier3.factors?Object.entries(preview.tier3.factors).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
   const bestGi=preview&&preview.gi&&preview.gi.triggers&&preview.gi.triggers.length>0?preview.gi.triggers[0]:null;
   return<div>
+    {/* The report opens here rather than downloading. A .html file handed to iOS becomes a
+        document for whatever app claims that type — which is how it landed in an "Open in
+        Alibaba.com" sheet. Keeping it in an iframe means nothing is ever handed off; Save
+        as PDF goes through this viewer's own print button, which uses the system dialog. */}
+    {reportHtml&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:300,background:"#F4F1EA",display:"flex",flexDirection:"column"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"calc(env(safe-area-inset-top) + 10px) 14px 10px",background:"#fff",borderBottom:"1px solid var(--border)",flexShrink:0}}>
+        <button className="btn btn-o btn-s" style={{margin:0}} onClick={()=>setReportHtml(null)}>✕ Close</button>
+        <div style={{flex:1,minWidth:0,fontSize:13,fontWeight:600,color:"var(--ink-soft)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Performance report</div>
+        <button className="btn btn-rose btn-s" style={{margin:0,flexShrink:0}} onClick={()=>{
+          const w=reportFrame.current&&reportFrame.current.contentWindow;
+          if(w){w.focus();w.print()}
+        }}>Save as PDF</button>
+      </div>
+      <iframe ref={reportFrame} srcDoc={reportHtml} title="Performance report"
+        style={{flex:1,width:"100%",border:"none",background:"#F4F1EA"}}/>
+    </div>}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:20}}>
       <p className="sub" style={{marginTop:0}}>Based on {reportState.activeDaysLogged} logged day{reportState.activeDaysLogged!==1?"s":""}</p>
-      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:0}}>⬇ Full report</button>
+      <button className="btn" disabled={!reportState.enabled} onClick={reportState.enabled?downloadReport:undefined} style={{width:"auto",flexShrink:0,padding:"11px 16px",fontSize:12,borderRadius:100,marginTop:0}}>📄 Full report</button>
     </div>
     {!reportState.enabled&&<div className="info" style={{fontSize:13}}>{reportState.label}</div>}
-    {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>✓ Detailed PDF report downloaded</div>}
+    {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>✓ Report generated — the next one unlocks in 7 days</div>}
 
     <h3 className="stit">Performance</h3>
     <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
@@ -2841,7 +2857,9 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastRepo
       {bestT3?<>
         <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>{bestT3[1].wellRate!==undefined?
           `${bestT3[1].label} occurred on ${bestT3[1].wellRate}% of well-slept nights vs ${bestT3[1].poorRate}% of poor-sleep nights.`
-          :`Well-slept nights averaged ${bestT3[1].wellMean} for ${bestT3[1].label.toLowerCase()}, vs ${bestT3[1].poorMean} on poor-sleep nights.`}</div>
+          :bestT3[0]==="last_meal_hour"
+            ?`${bestT3[1].wellMean<bestT3[1].poorMean?"An earlier":"A later"} last meal goes with better sleep — ${bestT3[1].wellClock} on well-slept nights against ${bestT3[1].poorClock} on poor ones.`
+            :`Well-slept nights averaged ${bestT3[1].wellMean} for ${bestT3[1].label.toLowerCase()}, vs ${bestT3[1].poorMean} on poor-sleep nights.`}</div>
         <div className="pbg" style={{height:10}}><div className="pf" style={{width:`${bestT3[1].wellRate!==undefined?bestT3[1].wellRate:Math.min(100,Math.round(preview.tier3.nWell/(preview.tier3.nWell+preview.tier3.nPoor)*100))}%`,background:"var(--good)"}}/></div>
       </>:<div style={{fontSize:13,color:"var(--gray)"}}>Not enough sleep data yet, or no factor showed a meaningful pattern.</div>}
     </div>
