@@ -630,13 +630,26 @@
   // Measured between consecutive logged days only: last meal of one day to first meal of
   // the next. A gap spanning a day with nothing logged is missing data rather than a fast,
   // so those pairs are skipped instead of counting as very long fasts.
-  function fastingSection(history) {
-    const days = Object.keys(history || {}).filter((d) => (history[d] || []).some((m) => minsOfTime(m.time) !== null)).sort();
+  // Something has to carry calories to break a fast: magnesium after dinner, or any other
+  // supplement logged for the record, leaves the fast running. A meal with no calorie
+  // figure at all is treated as real food rather than assumed to be a pill.
+  const FAST_BREAKING_CALORIES = 1;
+  const breaksFast = (m) => { const c = Number(m && m.calories); return isNaN(c) || c > FAST_BREAKING_CALORIES; };
+
+  function fastingSection(history, templates, skipped) {
+    // Recurring meals are eaten on every day they are not skipped, so they bound the
+    // eating window exactly like a logged one — a standing 21:30 yoghurt is still dinner.
+    const mealsOn = (d) => [
+      ...(history[d] || []),
+      ...(templates || []).filter((_, i) => !(((skipped || {})[d]) || []).includes(i)),
+    ];
+    const timesOn = (d) => mealsOn(d).filter(breaksFast).map((m) => minsOfTime(m.time)).filter((v) => v !== null);
+    const days = Object.keys(history || {}).filter((d) => timesOn(d).length > 0).sort();
     const nights = [];
     for (let i = 1; i < days.length; i++) {
       if (daysBetween(new Date(days[i - 1] + "T12:00:00"), new Date(days[i] + "T12:00:00")) !== 1) continue;
-      const prev = (history[days[i - 1]] || []).map((m) => minsOfTime(m.time)).filter((v) => v !== null);
-      const next = (history[days[i]] || []).map((m) => minsOfTime(m.time)).filter((v) => v !== null);
+      const prev = timesOn(days[i - 1]);
+      const next = timesOn(days[i]);
       if (!prev.length || !next.length) continue;
       const last = Math.max(...prev), first = Math.min(...next);
       nights.push({ from: days[i - 1], to: days[i], hours: (1440 - last + first) / 60, lastMeal: last, firstMeal: first });
@@ -800,7 +813,7 @@
       tier3: tier3(history, sleep, sunlight, rpp),
       tier4: tier4(history, rpp, sunlight, sleep, hydration),
       gi: giSection(history, giDistress),
-      fasting: fastingSection(history),
+      fasting: fastingSection(history, state.templates, state.skipped),
       foodQuality: foodQualitySection(history),
       nutrients: nutrientSection(history, state.targets, state.dailyExtras),
     };
@@ -2792,7 +2805,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
 }
 
 /* ── WEEKLY REPORT ── */
-function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastReportWindowStart,setLastReportWindowStart}){
+function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,skipped,DT,lastReportWindowStart,setLastReportWindowStart}){
   // The engine has no idea which nutrients exist or what this user targets, so hand it
   // both. dailyExtras carries what is not in the food itself — vitamin D from sunlight.
   const reportTargets={
@@ -2807,7 +2820,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastRepo
   const reportState=reportAvailability(history,lastReportWindowStart);
   const downloadReport=()=>{
     try{
-      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,targets:reportTargets,dailyExtras});
+      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,templates,skipped,targets:reportTargets,dailyExtras});
       // Shown inside the app rather than downloaded. Handing iOS a .html file makes it a
       // document for some other installed app to open, which is how this ended up in an
       // "Open in Alibaba.com" sheet. Nothing leaves the app now; Save as PDF is reached
@@ -2817,7 +2830,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,DT,lastRepo
       setShowToast(true);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setShowToast(false),2600);
     }catch(e){alert("Couldn't generate the report: "+e.message)}
   };
-  const preview=(()=>{try{return window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,targets:reportTargets,dailyExtras})}catch{return null}})();
+  const preview=(()=>{try{return window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,templates,skipped,targets:reportTargets,dailyExtras})}catch{return null}})();
   const t2Label={sun:"sun exposure",hydration:"hydration",sleep:"a well-slept night"};
   const bestT2=preview&&preview.tier2?Object.entries(preview.tier2).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
   const bestT3=preview&&preview.tier3&&preview.tier3.factors?Object.entries(preview.tier3.factors).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
@@ -3188,7 +3201,7 @@ function App(){
     {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} allRpp={rpp} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
-    {tab==="report"&&<ReportPage history={history} rpp={rpp} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
+    {tab==="report"&&<ReportPage history={history} rpp={rpp} templates={templates} skipped={skipped} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
     <div className="tabbar">
       {tabsDef.map(([key,label])=><button key={key} className={"tab"+(tab===key?" on":"")} onClick={()=>setTab(key)}>
