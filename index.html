@@ -1346,7 +1346,7 @@
         <h1 style="${serif};font-size:60px;line-height:1.05;letter-spacing:-0.01em;margin:0">Performance Report</h1>
         <p style="font-size:18px;color:${H.muted};margin:0">Generated ${esc(formatDate(new Date().toISOString().slice(0, 10)))} · ${meta.totalDaysLogged} days of logging · ${meta.totalSessions} training session${meta.totalSessions !== 1 ? "s" : ""}${meta.assumedSessions ? ` (${meta.assumedSessions} with an assumed type or time)` : ""}</p>
       </div>
-      ${cards.length ? `<div style="display:grid;grid-template-columns:repeat(${cards.length},minmax(0,1fr));gap:16px">${cards.join("")}</div>` : ""}
+      ${cards.length ? `<div class="g-kpi" style="display:grid;grid-template-columns:repeat(${cards.length},minmax(0,1fr));gap:16px">${cards.join("")}</div>` : ""}
     </div>`);
 
     // ── what to do next ──
@@ -1356,7 +1356,7 @@
         <h2 style="${serif};font-size:32px;color:${H.bg};margin:0">What to do next</h2>
         <div style="font-size:15px;color:${H.darkMuted}">Ranked by expected impact</div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px">
+      <div class="g-2" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px">
         ${prio.map((p, i) => `<div style="background:${H.darkCard};border-radius:14px;padding:24px;display:flex;gap:18px">
           <div style="flex-shrink:0;width:40px;height:40px;border-radius:20px;background:${H.bg};color:${H.dark};display:flex;align-items:center;justify-content:center;font-weight:600;font-size:18px">${i + 1}</div>
           <div style="display:flex;flex-direction:column;gap:8px">
@@ -1391,11 +1391,11 @@
             <h3 style="${serif};font-size:22px;margin:0">${esc(labelOfType(type))}</h3>
             <span style="font-size:15px;color:${H.muted}">· ${d.n} session${d.n !== 1 ? "s" : ""}</span>
             <div style="flex-grow:1"></div>
-            <div style="position:relative;width:360px;height:16px;font-size:12px;color:${H.muted};margin-right:150px">
+            <div class="rpp-rail" style="position:relative;width:360px;height:16px;font-size:12px;color:${H.muted};margin-right:150px">
               <span style="position:absolute;left:0">6</span><span style="position:absolute;left:25%;transform:translateX(-50%)">7</span><span style="position:absolute;left:50%;transform:translateX(-50%)">RPP 8</span><span style="position:absolute;left:75%;transform:translateX(-50%)">9</span><span style="position:absolute;right:0">10</span>
             </div>
           </div>
-          ${rows.map((r) => `<div style="display:grid;grid-template-columns:minmax(0,1fr) 360px 126px;gap:24px;align-items:center;min-height:78px;padding:10px 0;border-bottom:1px solid ${H.hair}">
+          ${rows.map((r) => `<div class="r-diet" style="display:grid;grid-template-columns:minmax(0,1fr) 360px 126px;gap:24px;align-items:center;min-height:78px;padding:10px 0;border-bottom:1px solid ${H.hair}">
             <div style="display:flex;flex-direction:column;gap:4px">
               <div style="${LABEL}">${esc(r.label)}</div>
               <div style="font-size:16px;line-height:1.45">${r.text}</div>
@@ -1513,7 +1513,7 @@
         </div>
       </div>`);
     }
-    if (half.length) parts.push(`<div style="display:grid;grid-template-columns:repeat(${half.length},minmax(0,1fr));gap:24px">${half.join("")}</div>`);
+    if (half.length) parts.push(`<div class="g-2" style="display:grid;grid-template-columns:repeat(${half.length},minmax(0,1fr));gap:24px">${half.join("")}</div>`);
 
     // ── nutrient tables ──
     if (!n) pending.push({ t: "Macro and micronutrient tables", r: "needs at least 3 logged days" });
@@ -1521,7 +1521,7 @@
       const row = (r, big) => {
         const col = statusColor(r.status.tone);
         const w = clamp((r.pct || 0) / 1.25, 0, 100);       // 125% of target fills the bar
-        return `<div style="display:grid;grid-template-columns:${big ? "180px minmax(0,1fr) 150px 110px" : "150px minmax(0,1fr) 190px 110px"};gap:24px;align-items:center;height:${big ? 64 : 46}px;border-bottom:1px solid ${H.hair}">
+        return `<div class="r-tbl" style="display:grid;grid-template-columns:${big ? "180px minmax(0,1fr) 150px 110px" : "150px minmax(0,1fr) 190px 110px"};gap:24px;align-items:center;height:${big ? 64 : 46}px;border-bottom:1px solid ${H.hair}">
           <div style="font-size:${big ? 18 : 16}px;font-weight:600">${esc(r.label)}</div>
           <div style="display:flex;align-items:center;gap:14px">
             <div style="position:relative;flex-grow:1;height:${big ? 16 : 14}px;background:${big ? H.track : H.trackSoft};border-radius:8px">
@@ -1534,7 +1534,7 @@
           <div>${statusChip(r.status)}</div>
         </div>`;
       };
-      const head = (cols) => `<div style="display:grid;grid-template-columns:${cols};gap:24px;padding:0 0 10px;border-bottom:1px solid ${H.rule};font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}"><div>Nutrient</div><div>% of target</div><div style="text-align:right">Avg / target</div><div>Status</div></div>`;
+      const head = (cols) => `<div class="h-tbl" style="display:grid;grid-template-columns:${cols};gap:24px;padding:0 0 10px;border-bottom:1px solid ${H.rule};font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}"><div>Nutrient</div><div>% of target</div><div style="text-align:right">Avg / target</div><div>Status</div></div>`;
       parts.push(`<div style="${CARD}">
         <div style="display:flex;flex-direction:column;gap:6px">
           <h2 style="${serif};${H2};margin:0">Macronutrients</h2>
@@ -1554,8 +1554,8 @@
           <p style="${SUB};margin:0">Strongest sources of what you are short on. More often, or bigger portions, moves these fastest.</p>
         </div>
         <div style="display:flex;flex-direction:column">
-          <div style="display:grid;grid-template-columns:minmax(0,1.5fr) 150px 120px minmax(0,1fr);gap:24px;padding:0 0 10px;border-bottom:1px solid ${H.rule};font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}"><div>Meal</div><div>Fills</div><div style="text-align:right">Per serving</div><div>Share of daily target</div></div>
-          ${n.opportunities.map((g) => g.nutrients.map((x, j) => `<div style="display:grid;grid-template-columns:minmax(0,1.5fr) 150px 120px minmax(0,1fr);gap:24px;align-items:center;min-height:60px;border-bottom:1px solid ${H.hair};padding:8px 0">
+          <div class="h-tbl" style="display:grid;grid-template-columns:minmax(0,1.5fr) 150px 120px minmax(0,1fr);gap:24px;padding:0 0 10px;border-bottom:1px solid ${H.rule};font-size:13px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:${H.muted}"><div>Meal</div><div>Fills</div><div style="text-align:right">Per serving</div><div>Share of daily target</div></div>
+          ${n.opportunities.map((g) => g.nutrients.map((x, j) => `<div class="r-tbl" style="display:grid;grid-template-columns:minmax(0,1.5fr) 150px 120px minmax(0,1fr);gap:24px;align-items:center;min-height:60px;border-bottom:1px solid ${H.hair};padding:8px 0">
             <div style="font-size:15px;font-weight:600;line-height:1.4">${j === 0 ? `${esc(g.meal)} <span style="font-weight:400;color:${H.muted}">(logged ${g.count}×)</span>` : ""}</div>
             <div style="font-size:15px"><span style="font-weight:600">${esc(x.label)}</span> <span style="color:${H.muted}">· now ${x.pct}%</span></div>
             <div style="text-align:right;font-size:15px">${num(x.per)}${esc(x.unit)}</div>
@@ -1618,7 +1618,7 @@
         <h2 style="${serif};${H2};margin:0">Still waiting on data</h2>
         <p style="${SUB};margin:0">These unlock on their own as you keep logging.</p>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+      <div class="g-2" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
         ${pending.map((p) => `<div style="border:1px solid ${H.line};border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:10px">
           <h3 style="${serif};font-size:19px;margin:0">${esc(p.t)}</h3>
           <p style="font-size:15px;line-height:1.5;color:${H.soft};margin:0">${esc(p.r)}.</p></div>`).join("")}
@@ -1637,9 +1637,34 @@
 body{margin:0;background:${H.bg};font-family:'IBM Plex Sans',system-ui,sans-serif;color:${H.ink};font-variant-numeric:tabular-nums}
 h1,h2,h3{font-family:Fraunces,Georgia,serif;font-weight:600;margin:0;text-wrap:balance}
 p{margin:0;text-wrap:pretty}
-@media print{body{background:#fff}.sheet{padding:24px 28px!important}}
+@media print{body{background:#fff}.sheet{padding:24px 28px!important;width:auto!important}}
+/* The sheet is authored at 1280 for a laptop or a printed page, but it is read on a phone
+   as often as not. Below that width the multi-column grids collapse to one column and the
+   tables stack into labelled blocks, so nothing runs off the side. */
+.sheet{width:1280px;max-width:100%}
+@media(max-width:1100px){
+  .sheet{padding:32px 20px!important;gap:24px!important}
+  h1{font-size:38px!important}
+  h2{font-size:24px!important}
+  h3{font-size:18px!important}
+  .g-kpi{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .g-2{grid-template-columns:1fr!important}
+  .rpp-rail{display:none!important}
+  /* diet-impact rows: sentence, then the dumbbell, then the confidence */
+  .r-diet{grid-template-columns:1fr!important;gap:12px!important;min-height:0!important;padding:14px 0!important}
+  /* nutrient and gap tables: one block per row, its own column headers dropped */
+  .h-tbl{display:none!important}
+  .r-tbl{grid-template-columns:1fr!important;height:auto!important;min-height:0!important;gap:6px!important;padding:12px 0!important}
+  .r-tbl>*{text-align:left!important}
+}
+@media(max-width:560px){
+  .sheet{padding:24px 14px!important}
+  h1{font-size:30px!important}
+  h2{font-size:21px!important}
+  .g-kpi{grid-template-columns:1fr!important}
+}
 </style></head>
-<body><div class="sheet" style="width:1280px;box-sizing:border-box;padding:72px 80px;display:flex;flex-direction:column;gap:40px;background:${H.bg};margin:0 auto">
+<body><div class="sheet" style="box-sizing:border-box;padding:72px 80px;display:flex;flex-direction:column;gap:40px;background:${H.bg};margin:0 auto">
 ${parts.join("\n")}
 </div></body></html>`;
   }
