@@ -139,7 +139,8 @@
   }
   function addHours(date, hours) { return new Date(date.getTime() + hours * 3600 * 1000); }
   function daysBetween(a, b) { return Math.floor((b - a) / (1000 * 60 * 60 * 24)); }
-  function isoDate(d) { return d.toISOString().slice(0, 10); }
+  // Local day, matching how the app stamps meals — see isoDay in the app layer.
+  function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
   function addDays(dateStr, delta) {
     const d = new Date(dateStr + "T12:00:00");
     d.setDate(d.getDate() + delta);
@@ -1048,7 +1049,7 @@
     const w = createWriter(doc);
 
     w.title("Performance Report");
-    w.body(`Generated ${formatDate(new Date().toISOString().slice(0, 10))} · Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
+    w.body(`Generated ${formatDate(isoDate(new Date()))} · Based on ${report.meta.totalDaysLogged} days of logging and ${report.meta.totalSessions} training sessions.`, { color: COLORS.soft, size: 10 });
     if (report.meta.assumedSessions) w.body(`${report.meta.assumedSessions} of those had no training type or time entered, so your usual ones were assumed.`, { color: COLORS.faint, size: 8.5 });
     w.space(2); w.hr();
 
@@ -1344,7 +1345,7 @@
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="font-size:14px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#1F5E4A">Nutrition, sleep &amp; training · ${meta.totalDaysLogged}-day review</div>
         <h1 style="${serif};font-size:60px;line-height:1.05;letter-spacing:-0.01em;margin:0">Performance Report</h1>
-        <p style="font-size:18px;color:${H.muted};margin:0">Generated ${esc(formatDate(new Date().toISOString().slice(0, 10)))} · ${meta.totalDaysLogged} days of logging · ${meta.totalSessions} training session${meta.totalSessions !== 1 ? "s" : ""}${meta.assumedSessions ? ` (${meta.assumedSessions} with an assumed type or time)` : ""}</p>
+        <p style="font-size:18px;color:${H.muted};margin:0">Generated ${esc(formatDate(isoDate(new Date())))} · ${meta.totalDaysLogged} days of logging · ${meta.totalSessions} training session${meta.totalSessions !== 1 ? "s" : ""}${meta.assumedSessions ? ` (${meta.assumedSessions} with an assumed type or time)` : ""}</p>
       </div>
       ${cards.length ? `<div class="g-kpi" style="display:grid;grid-template-columns:repeat(${cards.length},minmax(0,1fr));gap:16px">${cards.join("")}</div>` : ""}
     </div>`);
@@ -1625,12 +1626,12 @@
       </div></div>`);
 
     parts.push(`<div style="display:flex;justify-content:space-between;font-size:13px;color:${H.muted};border-top:1px solid ${H.rule};padding-top:20px">
-      <span>Performance Report · ${esc(formatDate(new Date().toISOString().slice(0, 10)))} · Confidence: high · medium · low</span>
+      <span>Performance Report · ${esc(formatDate(isoDate(new Date())))} · Confidence: high · medium · low</span>
       <span>Every figure is measured from what you logged. Associations, not causes.</span></div>`);
 
     return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Performance Report — ${esc(formatDate(new Date().toISOString().slice(0, 10)))}</title>
+<title>Performance Report — ${esc(formatDate(isoDate(new Date())))}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
 <style>
@@ -1837,7 +1838,12 @@ Respond ONLY with JSON:
 {"mealName":"description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
 }
 
-function today(){return new Date().toISOString().slice(0,10)}
+// Dates are the user's own calendar day, not UTC. toISOString() gave the UTC date, so for
+// anyone behind UTC every evening meal was stamped with tomorrow and reappeared the next
+// morning as "today"; for anyone ahead of UTC the first hours after midnight were filed
+// under yesterday. Times were already local, which is what made the mismatch invisible.
+function isoDay(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function today(){return isoDay(new Date())}
 function nowTime(){const d=new Date();return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")}
 function minsOf(t){if(!t)return null;const[h,m]=String(t).split(":").map(Number);return(isNaN(h)||isNaN(m))?null:h*60+m}
 // People usually log a main meal a while after eating it, so the first main meal logged
@@ -1978,10 +1984,10 @@ function reportAvailability(history,lastReportWindowStart){
   if(daysSince<REPORT_CADENCE_DAYS+REPORT_GRACE_DAYS){const y=REPORT_CADENCE_DAYS+REPORT_GRACE_DAYS-daysSince;return{enabled:true,activeDaysLogged,label:`Report available (expires in ${y} day${y!==1?"s":""})`}}
   return{enabled:true,activeDaysLogged,label:"Report available — download now"};
 }
-function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
-function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
-function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(x.toISOString().slice(0,10))}return d}
-function datesSince(fromISO){const cursor=new Date(fromISO+"T12:00:00");const now=new Date();const out=[];while(cursor<=now){out.push(cursor.toISOString().slice(0,10));cursor.setDate(cursor.getDate()+1)}return out}
+function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
+function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
+function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
+function datesSince(fromISO){const cursor=new Date(fromISO+"T12:00:00");const now=new Date();const out=[];while(cursor<=now){out.push(isoDay(cursor));cursor.setDate(cursor.getDate()+1)}return out}
 function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>{const v=Number(m[k]);t[k]+=isNaN(v)?0:v}));return t}
 function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m<=1)?1000:2000}
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
@@ -2662,7 +2668,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const breakdownDD=dd.filter(d=>d.date!==today());
   const wd=dd.filter(d=>d.totals);
   const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
-  const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===y.toISOString().slice(0,10))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
+  const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===isoDay(y))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
 
@@ -2961,6 +2967,31 @@ function App(){
   const[meals,setMeals_]=useState(()=>{const d=ls("nt-meals",{});return d.date===today()?(d.meals||[]):[]});
   const[templates,setTemplates_]=useState(()=>ls("nt-templates",[]));
   const[history,setHistory_]=useState(()=>ls("nt-history",{}));
+  // Nothing re-evaluated the date once the app was running, so an app left open — or a
+  // phone app resumed from the background, which is the normal case — kept showing
+  // yesterday's meals and workout as today's until it was reloaded.
+  const[dayStamp,setDayStamp]=useState(()=>today());
+  useEffect(()=>{
+    const check=()=>{const t=today();if(t!==dayStamp)setDayStamp(t)};
+    const id=setInterval(check,60000);
+    document.addEventListener("visibilitychange",check);
+    window.addEventListener("focus",check);
+    return()=>{clearInterval(id);document.removeEventListener("visibilitychange",check);window.removeEventListener("focus",check)};
+  },[dayStamp]);
+  // On a new day, yesterday's meals belong to history. update() already mirrors them there
+  // on every write, but mirror again rather than trust it before clearing.
+  useEffect(()=>{
+    const stored=ls("nt-meals",{});
+    if(!stored.date||stored.date===dayStamp)return;
+    const carried=stored.meals||[];
+    if(carried.length){
+      setHistory_(p=>{
+        if((p[stored.date]||[]).length>=carried.length)return p;      // already there
+        const u={...p,[stored.date]:carried};lss("nt-history",u);return u;
+      });
+    }
+    setMeals_([]);lss("nt-meals",{meals:[],date:dayStamp});
+  },[dayStamp]);
   const[sunlight,setSunlight_]=useState(()=>ls("nt-sunlight",{}));
   const[giDistress,setGiDistress_]=useState(()=>ls("nt-gi",{}));
   const[rpp,setRpp_]=useState(()=>ls("nt-rpp",{}));
