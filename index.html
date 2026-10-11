@@ -2610,19 +2610,20 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
         {row.key==="fat"&&<div style={{marginTop:8}}>
           <button className="collapse-btn" onClick={()=>setFatOpen(!fatOpen)}>{fatOpen?"▾":"▸"} Saturated / unsaturated</button>
           {fatOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
-            {/* The two halves read in opposite directions. Saturated is a ceiling, so it
-                turns red on reaching it; unsaturated is the share worth hitting, so it
-                turns green. */}
+            {/* The two halves read in opposite directions, and each starts on the colour the
+                other ends on. Saturated is a ceiling: green while there is room left, red once
+                the limit is reached. Unsaturated is a share worth hitting: red until the target,
+                green once it is there. No amber in between — either there is room or there isn't. */}
             {(()=>{
               const sat=tot.satFat||0, unsat=tot.unsatFat||0;
               const satPct=Math.round((sat/DT.satFat)*100), unsatPct=Math.round((unsat/DT.unsatFat)*100);
               const rows=[
                 {name:"Saturated",v:sat,target:DT.satFat,pct:satPct,over:satPct>=100,
                  note:satPct>=100?"over the daily limit":"of the daily limit",
-                 color:satPct>=100?"var(--bad)":satPct>=75?"var(--warn)":"var(--ink-soft)"},
+                 color:satPct>=100?"var(--bad)":"var(--good)"},
                 {name:"Unsaturated",v:unsat,target:DT.unsatFat,pct:unsatPct,over:false,
                  note:unsatPct>=100?"target reached":"of target",
-                 color:unsatPct>=100?"var(--good)":unsatPct>=70?"var(--warn)":"var(--bad)"},
+                 color:unsatPct>=100?"var(--good)":"var(--bad)"},
               ];
               return rows.map(r=><div key={r.name} style={{marginBottom:10}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
