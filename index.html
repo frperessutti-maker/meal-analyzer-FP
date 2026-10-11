@@ -1683,9 +1683,12 @@ let currentUserKey=null; // mirrors App()'s userKey_; read by doAnalyze/getSug s
 
 const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"Vit C",key:"vitaminC",unit:"mg",target:90},{name:"Vit A",key:"vitaminA",unit:"mcg",target:900},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Iodine",key:"iodine",unit:"mcg",target:150},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
 const MK=["calories","protein","fat","carbs","fiber"];
+// Tracked and summed like any nutrient, but not macro rows of their own: they live in a
+// breakdown under Fat. satFat carries a ceiling, unsatFat a target.
+const FAT_SPLIT=["satFat","unsatFat"];
 const AMINOS_BASE=[{name:"Leucine",key:"leucine",pctOfProtein:0.065,unit:"g"},{name:"Glutamine",key:"glutamine",pctOfProtein:0.06,unit:"g"},{name:"Beta-Alanine",key:"betaAlanine",fixedTarget:1.2,unit:"g"}];
 function getAminos(protTarget){return AMINOS_BASE.map(a=>({...a,target:a.fixedTarget||Math.round(protTarget*a.pctOfProtein*10)/10}))}
-const AK=[...MK,...MICROS.map(m=>m.key),...AMINOS_BASE.map(a=>a.key)];
+const AK=[...MK,...FAT_SPLIT,...MICROS.map(m=>m.key),...AMINOS_BASE.map(a=>a.key)];
 const GOALS=[
   {id:"maintain",label:"Maintain weight",calAdj:0,protMult:2},
   {id:"lose_weight",label:"Lose weight",calAdj:-500,protMult:2.2},
@@ -1789,6 +1792,11 @@ function calcTargets(p){
     if(p.custom.carbs!=null)t.carbs=Math.round(p.custom.carbs);
     t.calories=Math.round(t.protein*4+t.carbs*4+t.fat*9);
   }
+  // Saturated fat is a ceiling, not a goal: the usual guidance is to keep it under 10% of
+  // energy. What's left of the fat allowance is the unsaturated share, which is the part
+  // worth actually reaching. Derived after any custom override so the two still add up.
+  t.satFat=Math.max(Math.round(t.calories*0.10/9),1);
+  t.unsatFat=Math.max(t.fat-t.satFat,0);
   return t;
 }
 
@@ -1826,6 +1834,8 @@ Amino acid estimation references (per 100g of food):
 - Pork: leucine 1.7g, glutamine 1.0g, betaAlanine 0.15g
 Always estimate amino acids based on these references. Do NOT return 0 for leucine/glutamine if the meal contains protein.
 
+FATS: also split fat into satFat (saturated) and unsatFat (mono + polyunsaturated), both in g. They must add up to fat.
+
 Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/magnesium/potassium/calcium in mg, vitaminC in mg, vitaminA in mcg RAE, vitaminD in IU, B6 in mg, B12/folate/iodine in mcg. Amino acids (leucine/glutamine/betaAlanine) in grams.
 
 ITEMS: also split the meal into the separate foods it is made of.
@@ -1835,7 +1845,7 @@ ITEMS: also split the meal into the separate foods it is made of.
 - Every item needs its own calories and macros, and the items must add up to the meal totals.
 
 Respond ONLY with JSON:
-{"mealName":"description","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
+{"mealName":"description","calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
 }
 
 // Dates are the user's own calendar day, not UTC. toISOString() gave the UTC date, so for
@@ -2552,6 +2562,7 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
 function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
   const[mealsOpen,setMealsOpen]=useState(true);
   const[aminoOpen,setAminoOpen]=useState(false);
+  const[fatOpen,setFatOpen]=useState(false);
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
@@ -2594,6 +2605,41 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
               <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
             </div>})}
+          </div>}
+        </div>}
+        {row.key==="fat"&&<div style={{marginTop:8}}>
+          <button className="collapse-btn" onClick={()=>setFatOpen(!fatOpen)}>{fatOpen?"▾":"▸"} Saturated / unsaturated</button>
+          {fatOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
+            {/* The two halves read in opposite directions. Saturated is a ceiling, so it
+                turns red on reaching it; unsaturated is the share worth hitting, so it
+                turns green. */}
+            {(()=>{
+              const sat=tot.satFat||0, unsat=tot.unsatFat||0;
+              const satPct=Math.round((sat/DT.satFat)*100), unsatPct=Math.round((unsat/DT.unsatFat)*100);
+              const rows=[
+                {name:"Saturated",v:sat,target:DT.satFat,pct:satPct,over:satPct>=100,
+                 note:satPct>=100?"over the daily limit":"of the daily limit",
+                 color:satPct>=100?"var(--bad)":satPct>=75?"var(--warn)":"var(--ink-soft)"},
+                {name:"Unsaturated",v:unsat,target:DT.unsatFat,pct:unsatPct,over:false,
+                 note:unsatPct>=100?"target reached":"of target",
+                 color:unsatPct>=100?"var(--good)":unsatPct>=70?"var(--warn)":"var(--bad)"},
+              ];
+              return rows.map(r=><div key={r.name} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:13,fontWeight:500}}>{r.name}</span>
+                  <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(r.v*10)/10}g / {r.target}g ({r.pct}%)</span>
+                </div>
+                <PB value={r.v} max={r.target} color={r.color}/>
+                <div style={{fontSize:11,color:r.over?"var(--bad)":"var(--gray)",marginTop:3}}>{r.note}</div>
+              </div>);
+            })()}
+            {(() => {
+              const split=(tot.satFat||0)+(tot.unsatFat||0);
+              const total=tot.fat||0;
+              // Older meals were analysed before the split existed, so they carry fat but
+              // no breakdown. Say so rather than showing a quietly short total.
+              return (total-split)>1 ? <div style={{fontSize:11,color:"var(--gray)",marginTop:2}}>{Math.round(total-split)}g from meals logged before the breakdown existed.</div> : null;
+            })()}
           </div>}
         </div>}
       </div>)}
