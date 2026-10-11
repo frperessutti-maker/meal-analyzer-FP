@@ -1925,12 +1925,19 @@ function suggestMealTime(history,todayMeals,meal){
   const d=new Date();const now=d.getHours()*60+d.getMinutes();
   const slot=slotForMinutes(now);
   if(!slot||isSnack(meal))return nowTime();
-  const taken=(todayMeals||[]).some(m=>{const v=minsOf(m.time);return v!==null&&v>=slot.from&&v<slot.to&&!isSnack(m)});
+  // Anything already logged in this window means the meal is underway, so the second
+  // plate is being eaten now. Size is irrelevant here: a 180 Cal starter counted as a
+  // snack and left the slot looking free, which is how the average came up again.
+  const taken=(todayMeals||[]).some(m=>{const v=minsOf(m.time);return v!==null&&v>=slot.from&&v<slot.to});
   if(taken)return nowTime();
   // The usual time is only a sensible guess once it has passed. Logging at 11:45 when
   // lunch is normally 12:30 would otherwise suggest a time that hasn't happened yet.
   const avg=averageMealTimes(history)[slot.key];
-  return now>=avg?hhmm(avg):nowTime();
+  if(now<avg)return nowTime();
+  // And never propose a time earlier than something already logged today — meals run
+  // forward, so an average that predates the last entry is not a plausible guess.
+  const latest=(todayMeals||[]).map(m=>minsOf(m.time)).filter(v=>v!==null).reduce((a,b)=>Math.max(a,b),-1);
+  return avg>=latest?hhmm(avg):nowTime();
 }
 // Backfilling a past day has no meaningful "entry time", so main meals are placed by
 // position instead: first is breakfast, second lunch, third dinner. Anything beyond
