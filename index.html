@@ -2703,13 +2703,28 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
 }
 
 /* ── HISTORY ── */
-function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,customTypes,DT,prompt,profile}){
+function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,toggleSkip,customTypes,DT,prompt,profile}){
   const[editTimeKey,setEditTimeKey]=useState(null);
   const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
   const[avgOpen,setAvgOpen]=useState(false);
+  const[tmplEditKey,setTmplEditKey]=useState(null),[tmplTxt,setTmplTxt]=useState(""),[tmplLd,setTmplLd]=useState(false),[tmplErr,setTmplErr]=useState(null);
+  const[tmplTimeKey,setTmplTimeKey]=useState(null),[tmplEraseKey,setTmplEraseKey]=useState(null);
+  // A recurring meal is a template shared by every day, so it cannot be edited in place for
+  // one day only. Instead the day takes its own copy: the template is skipped just for that
+  // date and an ordinary logged meal stands in its place, carrying the edit. Every other day
+  // is untouched, and the copy is then editable and deletable like any other entry.
+  const detachTemplate=(date,idx,meal)=>{onAdd(date,{...meal,date,fromRecurring:true});toggleSkip(date,idx)};
+  const saveTmplEdit=async(date,idx)=>{
+    const t=(templates||[])[idx];if(!t||!tmplTxt.trim())return;
+    if(tmplTxt.trim()===t.mealName){setTmplEditKey(null);setTmplTxt("");return}
+    setTmplLd(true);setTmplErr(null);
+    try{const m=await doAnalyze(tmplTxt,null,prompt);detachTemplate(date,idx,{...m,time:t.time||""});setTmplEditKey(null);setTmplTxt("")}
+    catch(e){setTmplErr("Edit failed: "+e.message)}
+    finally{setTmplLd(false)}
+  };
   const handleEditHist=async(date,idx)=>{if(!editHistTxt.trim())return;const orig=(history[date]||[])[idx];const textChanged=editHistTxt.trim()!==orig?.mealName;if(!textChanged){setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("");return}setEditHistLd(true);try{const m=await doAnalyze(editHistTxt,null,prompt);m.time=orig?.time||"";m.date=date;onDel(date,idx);onAdd(date,m);setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditHistLd(false)}};
   // 7-day window: averages cover all 7 (today included), the day cards cover the 6
   // completed days, and the chart renders oldest-to-newest so today sits on the right.
@@ -2861,14 +2876,25 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
             <button onClick={()=>setRppEditDate(null)} className="btn-x" style={{fontSize:12,color:"var(--ink-soft)"}}>Done</button>
           </div>
         </div>})()}
-        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
+        {(history[d.date]||[]).map((m,mi)=>editHistDate===d.date&&editHistIdx===mi?<div key={mi} className="panel" style={{padding:12}}><textarea value={editHistTxt} onChange={e=>setEditHistTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditHist(d.date,mi)} disabled={editHistLd}>{editHistLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditHistDate(null);setEditHistIdx(null)}}>Cancel</button></div></div>:<div key={mi} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,fontSize:13,color:"var(--ink)",padding:"8px 0",borderTop:"1px solid var(--border-soft)"}}><div style={{flex:1,minWidth:0}}><div>{m.mealName}</div><div style={{fontSize:11,color:"var(--ink-soft)",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><span>{Math.round(m.calories)} Cal</span>{m.fromRecurring&&<span style={{fontSize:9.5,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 6px",borderRadius:100,letterSpacing:.2}}>RECURRING · THIS DAY</span>}</div></div><div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>{editTimeKey===d.date+"#"+mi
   ?<input type="time" autoFocus value={m.time||""} onChange={e=>onUpd(d.date,mi,{time:e.target.value})} onBlur={()=>setEditTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
   :<span onClick={()=>setEditTimeKey(d.date+"#"+mi)} title="Edit time" style={{fontSize:11.5,fontWeight:600,color:m.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}<span onClick={()=>{setEditHistDate(d.date);setEditHistIdx(mi);setEditHistTxt(m.mealName)}} style={{cursor:"pointer"}}>✏️</span><span onClick={()=>onDel(d.date,mi)} style={{cursor:"pointer",color:"var(--bad)",fontSize:16}}>×</span></div></div>)}
         {/* Recurring meals are already counted in this day's totals below, so they have to
             be listed here as well — otherwise the numbers include food that isn't shown.
-            They're managed on the Summary page, so these rows are read-only. */}
-        {(templates||[]).filter((_,i)=>!(skipped[d.date]||[]).includes(i)).map((t,ti)=>
-          <div key={"rt"+ti} className="panel" style={{padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+            Editing the time or the content, or removing one, applies to this day alone:
+            see detachTemplate. The template itself stays on the Summary page. */}
+        {(templates||[]).map((t,ti)=>({t,ti})).filter(({ti})=>!(skipped[d.date]||[]).includes(ti)).map(({t,ti})=>{
+          const tkey=d.date+"#"+ti;
+          if(tmplEditKey===tkey)return<div key={"rt"+ti} className="panel" style={{padding:12}}>
+            <textarea value={tmplTxt} onChange={e=>setTmplTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/>
+            {tmplErr&&<div className="err" style={{marginBottom:8}}>{tmplErr}</div>}
+            <div style={{fontSize:11,color:"var(--gray)",marginBottom:8}}>Re-analysed and saved for {fmt(d.date)} only — the recurring meal itself stays unchanged on every other day.</div>
+            <div className="fr">
+              <button className="btn btn-rose btn-s" onClick={()=>saveTmplEdit(d.date,ti)} disabled={tmplLd||!tmplTxt.trim()}>{tmplLd?"Saving…":"Save for this day"}</button>
+              <button className="btn btn-o btn-s" onClick={()=>{setTmplEditKey(null);setTmplTxt("");setTmplErr(null)}}>Cancel</button>
+            </div>
+          </div>;
+          return<div key={"rt"+ti} className="panel" style={{padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{t.mealName}</div>
               <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -2876,8 +2902,21 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
                 <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
               </div>
             </div>
-            {t.time&&<span style={{fontSize:11.5,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"4px 9px",borderRadius:100,whiteSpace:"nowrap",flexShrink:0}}>{t.time}</span>}
-          </div>)}
+            <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+              {tmplEraseKey===tkey?<>
+                <span style={{fontSize:11,color:"var(--bad)",whiteSpace:"nowrap"}}>Remove from this day?</span>
+                <button className="btn btn-d btn-s" onClick={()=>{toggleSkip(d.date,ti);setTmplEraseKey(null)}}>Yes</button>
+                <button className="btn btn-o btn-s" onClick={()=>setTmplEraseKey(null)}>No</button>
+              </>:<>
+                {tmplTimeKey===tkey
+                  ?<input type="time" autoFocus defaultValue={t.time||""} onChange={e=>{if(e.target.value){setTmplTimeKey(null);detachTemplate(d.date,ti,{...t,time:e.target.value})}}} onBlur={()=>setTmplTimeKey(null)} style={{width:92,padding:"4px 7px",fontSize:11.5}}/>
+                  :<span onClick={()=>setTmplTimeKey(tkey)} title="Set the time for this day only" style={{fontSize:11.5,fontWeight:600,color:t.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"5px 9px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{t.time||"set time"}</span>}
+                <span onClick={()=>{setTmplEditKey(tkey);setTmplTxt(t.mealName);setTmplErr(null)}} title="Change what it was, for this day only" style={{cursor:"pointer"}}>✏️</span>
+                <span onClick={()=>setTmplEraseKey(tkey)} title="Remove it from this day only" style={{cursor:"pointer",color:"var(--bad)",fontSize:16,lineHeight:1}}>×</span>
+              </>}
+            </div>
+          </div>;
+        })}
         {d.totals&&<>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
@@ -3309,7 +3348,7 @@ function App(){
 
     {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} allRpp={rpp} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
-    {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} DT={DT} prompt={prompt} profile={profile}/>}
+    {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} toggleSkip={toggleSkip} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} templates={templates} skipped={skipped} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
     <div className="tabbar">
