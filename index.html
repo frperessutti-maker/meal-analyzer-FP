@@ -655,19 +655,38 @@
       const last = Math.max(...prev), first = Math.min(...next);
       nights.push({ from: days[i - 1], to: days[i], hours: (1440 - last + first) / 60, lastMeal: last, firstMeal: first });
     }
-    if (nights.length < 2) return null;
-    const avg = nights.reduce((s, n) => s + n.hours, 0) / nights.length;
-    const longest = nights.reduce((a, b) => (b.hours > a.hours ? b : a));
-    const shortest = nights.reduce((a, b) => (b.hours < a.hours ? b : a));
+    if (!nights.length) return null;
     const fmtH = (h) => `${Math.floor(h)}h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}m`;
+    // The headline figures cover the last seven days. A month-long average is a number
+    // nothing you do this week can move; a week's is one you can still act on. The trend
+    // below it keeps the longer view, which is where a month belongs.
+    const end = nights[nights.length - 1].to;
+    const week = windowDays(end, 0, 6);
+    const recent = nights.filter((n) => week.includes(n.to));
+    if (recent.length < 2) return null;
+    const avg = recent.reduce((s, n) => s + n.hours, 0) / recent.length;
+    const longest = recent.reduce((a, b) => (b.hours > a.hours ? b : a));
+    const shortest = recent.reduce((a, b) => (b.hours < a.hours ? b : a));
+    // Eight weeks, oldest first, each the average of whatever nights fell inside it. A
+    // week with nothing logged stays null rather than being drawn as a zero-hour fast.
+    const weeks = [];
+    for (let w = 7; w >= 0; w--) {
+      const span = windowDays(end, w * 7, w * 7 + 6);
+      const ns = nights.filter((n) => span.includes(n.to));
+      weeks.push({
+        start: span[6], end: span[0], nights: ns.length,
+        avgHours: ns.length ? Math.round((ns.reduce((s, n) => s + n.hours, 0) / ns.length) * 10) / 10 : null,
+      });
+    }
     return {
-      nights: nights.length,
+      nights: recent.length, days: week.length, weekEnd: end,
       avgHours: Math.round(avg * 10) / 10,
       avgText: fmtH(avg),
       longestText: fmtH(longest.hours), longestDate: longest.to,
       shortestText: fmtH(shortest.hours), shortestDate: shortest.to,
-      avgLastMeal: hourToClock(nights.reduce((s, n) => s + n.lastMeal, 0) / nights.length / 60),
-      avgFirstMeal: hourToClock(nights.reduce((s, n) => s + n.firstMeal, 0) / nights.length / 60),
+      avgLastMeal: hourToClock(recent.reduce((s, n) => s + n.lastMeal, 0) / recent.length / 60),
+      avgFirstMeal: hourToClock(recent.reduce((s, n) => s + n.firstMeal, 0) / recent.length / 60),
+      weeks, weeksFmt: weeks.map((w) => (w.avgHours === null ? null : fmtH(w.avgHours))),
     };
   }
 
@@ -1557,34 +1576,56 @@
 
     // ── fasting + food quality, side by side ──
     const half = [];
-    if (!f) pending.push({ t: "Overnight fast", r: "needs two consecutive days with meals logged on both sides of a night" });
+    if (!f) pending.push({ t: "Overnight fast", r: "needs two nights in the last week with meals logged on both sides" });
     else {
       const toPct = (clock) => { const [h, m] = String(clock).split(":").map(Number); return ((h * 60 + m) / 1440) * 100; };
       const s = toPct(f.avgFirstMeal), e = toPct(f.avgLastMeal);
+      // The scale below the bar is fixed. The clock times used to be printed at their own
+      // positions, which put the last meal on top of the 24:00 whenever dinner was late;
+      // they are spelled out underneath instead, where nothing can collide.
+      const vals = f.weeks.map((w) => w.avgHours).filter((v) => v !== null);
+      const top = Math.max(16, ...vals) * 1.1;
+      const shortDate = (d) => { const x = new Date(d + "T12:00:00"); return `${x.getDate()}/${x.getMonth() + 1}`; };
       half.push(`<div style="background:${H.card};border:1px solid ${H.line};border-radius:20px;padding:36px;display:flex;flex-direction:column;gap:22px">
         <div style="display:flex;flex-direction:column;gap:6px">
           <h2 style="${serif};font-size:28px;margin:0">Overnight fast</h2>
-          <p style="font-size:15px;color:${H.muted};margin:0">${f.nights} night${f.nights !== 1 ? "s" : ""} with meals logged on both sides</p>
+          <p style="font-size:15px;color:${H.muted};margin:0">Based on the last 7 days</p>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
           <div style="${LABEL}">Your typical day</div>
-          <div style="position:relative;height:44px;border-radius:10px;background:#DDE5E1;overflow:hidden">
-            <div style="position:absolute;left:${s}%;width:${Math.max(e - s, 2)}%;top:0;height:44px;background:${H.green}"></div>
-            <div style="position:absolute;left:${s}%;width:${Math.max(e - s, 2)}%;top:0;height:44px;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-size:14px;font-weight:600">eating window</div>
+          <div style="position:relative;height:40px;border-radius:10px;background:#DDE5E1;overflow:hidden">
+            <div style="position:absolute;left:${s}%;width:${Math.max(e - s, 2)}%;top:0;height:40px;background:${H.green}"></div>
           </div>
           <div style="position:relative;height:18px;font-size:13px;color:${H.muted}">
             <span style="position:absolute;left:0">00:00</span>
-            <span style="position:absolute;left:${s}%;transform:translateX(-50%);font-weight:600;color:${H.ink}">${esc(f.avgFirstMeal)}</span>
-            <span style="position:absolute;left:${e}%;transform:translateX(-50%);font-weight:600;color:${H.ink}">${esc(f.avgLastMeal)}</span>
+            <span style="position:absolute;left:50%;transform:translateX(-50%)">12:00</span>
             <span style="position:absolute;right:0">24:00</span>
           </div>
+          <p style="font-size:15px;color:${H.soft};margin:0;line-height:1.5">Eating window <strong>${esc(f.avgFirstMeal)}</strong> to <strong>${esc(f.avgLastMeal)}</strong>, so the fast runs <strong>${esc(f.avgText)}</strong> on average across ${f.nights} night${f.nights !== 1 ? "s" : ""}.</p>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
-          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Shortest</div><div style="${serif};font-size:22px;font-weight:600">${esc(f.shortestText)}</div></div>
-          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Average</div><div style="${serif};font-size:22px;font-weight:600;color:${H.green}">${esc(f.avgText)}</div></div>
-          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Longest</div><div style="${serif};font-size:22px;font-weight:600">${esc(f.longestText)}</div></div>
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Shortest</div><div style="${serif};font-size:20px;font-weight:600;white-space:nowrap">${esc(f.shortestText)}</div></div>
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Average</div><div style="${serif};font-size:20px;font-weight:600;white-space:nowrap;color:${H.green}">${esc(f.avgText)}</div></div>
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:13px;color:${H.muted}">Longest</div><div style="${serif};font-size:20px;font-weight:600;white-space:nowrap">${esc(f.longestText)}</div></div>
         </div>
-        <p style="font-size:13px;color:${H.faint};margin:0">Nights where either day had nothing logged are left out, so gaps in tracking are not counted as fasts.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:18px;border-top:1px solid ${H.rule}">
+          <div style="${LABEL}">Weekly average, last 8 weeks</div>
+          <div style="display:flex;align-items:flex-end;gap:5px;height:110px">
+            ${f.weeks.map((w, i) => {
+              if (w.avgHours === null) return `<div style="flex:1;height:4px;border-radius:2px;background:${H.track}"></div>`;
+              const h = Math.max(4, Math.round((w.avgHours / top) * 100));
+              const last = i === f.weeks.length - 1;
+              return `<div style="flex:1;height:${h}%;border-radius:6px 6px 2px 2px;background:${last ? H.green : H.greenBar}"></div>`;
+            }).join("")}
+          </div>
+          <div style="display:flex;gap:5px">
+            ${f.weeks.map((w) => `<div style="flex:1;text-align:center;font-size:11px;color:${H.muted};line-height:1.3">${w.avgHours === null ? "—" : Math.round(w.avgHours) + "h"}</div>`).join("")}
+          </div>
+          <div style="display:flex;gap:5px">
+            ${f.weeks.map((w, i) => `<div style="flex:1;text-align:center;font-size:10px;color:${H.faint};line-height:1.3">${i === 0 || i === f.weeks.length - 1 ? shortDate(w.start) : ""}</div>`).join("")}
+          </div>
+          <p style="font-size:13px;color:${H.muted};margin:0">Each bar is one week's average, oldest on the left. A week with nothing logged is left empty rather than drawn as a zero-hour fast.</p>
+        </div>
       </div>`);
     }
     if (!q) pending.push({ t: "Food quality rating", r: "needs at least 5 meals logged in the last week" });
