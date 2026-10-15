@@ -739,13 +739,21 @@
     const penaltyUnits = processed.length + late.length * 0.5;
     const share = penaltyUnits / rows.length;
     const over = Math.max(0, share - CHEAT_ALLOWANCE);
-    const stars = Math.round(Math.max(0, 5 * (1 - over / (1 - CHEAT_ALLOWANCE))) * 2) / 2;
+    const nameStars = Math.round(Math.max(0, 5 * (1 - over / (1 - CHEAT_ALLOWANCE))) * 2) / 2;
+    // Past half the days, saturated fat has stopped being the odd heavy day and become the
+    // pattern, so it starts costing the rating rather than only sitting beside it. Nothing
+    // is docked at 50%, two stars at every single day, straight line in between. It is
+    // capped there on purpose: the rating is mostly about what the food is, and one
+    // nutrient should not be able to take it to zero on its own.
+    const sf = satFatDays(history, targets);
+    const satPenalty = (sf && sf.overPct > 50) ? Math.round(((sf.overPct - 50) / 50) * 2 * 2) / 2 : 0;
+    const stars = Math.max(0, nameStars - satPenalty);
     const tally = {};
     processed.forEach((r) => { const k = r.name.toLowerCase(); tally[k] = tally[k] || { name: r.name, n: 0 }; tally[k].n++; });
     const lateTally = {};
     late.forEach((r) => { const k = r.name.toLowerCase(); lateTally[k] = lateTally[k] || { name: r.name, n: 0 }; lateTally[k].n++; });
     return {
-      satFat: satFatDays(history, targets),
+      satFat: sf, satPenalty, starsBeforeSatFat: nameStars,
       stars, totalItems: rows.length, totalMeals: meals.length,
       wholeCount: whole.length, wholePct: Math.round(whole.length / rows.length * 100),
       processedCount: processed.length, processedPct: Math.round(processed.length / rows.length * 100),
@@ -1560,6 +1568,13 @@
           <span style="${serif};font-size:56px;font-weight:600;line-height:1;color:${stars >= 4 ? H.green : stars >= 2.5 ? "#B7791F" : H.orange}">${stars}</span>
           <span style="font-size:20px;color:${H.muted}">/ 5 stars</span>
         </div>
+        ${(() => {
+          // What was actually lost, not what was nominally charged: a rating already at the
+          // floor cannot be "down from 0 by 2".
+          const lost = Math.round((q.starsBeforeSatFat - q.stars) * 2) / 2;
+          if (lost <= 0) return "";
+          return `<p style="font-size:14px;line-height:1.5;color:${H.orange};margin:-14px 0 0">Down from ${q.starsBeforeSatFat} — ${lost} star${lost !== 1 ? "s" : ""} docked for saturated fat running over the limit on ${q.satFat.overPct}% of your days.</p>`;
+        })()}
         <div style="display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;justify-content:space-between;font-size:14px"><span>Whole foods</span><span style="font-weight:600">${q.wholePct}%</span></div>
           <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(q.wholePct, 0, 100)}%;background:${H.green}"></div></div>
