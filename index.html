@@ -1936,6 +1936,21 @@ function MacroPieModal({meal,onClose}){
             {x.key==="carbs"&&fiber>0&&<div style={{fontSize:11.5,color:"var(--gray)",paddingLeft:20,paddingBottom:5}}>{Math.round(fiber*10)/10}g of that is fiber</div>}
           </div>)}
         </div>
+        {/* Which part of the plate carries the fat. A dressing can be most of a salad's
+            fat while being a small part of the plate, and the meal-level donut cannot show
+            that — so the parts are listed with the one number the donut raises questions
+            about. Only when the analysis actually split the meal. */}
+        {(()=>{
+          const items=mealItems(meal);
+          if(items.length<2)return null;
+          return<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--border-soft)"}}>
+            <div style={{fontSize:10.5,fontWeight:600,letterSpacing:.4,color:"var(--gray)",textTransform:"uppercase",marginBottom:5}}>What it is made of</div>
+            {items.map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:12.5,padding:"3px 0"}}>
+              <span style={{color:"var(--ink-soft)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.name}</span>
+              <span style={{flexShrink:0,color:"var(--gray)"}}>{Math.round(Number(it.calories)||0)} Cal · {Math.round((Number(it.fat)||0)*10)/10}g fat</span>
+            </div>)}
+          </div>;
+        })()}
         {/* Weight and energy rank the macros differently, because fat carries 9 Cal a gram
             against 4 for the other two. Worth one line so a meal that looks light on fat
             here is not assumed to be light on fat in the calorie count. */}
@@ -2124,6 +2139,8 @@ Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/magnesium/potassium/calciu
 ITEMS: also split the meal into the separate foods it is made of.
 - Foods joined into one dish stay ONE item: "pasta with shrimps", "chicken and rice risotto", "salad with feta" -> one item each.
 - Foods listed as separate things are SEPARATE items: "pasta and shrimps" -> "pasta" + "shrimps"; "eggs, toast and orange juice" -> three items.
+- EXCEPTION, overriding the first rule: a fat or sauce added on top of a dish is ALWAYS its own item, however the entry phrases it. Dressing, vinaigrette, olive oil, butter, margarine, mayonnaise, aioli, cream, creme fraiche, pesto, gravy, syrup, honey drizzled on top, nut butter spread on something. "salad with olive oil dressing" -> "salad" + "olive oil dressing". "toast with butter" -> "toast" + "butter". "chicken with gravy" -> "chicken" + "gravy". These carry most of a dish's fat, so folding them into it makes a lean dish look rich and hides the one thing the user could change.
+- If the dressing or sauce is named but no amount is given, assume a normal restaurant serving: 1-2 tablespoons of dressing or oil, 10g of butter.
 - If the meal is a single food, return one item whose name is that food.
 - Every item needs its own calories and macros, and the items must add up to the meal totals.
 
