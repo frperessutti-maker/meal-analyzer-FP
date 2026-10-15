@@ -847,7 +847,7 @@
     if (pct < 90) return { word: "Low", tone: "warn" };
     if (pct <= 110) return { word: "On target", tone: "good" };
     if (pct <= 200) return { word: "High", tone: "warn" };
-    return { word: "Excess", tone: "bad" };
+    return { word: "Excess", tone: "warn" };          // a warning, not a shortfall
   }
   function nutrientSection(history, targets, dailyExtras) {
     if (!targets || (!targets.macros && !targets.micros)) return null;
@@ -869,7 +869,11 @@
       const pct = (n.target && pool.length) ? Math.round((avg / n.target) * 100) : null;
       return { key: n.key, label: n.label, unit: n.unit || "", target: n.target, avg: Math.round(avg * 10) / 10, pct, ceiling: !!n.ceiling, days: pool.length, status: nutrientStatus(pct, n.ceiling) };
     });
-    const macros = buildRows(targets.macros), micros = buildRows(targets.micros);
+    const macros = buildRows(targets.macros);
+    // Lowest share of target first: the row that needs something done about it is the one
+    // worth reading, and hunting for it down an arbitrary list is work the report can do.
+    // A nutrient with no figure at all sorts last — it is not a deficiency, it is a blank.
+    const micros = buildRows(targets.micros).sort((a, b) => (a.pct === null) - (b.pct === null) || a.pct - b.pct);
     // For each nutrient that falls short, which meal the user already eats is its best
     // source? Ranked by what one serving delivers rather than by the weekly total, so a
     // staple contributing a little every day cannot crowd out the meal that would
@@ -1440,11 +1444,15 @@
     const cal = n && n.macros.find((r) => r.key === "calories");
     // Ceiling rows are left out of these counts: "17 of 19 on target" should mean targets
     // aimed at, and a saturated-fat row sitting comfortably low is not one of them.
+    // Only a shortfall counts against the total. Being above a target is not a failure to
+    // reach it, and scoring it as one made the headline read far worse than the eating —
+    // a 4 of 19 where fifteen nutrients were met or beaten. An excess still gets its own
+    // warning in the table below; it just does not take a point away up here.
     const aimed = n ? [...n.macros, ...n.micros].filter((r) => !r.ceiling) : [];
-    const onTarget = aimed.filter((r) => r.status.word === "On target").length;
+    const onTarget = aimed.filter((r) => r.pct !== null && r.pct >= 70).length;
     const totalN = aimed.length;
-    const lowN = aimed.filter((r) => r.pct !== null && r.pct < 90).length;
-    const highN = aimed.filter((r) => r.pct !== null && r.pct > 110).length;
+    const lowN = aimed.filter((r) => r.pct !== null && r.pct < 70).length;
+    const highN = aimed.filter((r) => r.pct !== null && r.pct > 200).length;
     const pending = [];
     const parts = [];
 
@@ -1458,7 +1466,7 @@
     if (f) cards.push(kpi("Avg overnight fast", esc(f.avgText), `across ${f.nights} fully logged night${f.nights !== 1 ? "s" : ""}`));
     if (q) cards.push(kpi("Food quality", `${q.stars}<span style="font-size:18px;color:${H.muted}"> / 5</span>`, `${q.wholePct}% of ${q.totalItems} foods are whole foods`));
     if (cal) cards.push(kpi("Energy intake", `<span style="color:${cal.pct < 90 || cal.pct > 110 ? H.orangeDeep : H.green}">${cal.pct}%</span><span style="font-size:15px;color:${H.muted}"> of target</span>`, `${num(cal.avg)} of ${num(cal.target)} Cal`));
-    if (n) cards.push(kpi("Nutrients on target", `${onTarget}<span style="font-size:18px;color:${H.muted}"> / ${totalN}</span>`, `${lowN} low · ${highN} above target`));
+    if (n) cards.push(kpi("Nutrients on target", `${onTarget}<span style="font-size:18px;color:${H.muted}"> / ${totalN}</span>`, `${lowN === 0 ? "nothing below 70%" : `${lowN} below 70%`}${highN ? ` · ${highN} above 200%` : ""}`));
     parts.push(`<div style="display:flex;flex-direction:column;gap:28px">
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="font-size:14px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#1F5E4A">Nutrition, sleep &amp; training · ${meta.totalDaysLogged}-day review</div>
@@ -1733,7 +1741,7 @@ if (half.length) parts.push(`<div class="g-2" style="display:grid;grid-template-
       parts.push(`<div style="${CARD}">
         <div style="display:flex;flex-direction:column;gap:6px">
           <h2 style="${serif};${H2};margin:0">Micronutrients</h2>
-          <p style="${SUB};margin:0">Deficient below 70%, low 70–89%, on target 90–110%, high 111–200%, excess above 200%.</p>
+          <p style="${SUB};margin:0">Worst first. Only below 70% counts as missed — above target is fine, and above 200% is flagged without being held against you.</p>
         </div>
         <div style="display:flex;flex-direction:column">${head("150px minmax(0,1fr) 190px 110px")}${n.micros.map((r) => row(r, false)).join("")}</div></div>`);
 
