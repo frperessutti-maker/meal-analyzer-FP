@@ -959,13 +959,13 @@
     const opp = f.direction === "positive" ? "lower" : "higher";
     const strong = f.direction === "positive" ? f.groups.high : f.groups.low;
     const weak = f.direction === "positive" ? f.groups.low : f.groups.high;
-    return `Your best sessions averaged RPP ${strong.rppAvg} and followed ${dir} ${macro} (${strong.macroAvg} ${unit}) in ${window}. Sessions with ${opp} ${macro} (${weak.macroAvg} ${unit}) averaged RPP ${weak.rppAvg}.`;
+    return `Your best sessions averaged ${rppText(strong.rppAvg)} and followed ${dir} ${macro} (${strong.macroAvg} ${unit}) in ${window}. Sessions with ${opp} ${macro} (${weak.macroAvg} ${unit}) averaged ${rppText(weak.rppAvg)}.`;
   }
   function tier2Sentence(name, data) {
     const labels = { sun: { yes: "days you logged sun exposure", no: "days without" }, hydration: { yes: "days you logged hydration", no: "days without" }, sleep: { yes: "sessions after a well-slept night", no: "sessions after poor sleep" } };
     const l = labels[name] || { yes: `days with ${name}`, no: `days without` };
     const diff = Math.abs(data.delta); const direction = data.delta > 0 ? "higher" : "lower";
-    return `On the ${data.nTrue} ${l.yes} your average RPP was ${data.meanTrue} — ${diff} points ${direction} than the ${data.nFalse} ${l.no}, for which you averaged ${data.meanFalse}.`;
+    return `On the ${data.nTrue} ${l.yes} your average was ${rppText(data.meanTrue)} — ${diff} points ${direction} than the ${data.nFalse} ${l.no}, which averaged ${rppText(data.meanFalse)}.`;
   }
   function tier3Sentence(name, f) {
     if (f.wellRate !== undefined) return `${f.label} occurred on ${f.wellRate}% of well-slept nights (n=${f.nWell}) and ${f.poorRate}% of poor-sleep nights (n=${f.nPoor}).`;
@@ -976,9 +976,9 @@
   function tier4Sentence(c) {
     const direction = c.rppDelta > 0 ? "rose" : "shifted";
     const isCo = c.coOccurring && c.coOccurring.length > 1;
-    if (isCo) return `Around ${formatDate(c.date)}, several habits changed together: ${c.coOccurringLabels.join(", ")}. In the 28 days after, your average RPP ${direction} from ${c.rppBefore} to ${c.rppAfter}. Because the changes co-occurred, the individual effect of each cannot be separated.`;
+    if (isCo) return `Around ${formatDate(c.date)}, several habits changed together: ${c.coOccurringLabels.join(", ")}. In the 28 days after, your average RPP ${direction} from ${rppText(c.rppBefore)} to ${rppText(c.rppAfter)}. Because the changes co-occurred, the individual effect of each cannot be separated.`;
     const relText = `${c.relChange > 0 ? "up" : "down"} ${Math.abs(c.relChange)}%`;
-    return `Around ${formatDate(c.date)}, your ${c.label.toLowerCase()} shifted ${relText} (from ${c.before} to ${c.after}). In the 28 days after, your average RPP ${direction} from ${c.rppBefore} to ${c.rppAfter}.`;
+    return `Around ${formatDate(c.date)}, your ${c.label.toLowerCase()} shifted ${relText} (from ${c.before} to ${c.after}). In the 28 days after, your average RPP ${direction} from ${rppText(c.rppBefore)} to ${rppText(c.rppAfter)}.`;
   }
 
   function tier1Takeaway(tier1) {
@@ -1082,7 +1082,7 @@
         });
         (data.supplements || []).forEach((f) => {
           const color = f.direction === "positive" ? COLORS.positive : COLORS.negative;
-          w.finding(`Sessions where you had ${f.label} ${WINDOW_SHORT[f.window]} averaged RPP ${f.meanWith} (n=${f.nWith}); the ${f.nWithout} sessions without it averaged ${f.meanWithout}.`, f.confidence, { dotColor: color });
+          w.finding(`Sessions where you had ${f.label} ${WINDOW_SHORT[f.window]} averaged ${rppText(f.meanWith)} (n=${f.nWith}); the ${f.nWithout} sessions without it averaged ${rppText(f.meanWithout)}.`, f.confidence, { dotColor: color });
         });
       });
       w.takeaway(tier1Takeaway(report.tier1));
@@ -1279,9 +1279,18 @@
       <div style="width:110px;height:5px;border-radius:3px;background:${H.track};overflow:hidden"><div style="height:5px;width:${clamp(c, 0, 100)}%;background:${col}"></div></div>
     </div>`;
   }
-  // The dumbbell used throughout: two RPP values on a 6-10 rail.
+  // RPP is picked as one of four levels and stored as a number on a 1-10 scale, so a mean
+  // lands between them. These bands match the app's RPP_LEVELS; the engine keeps its own
+  // copy because it is standalone and takes no vocabulary from the app.
+  const RPP_WORDS = [[7.5, "Excellent"], [5, "Good"], [2.5, "Mediocre"], [0, "Bad"]];
+  const rppWord = (v) => (RPP_WORDS.find(([min]) => v > min) || RPP_WORDS[3])[1];
+  const rppText = (v) => `${rppWord(v)} (${v})`;
+
+  // The dumbbell used throughout: two RPP values on a rail spanning the four levels, Bad
+  // at one end and Excellent at the other. It used to span 6-10, which was fine for a
+  // free 1-10 score but would stack Bad and Mediocre on top of each other now.
   function dumbbell(worse, better) {
-    const pos = (v) => clamp(((v - 6) / 4) * 100, 0, 100);
+    const pos = (v) => clamp(((v - 2) / 7) * 100, 0, 100);
     const a = pos(worse), b = pos(better), lo = Math.min(a, b), hi = Math.max(a, b);
     return `<div style="position:relative;height:28px">
       <div style="position:absolute;left:0;right:0;top:13px;height:2px;background:${H.hair}"></div>
@@ -1301,7 +1310,7 @@
     if (t2.sleep && t2.sleep.delta > 0) {
       const sun = report.tier3 && report.tier3.factors && report.tier3.factors.sun;
       out.push({ title: "Protect your sleep, get daylight",
-        text: `Your strongest lifestyle signal: ${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta} RPP after good sleep (${t2.sleep.meanTrue} vs ${t2.sleep.meanFalse}).` +
+        text: `Your strongest lifestyle signal: ${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta} RPP after good sleep (${rppText(t2.sleep.meanTrue)} vs ${rppText(t2.sleep.meanFalse)}).` +
               (sun ? ` Sun exposure showed up on ${sun.wellRate}% of good nights vs ${sun.poorRate}% of poor ones.` : "") });
     }
     Object.entries(report.tier1 || {}).forEach(([type, d]) => {
@@ -1310,7 +1319,7 @@
       const better = f.direction === "positive" ? f.groups.high : f.groups.low;
       const worse = f.direction === "positive" ? f.groups.low : f.groups.high;
       out.push({ title: `${f.direction === "positive" ? "More" : "Less"} ${MACRO_LABELS[f.macro]} ${WINDOW_SHORT[f.window]} for ${labelOfType(type).toLowerCase()}`,
-        text: `Best sessions followed ${better.macroAvg}${MACRO_UNITS[f.macro]} (vs ${worse.macroAvg}${MACRO_UNITS[f.macro]}), scoring RPP ${better.rppAvg} against ${worse.rppAvg}.` });
+        text: `Best sessions followed ${better.macroAvg}${MACRO_UNITS[f.macro]} (vs ${worse.macroAvg}${MACRO_UNITS[f.macro]}), scoring ${rppText(better.rppAvg)} against ${rppText(worse.rppAvg)}.` });
     });
     const n = report.nutrients;
     if (n && out.length < 4) {
@@ -1350,7 +1359,7 @@
       <div style="${serif};font-size:40px;font-weight:600;line-height:1${color ? `;color:${color}` : ""}">${value}</div>
       <div style="font-size:13px;color:${H.muted}">${note}</div></div>`;
     const cards = [];
-    if (t2.sleep) cards.push(kpi("Good-sleep boost", `${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta}`, `RPP after a well-slept night (${t2.sleep.meanTrue} vs ${t2.sleep.meanFalse})`, t2.sleep.delta > 0 ? H.green : H.orange));
+    if (t2.sleep) cards.push(kpi("Good-sleep boost", `${t2.sleep.delta > 0 ? "+" : ""}${t2.sleep.delta}`, `RPP after a well-slept night (${rppText(t2.sleep.meanTrue)} vs ${rppText(t2.sleep.meanFalse)})`, t2.sleep.delta > 0 ? H.green : H.orange));
     if (f) cards.push(kpi("Avg overnight fast", esc(f.avgText), `across ${f.nights} fully logged night${f.nights !== 1 ? "s" : ""}`));
     if (q) cards.push(kpi("Food quality", `${q.stars}<span style="font-size:18px;color:${H.muted}"> / 5</span>`, `${q.wholePct}% of ${q.totalItems} foods are whole foods`));
     if (cal) cards.push(kpi("Energy intake", `<span style="color:${cal.pct < 90 || cal.pct > 110 ? H.orangeDeep : H.green}">${cal.pct}%</span><span style="font-size:15px;color:${H.muted}"> of target</span>`, `${num(cal.avg)} of ${num(cal.target)} Cal`));
@@ -1392,12 +1401,12 @@
           const worse = x.direction === "positive" ? x.groups.low : x.groups.high;
           const u = MACRO_UNITS[x.macro];
           rows.push({ label: `${WINDOW_SHORT[x.window]} · ${MACRO_LABELS[x.macro]}`,
-            text: `<span style="font-weight:600;color:${H.green}">${better.macroAvg === 0 ? "Nothing eaten" : `${x.direction === "positive" ? "Higher" : "Lower"} ${MACRO_LABELS[x.macro]}`} (${better.macroAvg} ${u})</span> → RPP ${better.rppAvg} &nbsp; <span style="color:${H.muted}">vs ${worse.macroAvg} ${u} → RPP ${worse.rppAvg}</span>`,
+            text: `<span style="font-weight:600;color:${H.green}">${better.macroAvg === 0 ? "Nothing eaten" : `${x.direction === "positive" ? "Higher" : "Lower"} ${MACRO_LABELS[x.macro]}`} (${better.macroAvg} ${u})</span> → ${rppText(better.rppAvg)} &nbsp; <span style="color:${H.muted}">vs ${worse.macroAvg} ${u} → ${rppText(worse.rppAvg)}</span>`,
             worse: worse.rppAvg, better: better.rppAvg, conf: x.confidence });
         });
         (d.supplements || []).forEach((x) => {
           rows.push({ label: `${WINDOW_SHORT[x.window]} · supplement`,
-            text: `<span style="font-weight:600;color:${H.green}">${esc(x.label)}</span> → RPP ${x.meanWith} &nbsp; <span style="color:${H.muted}">without → RPP ${x.meanWithout}</span>`,
+            text: `<span style="font-weight:600;color:${H.green}">${esc(x.label)}</span> → ${rppText(x.meanWith)} &nbsp; <span style="color:${H.muted}">without → ${rppText(x.meanWithout)}</span>`,
             worse: x.meanWithout, better: x.meanWith, conf: x.confidence });
         });
         return `<div style="display:flex;flex-direction:column;gap:0">
@@ -1407,7 +1416,7 @@
             <span style="font-size:15px;color:${H.muted}">· ${d.n} session${d.n !== 1 ? "s" : ""}</span>
             <div style="flex-grow:1"></div>
             <div class="rpp-rail" style="position:relative;width:360px;height:16px;font-size:12px;color:${H.muted};margin-right:150px">
-              <span style="position:absolute;left:0">6</span><span style="position:absolute;left:25%;transform:translateX(-50%)">7</span><span style="position:absolute;left:50%;transform:translateX(-50%)">RPP 8</span><span style="position:absolute;left:75%;transform:translateX(-50%)">9</span><span style="position:absolute;right:0">10</span>
+              <span style="position:absolute;left:0">Bad</span><span style="position:absolute;left:28.6%;transform:translateX(-50%)">Mediocre</span><span style="position:absolute;left:64.3%;transform:translateX(-50%)">Good</span><span style="position:absolute;right:0">Excellent</span>
             </div>
           </div>
           ${rows.map((r) => `<div class="r-diet" style="display:grid;grid-template-columns:minmax(0,1fr) 360px 126px;gap:24px;align-items:center;min-height:78px;padding:10px 0;border-bottom:1px solid ${H.hair}">
@@ -1741,6 +1750,54 @@ function sessionsOf(v){
   return[];
 }
 const blankSession=()=>({score:0,trainingTime:"",trainingType:""});
+
+// Performance is logged as one of four levels, the sleep check-in's vocabulary plus a top
+// rung. Underneath it is still a number on the original 1-10 scale: the report's
+// statistics are calibrated to that scale (group means, the 0.4-point persistence
+// threshold, the dumbbell rail), and keeping it means a score logged before the levels
+// existed stays on the same footing as one logged after. Each level stores the midpoint
+// of its band.
+const RPP_LEVELS=[
+  {id:"bad",      label:"Bad",       score:2,   color:"var(--bad)",  soft:"var(--bad-soft)"},
+  {id:"mediocre", label:"Mediocre",  score:4,   color:"var(--warn)", soft:"var(--warn-soft)"},
+  {id:"good",     label:"Good",      score:6.5, color:"var(--good)", soft:"var(--good-soft)"},
+  {id:"excellent",label:"Excellent", score:9,   color:"var(--rose)", soft:"var(--rose-soft)"},
+];
+// Bands on the old scale: above 7.5 excellent, 5 to 7.5 good, 2.5 to 5 mediocre, below
+// that bad. Any score ever entered therefore reads as exactly one level.
+function rppLevel(score){
+  const v=Number(score)||0;
+  if(v<=0)return null;
+  return v>7.5?RPP_LEVELS[3]:v>=5?RPP_LEVELS[2]:v>=2.5?RPP_LEVELS[1]:RPP_LEVELS[0];
+}
+function rppLabel(score){const l=rppLevel(score);return l?l.label:""}
+// Old scores are snapped to their level's stored value, so the data holds one scale
+// rather than two: a 7 logged last month and a Good logged today become the same number,
+// and the report's averages stop mixing free scores with level midpoints. Idempotent —
+// a value already on a level is returned untouched, so this can run on every load and on
+// anything arriving from the cloud.
+function migrateRppScale(rpp){
+  const out={};
+  Object.keys(rpp||{}).forEach(d=>{
+    const ss=sessionsOf(rpp[d]);
+    if(!ss.length){out[d]=rpp[d];return}
+    out[d]=ss.map(x=>{const l=rppLevel(x.score);return(l&&l.score!==Number(x.score))?{...x,score:l.score}:x});
+  });
+  return out;
+}
+function rppScaleChanged(a,b){return JSON.stringify(a)!==JSON.stringify(b)}
+
+// The four levels as one row of buttons. Tapping the chosen one clears it, matching how
+// the 1-10 row behaved.
+function RppPicker({score,onPick,small}){
+  const cur=rppLevel(score);
+  return<div style={{display:"flex",gap:4}}>
+    {RPP_LEVELS.map(l=>{
+      const on=!!cur&&cur.id===l.id;
+      return<button key={l.id} onClick={()=>onPick(on?0:l.score)} style={{flex:1,height:small?28:34,borderRadius:8,border:on?"none":"1px solid var(--border)",cursor:"pointer",background:on?l.color:"var(--card-bg)",color:on?"#fff":"var(--ink-soft)",fontSize:small?10.5:12,fontWeight:600,padding:"0 2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.label}</button>;
+    })}
+  </div>;
+}
 
 const NUTRIENT_INFO={
   calories:"Energy fuel for training and daily function. Too low impairs recovery, focus, and hormonal balance. Too high leads to fat gain.",
@@ -2554,12 +2611,11 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
               {ORDINALS[si]||`Session ${si+1}`} session{s.trainingType?` · ${typeLabel(s.trainingType,customTypes)}`:""}
             </span>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              {score>0&&<span style={{fontSize:15,fontWeight:700,color:score>=8?"var(--good)":score>=5?"var(--warn)":"var(--bad)"}}>{score}/10</span>}
+              {score>0&&<span style={{fontSize:14,fontWeight:700,color:rppLevel(score).color}}>{rppLabel(score)}</span>}
               <button className="btn-x" title="Remove this session" onClick={()=>removeSession(si)} style={{fontSize:15,color:"var(--bad)"}}>×</button>
             </div>
           </div>
-          <div style={{display:"flex",gap:4,marginBottom:showTime?10:0}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
-            <button key={n} onClick={()=>patchSession(si,{score:n===score?0:n})} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:n<=score?(score>=8?"var(--good)":score>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:10,color:n<=score?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+          <div style={{marginBottom:showTime?10:0}}><RppPicker score={score} onPick={v=>patchSession(si,{score:v})}/></div>
           {showTime&&(!s.trainingTime||!s.trainingType)&&(rppFallback.time||rppFallback.type)&&<div style={{fontSize:11.5,color:"var(--gray)",marginBottom:8}}>Left blank, the report will assume{!s.trainingTime&&rppFallback.time?` ${rppFallback.time}`:""}{!s.trainingTime&&rppFallback.time&&!s.trainingType&&rppFallback.type?" and":""}{!s.trainingType&&rppFallback.type?` ${typeLabel(rppFallback.type,customTypes)}`:""} — your usual.</div>}
           {showTime&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:showType?10:0}}>
             <label style={{fontSize:13,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
@@ -2582,8 +2638,7 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
         {ORDINALS[sessions.length]||`Session ${sessions.length+1}`} session
       </div>}
       {sessions.length>0&&<div style={{fontSize:13,color:"var(--ink-soft)",marginBottom:8}}>Log your rate of perceived performance</div>}
-      <div style={{display:"flex",gap:4}}>{[1,2,3,4,5,6,7,8,9,10].map(n=>
-        <button key={"new"+n} onClick={()=>writeSessions([...sessions,{...blankSession(),score:n}])} style={{flex:1,height:30,borderRadius:7,border:"none",cursor:"pointer",background:"var(--track)",fontSize:10,color:"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+      <RppPicker score={0} onPick={v=>writeSessions([...sessions,{...blankSession(),score:v}])}/>
     </div>
 
     {/* Naming a workout. Only recurring ones are worth adding: the report needs several
@@ -2930,8 +2985,8 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         {(()=>{const ss=sessionsOf(rpp[d.date]);const isEditing=rppEditDate===d.date;
           const best=ss.reduce((a,b)=>(Number(b.score)||0)>(Number(a&&a.score)||0)?b:a,null);
           const s=Number(best&&best.score)||0;
-          const summary=ss.filter(x=>Number(x.score)>0).map(x=>`${x.score}/10${x.trainingTime?" @ "+x.trainingTime:""}${x.trainingType?" · "+typeLabel(x.trainingType,customTypes):""}`).join("   ");
-          return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>=8?"var(--good)":s>=5?"var(--warn)":s>0?"var(--bad)":"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{summary?`: ${summary}`:""} {isEditing?"▾":"▸"}</span>})()}
+          const summary=ss.filter(x=>Number(x.score)>0).map(x=>`${rppLabel(x.score)}${x.trainingTime?" @ "+x.trainingTime:""}${x.trainingType?" · "+typeLabel(x.trainingType,customTypes):""}`).join("   ");
+          return<span onClick={()=>setRppEditDate(isEditing?null:d.date)} style={{fontSize:13,cursor:"pointer",color:s>0?rppLevel(s).color:"var(--ink-soft)",fontWeight:s>0?600:400}}>💪 Rate of Perceived Performance{summary?`: ${summary}`:""} {isEditing?"▾":"▸"}</span>})()}
         {rppEditDate===d.date&&(()=>{const ss=sessionsOf(rpp[d.date]);
           const write=(next)=>setRpp(d.date,next);
           const patch=(i,p)=>write(ss.map((x,j)=>j===i?{...x,...p}:x));
@@ -2943,7 +2998,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
               <span style={{fontSize:11,fontWeight:600,color:"var(--ink-soft)",textTransform:"uppercase",letterSpacing:.3}}>{ss.length>1?`Workout ${si+1}`:"Workout"}</span>
               <button className="btn-x" title="Remove this workout" onClick={()=>write(ss.filter((_,j)=>j!==si))} style={{fontSize:14,color:"var(--bad)"}}>×</button>
             </div>
-            <div style={{display:"flex",gap:3,marginBottom:8}}>{[1,2,3,4,5,6,7,8,9,10].map(n=><button key={n} onClick={()=>patch(si,{score:n===s?0:n})} style={{flex:1,height:26,borderRadius:6,border:"none",cursor:"pointer",background:n<=s?(s>=8?"var(--good)":s>=5?"var(--warn)":"var(--bad)"):"var(--track)",fontSize:9,color:n<=s?"#fff":"var(--gray)",fontWeight:600}}>{n}</button>)}</div>
+            <div style={{marginBottom:8}}><RppPicker score={s} onPick={v=>patch(si,{score:v})} small/></div>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
               <label style={{fontSize:12,color:"var(--ink-soft)",whiteSpace:"nowrap"}}>Training time:</label>
               <input type="time" value={t} onChange={e=>patch(si,{trainingTime:e.target.value})} style={{padding:"4px 8px",fontSize:12,flex:1}}/>
@@ -3170,7 +3225,7 @@ function App(){
   },[dayStamp]);
   const[sunlight,setSunlight_]=useState(()=>ls("nt-sunlight",{}));
   const[giDistress,setGiDistress_]=useState(()=>ls("nt-gi",{}));
-  const[rpp,setRpp_]=useState(()=>ls("nt-rpp",{}));
+  const[rpp,setRpp_]=useState(()=>migrateRppScale(ls("nt-rpp",{})));
   const[skipped,setSkipped_]=useState(()=>ls("nt-skipped",{}));
   const[hydration,setHydration_]=useState(()=>ls("nt-hydration",{}));
   const[sleep,setSleep_]=useState(()=>ls("nt-sleep",{}));
@@ -3258,13 +3313,13 @@ function App(){
         setHistory_(trimmed);lss("nt-history",trimmed);
         setSunlight_(data.sunlight||{});lss("nt-sunlight",data.sunlight||{});
         setGiDistress_(data.gi||{});lss("nt-gi",data.gi||{});
-        setRpp_(data.rpp||{});lss("nt-rpp",data.rpp||{});
+        const migRpp=migrateRppScale(data.rpp||{});setRpp_(migRpp);lss("nt-rpp",migRpp);
         setSkipped_(data.skipped||{});lss("nt-skipped",data.skipped||{});
         setHydration_(data.hydration||{});lss("nt-hydration",data.hydration||{});
         setSleep_(data.sleep||{});lss("nt-sleep",data.sleep||{});
         setCustomTypes_(data.customTypes||[]);lss("nt-custom-types",data.customTypes||[]);
         setLastReportWindowStart_(data.lastReportWindow||null);lss("nt-last-report-window",data.lastReportWindow||null);
-        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:data.rpp||{},skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{},customTypes:data.customTypes||[],lastReportWindow:data.lastReportWindow||null})
+        cloudPut(userKey_,{profile:data.profile,meals:{meals:todayMeals,date:today()},templates:data.templates||[],history:trimmed,sunlight:data.sunlight||{},gi:data.gi||{},rpp:migRpp,skipped:data.skipped||{},hydration:data.hydration||{},sleep:data.sleep||{},customTypes:data.customTypes||[],lastReportWindow:data.lastReportWindow||null})
       }
       setSyncing(false);
     }).catch(function(){setSyncing(false)});
@@ -3295,6 +3350,13 @@ function App(){
   const syncTimer=useRef(null);
   const syncToCloud=useCallback(async(opts)=>{if(!userKey_)return false;const ok=await cloudPut(userKey_,{profile:ls("nt-profile",null),meals:ls("nt-meals",{}),templates:ls("nt-templates",[]),history:ls("nt-history",{}),sunlight:ls("nt-sunlight",{}),gi:ls("nt-gi",{}),rpp:ls("nt-rpp",{}),skipped:ls("nt-skipped",{}),hydration:ls("nt-hydration",{}),sleep:ls("nt-sleep",{}),customTypes:ls("nt-custom-types",[]),lastReportWindow:ls("nt-last-report-window",null)},opts);if(ok)dirty.current=false;return ok},[userKey_]);
   const scheduleSync=()=>{dirty.current=true;if(syncTimer.current)clearTimeout(syncTimer.current);syncTimer.current=setTimeout(syncToCloud,3000)};
+
+  // The level conversion above only changed what is in memory. Persist it once, and push
+  // it so other devices and the next load see the converted scores rather than redoing it.
+  useEffect(()=>{
+    const stored=ls("nt-rpp",{});
+    if(rppScaleChanged(stored,rpp)){lss("nt-rpp",rpp);scheduleSync()}
+  },[]);
 
   // A change can be sitting in the 3s debounce when the tab is closed or backgrounded —
   // very common right after logging a meal — and that pending write would otherwise be
