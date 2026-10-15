@@ -1766,18 +1766,55 @@ const NUTRIENT_INFO={
   betaAlanine:"Precursor to carnosine — buffers lactic acid in muscles. Improves performance in high-intensity efforts like sparring rounds."
 };
 
+// Richest everyday sources of each nutrient, as [food, amount per serving]. Figures are
+// rounded reference values for a typical portion, not an analysis of what this user ate —
+// they answer "what should I reach for" when a nutrient comes up short. Deliberately NOT
+// presented as a ranking: the servings are the ones people actually eat (a cup of lentils,
+// 100g of liver), so the amounts are not comparable down the column.
+const NUTRIENT_SOURCES={
+  protein:[["Chicken breast","31g / 100g"],["Whey isolate","25g / 30g scoop"],["Tuna","26g / 100g"],["Greek yoghurt","17g / 170g pot"],["Lentils, cooked","18g / cup"]],
+  carbs:[["Oats, dry","33g / 50g"],["Rice, cooked","45g / cup"],["Pasta, cooked","43g / cup"],["Baked potato","37g / medium"],["Banana","27g / medium"]],
+  fat:[["Olive oil","14g / tbsp"],["Avocado","21g / medium"],["Almonds","15g / 30g"],["Peanut butter","16g / 2 tbsp"]],
+  fiber:[["Lentils, cooked","15g / cup"],["Black beans, cooked","15g / cup"],["Chia seeds","10g / 30g"],["Raspberries","8g / cup"],["Oats, dry","5g / 50g"]],
+  iron:[["Beef liver","6.5mg / 100g"],["Lentils, cooked","6.6mg / cup"],["Spinach, cooked","6.4mg / cup"],["Dark chocolate 70%","3.4mg / 30g"],["Pumpkin seeds","2.5mg / 30g"]],
+  zinc:[["Oysters","39mg / 100g"],["Beef, lean","5mg / 100g"],["Pumpkin seeds","2.2mg / 30g"],["Lentils, cooked","2.5mg / cup"],["Cashews","1.6mg / 30g"]],
+  magnesium:[["Pumpkin seeds","150mg / 30g"],["Spinach, cooked","157mg / cup"],["Almonds","80mg / 30g"],["Black beans, cooked","120mg / cup"],["Dark chocolate 70%","64mg / 30g"]],
+  potassium:[["White beans, cooked","1000mg / cup"],["Baked potato","900mg / medium"],["Spinach, cooked","840mg / cup"],["Avocado","700mg / medium"],["Banana","420mg / medium"]],
+  vitaminD:[["Cod liver oil","1360 IU / tbsp"],["Salmon, wild","600 IU / 100g"],["UV-grown mushrooms","400 IU / 100g"],["Sardines","190 IU / 100g"],["Fortified milk","100 IU / cup"]],
+  vitaminC:[["Red bell pepper","150mg / medium"],["Guava","125mg / fruit"],["Broccoli, cooked","80mg / cup"],["Kiwi","70mg / fruit"],["Orange","70mg / medium"]],
+  vitaminA:[["Beef liver","6500mcg / 100g"],["Sweet potato, baked","1400mcg / medium"],["Spinach, cooked","940mcg / cup"],["Carrot","500mcg / medium"]],
+  vitaminB6:[["Chickpeas, cooked","1.1mg / cup"],["Tuna","1.0mg / 100g"],["Salmon","0.9mg / 100g"],["Chicken breast","0.5mg / 100g"],["Baked potato","0.4mg / medium"]],
+  vitaminB12:[["Clams","99mcg / 100g"],["Beef liver","70mcg / 100g"],["Sardines","9mcg / 100g"],["Salmon","3mcg / 100g"],["Beef, lean","2.5mcg / 100g"]],
+  folate:[["Lentils, cooked","360mcg / cup"],["Beef liver","290mcg / 100g"],["Chickpeas, cooked","280mcg / cup"],["Asparagus, cooked","260mcg / cup"],["Avocado","120mcg / medium"]],
+  calcium:[["Sardines with bones","380mg / 100g"],["Yoghurt, plain","350mg / cup"],["Tofu, calcium-set","350mg / 100g"],["Milk","300mg / cup"],["Hard cheese","200mg / 30g"]],
+  iodine:[["Kelp / kombu","2000mcg+ / g"],["Cod","115mcg / 100g"],["Iodised salt","60mcg / g"],["Milk","85mcg / cup"],["Egg","24mcg / egg"]],
+  omega3:[["Mackerel","2.6g / 100g"],["Flaxseed, ground","2.4g / tbsp"],["Salmon, wild","2.3g / 100g"],["Walnuts","2.5g / 30g"],["Sardines","1.5g / 100g"]],
+  leucine:[["Whey isolate","2.7g / 30g scoop"],["Chicken breast","2.3g / 100g"],["Beef, lean","2.2g / 100g"],["Parmesan","1.1g / 30g"],["Egg","0.5g / egg"]],
+  glutamine:[["Beef, lean","1.2g / 100g"],["Chicken breast","1.1g / 100g"],["Skimmed milk","0.8g / cup"],["Tofu","0.6g / 100g"],["Egg","0.3g / egg"]],
+  betaAlanine:[["Chicken breast","0.9g / 100g"],["Beef, lean","0.8g / 100g"],["Pork","0.7g / 100g"],["Tuna","0.4g / 100g"]],
+};
+
 function InfoBtn({id}){
   const[open,setOpen]=useState(false);
   const info=NUTRIENT_INFO[id];if(!info)return null;
   return<>
     <button onClick={(e)=>{e.stopPropagation();setOpen(true)}} style={{background:"none",border:"1px solid #ddd",borderRadius:"50%",width:18,height:18,fontSize:11,color:"#999",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:4,flexShrink:0,fontStyle:"italic",fontFamily:"Georgia,serif"}}>i</button>
     {open&&<div onClick={()=>setOpen(false)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,maxWidth:360,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,maxWidth:360,width:"100%",maxHeight:"82vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <span style={{fontSize:16,fontWeight:600}}>{TRACKABLE.find(t=>t.key===id)?.label||id}</span>
           <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#999"}}>×</button>
         </div>
         <p style={{fontSize:14,color:"#444",lineHeight:1.6,margin:0}}>{info}</p>
+        {(NUTRIENT_SOURCES[id]||[]).length>0&&<div style={{marginTop:18,paddingTop:16,borderTop:"1px solid #eee"}}>
+          <div style={{fontSize:11,fontWeight:600,letterSpacing:.5,color:"#999",textTransform:"uppercase",marginBottom:8}}>Richest sources</div>
+          {NUTRIENT_SOURCES[id].map(([food,amount],i)=>
+            <div key={food} style={{display:"flex",justifyContent:"space-between",gap:12,fontSize:13,padding:"6px 0",borderTop:i?"1px solid #f3f3f3":"none"}}>
+              <span style={{color:"#444"}}>{food}</span>
+              <span style={{color:"#666",fontWeight:500,whiteSpace:"nowrap"}}>{amount}</span>
+            </div>)}
+          <div style={{fontSize:10.5,color:"#aaa",marginTop:8,lineHeight:1.45}}>Among the richest everyday sources — reference figures for a typical portion, not a reading of what you ate.</div>
+        </div>}
       </div>
     </div>}
   </>
