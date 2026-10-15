@@ -693,12 +693,24 @@
   // one thing here that is actually measured, so it is worth counting properly — and it is
   // counted by day, not by meal, because the limit is a daily one: three modest meals can
   // add up past it while no single meal looks like a problem.
-  function satFatDays(history, targets) {
+  function dayKey(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+  // Calendar days counted back from `end`, inclusive at both ends.
+  function windowDays(end, from, to) {
+    const out = [], base = new Date(end + "T12:00:00");
+    for (let i = from; i <= to; i++) { const d = new Date(base); d.setDate(d.getDate() - i); out.push(dayKey(d)); }
+    return out;
+  }
+
+  // The rest of this section reads meal names, which is guesswork. Saturated fat is the
+  // one thing here that is actually measured, so it is counted properly — and by day, not
+  // by meal, because the limit is a daily one: three modest meals can add up past it while
+  // no single meal looks like a problem.
+  function satFatDays(history, days, targets) {
     const row = ((targets && targets.macros) || []).find((m) => m.key === "satFat");
     if (!row || !row.target) return null;
     const scored = [];
     let noBreakdown = 0;
-    Object.keys(history || {}).forEach((d) => {
+    days.forEach((d) => {
       const meals = history[d] || [];
       if (!meals.length) return;
       const sat = meals.reduce((t, m) => t + (Number(m.satFat) || 0), 0);
@@ -724,45 +736,78 @@
     };
   }
 
-  function foodQualitySection(history, targets) {
+  // One week's worth. The rating is deliberately not a verdict on months of eating —
+  // nothing a person does in a week could move that number, which makes it useless as
+  // something to act on. It covers seven days and starts again.
+  function qualityOfWeek(history, days, targets) {
     const meals = [];
-    Object.keys(history || {}).forEach((d) => (history[d] || []).forEach((m) => meals.push(m)));
-    if (meals.length < 10) return null;
+    days.forEach((d) => (history[d] || []).forEach((m) => meals.push(m)));
+    if (meals.length < 5) return null;
     // Rated per food, not per plate, so "pasta and ice cream" counts one whole food and
     // one processed rather than condemning the whole meal. The denominator is items too.
     const rows = [];
     meals.forEach((m) => itemsOf(m).forEach((it) => rows.push({ name: it.name || "food", cls: classifyMeal(it.name), mins: minsOfTime(m.time) })));
     const processed = rows.filter((r) => r.cls === "processed");
     const whole = rows.filter((r) => r.cls === "whole");
+    const neutral = rows.filter((r) => r.cls === "neutral");
     const late = rows.filter((r) => r.mins !== null && r.mins >= LATE_MEAL_MINUTES);
     // A late meal weighs half of an outright processed one.
     const penaltyUnits = processed.length + late.length * 0.5;
     const share = penaltyUnits / rows.length;
-    const over = Math.max(0, share - CHEAT_ALLOWANCE);
-    const nameStars = Math.round(Math.max(0, 5 * (1 - over / (1 - CHEAT_ALLOWANCE))) * 2) / 2;
+    const starsFrom = (units) => {
+      const over = Math.max(0, units / rows.length - CHEAT_ALLOWANCE);
+      return Math.round(Math.max(0, 5 * (1 - over / (1 - CHEAT_ALLOWANCE))) * 2) / 2;
+    };
+    const nameStars = starsFrom(penaltyUnits);
     // Past half the days, saturated fat has stopped being the odd heavy day and become the
     // pattern, so it starts costing the rating rather than only sitting beside it. Nothing
-    // is docked at 50%, two stars at every single day, straight line in between. It is
-    // capped there on purpose: the rating is mostly about what the food is, and one
-    // nutrient should not be able to take it to zero on its own.
-    const sf = satFatDays(history, targets);
+    // is docked at 50%, two stars at every single day, straight line in between. Capped
+    // there on purpose: one nutrient should not take the rating to zero on its own.
+    const sf = satFatDays(history, days, targets);
     const satPenalty = (sf && sf.overPct > 50) ? Math.round(((sf.overPct - 50) / 50) * 2 * 2) / 2 : 0;
     const stars = Math.max(0, nameStars - satPenalty);
-    const tally = {};
-    processed.forEach((r) => { const k = r.name.toLowerCase(); tally[k] = tally[k] || { name: r.name, n: 0 }; tally[k].n++; });
-    const lateTally = {};
-    late.forEach((r) => { const k = r.name.toLowerCase(); lateTally[k] = lateTally[k] || { name: r.name, n: 0 }; lateTally[k].n++; });
+    // Three shares of one whole, made to total exactly 100 — a card showing 45% and 20%
+    // and nothing else leaves the reader wondering what the other third was.
+    const pctOf = (n) => Math.round((n / rows.length) * 100);
+    const wholePct = pctOf(whole.length), processedPct = pctOf(processed.length);
+    const neutralPct = Math.max(0, 100 - wholePct - processedPct);
+    const tallyOf = (list) => { const t = {}; list.forEach((r) => { const k = r.name.toLowerCase(); t[k] = t[k] || { name: r.name, n: 0 }; t[k].n++; }); return Object.values(t).sort((a, b) => b.n - a.n); };
+    const worstOffenders = tallyOf(processed), topWhole = tallyOf(whole);
+    // What dropping the single worst repeat offender would be worth, so the suggestion can
+    // name a prize rather than just a chore. Swapped for a whole food, those items stop
+    // counting against the rating altogether.
+    const top = worstOffenders[0];
+    const ifSwapped = top ? { name: top.name, n: top.n, stars: Math.max(0, starsFrom(penaltyUnits - top.n) - satPenalty) } : null;
     return {
-      satFat: sf, satPenalty, starsBeforeSatFat: nameStars,
-      stars, totalItems: rows.length, totalMeals: meals.length,
-      wholeCount: whole.length, wholePct: Math.round(whole.length / rows.length * 100),
-      processedCount: processed.length, processedPct: Math.round(processed.length / rows.length * 100),
-      lateCount: late.length, latePct: Math.round(late.length / rows.length * 100),
-      neutralCount: rows.filter((r) => r.cls === "neutral").length,
+      days: days.length, stars, starsBeforeSatFat: nameStars, satPenalty, satFat: sf,
+      totalItems: rows.length, totalMeals: meals.length,
+      wholeCount: whole.length, wholePct,
+      processedCount: processed.length, processedPct,
+      neutralCount: neutral.length, neutralPct,
+      lateCount: late.length, latePct: pctOf(late.length),
       penaltyPct: Math.round(share * 100),
       withinAllowance: share > 0 && share <= CHEAT_ALLOWANCE,
-      worstOffenders: Object.values(tally).sort((a, b) => b.n - a.n).slice(0, 4),
-      lateOffenders: Object.values(lateTally).sort((a, b) => b.n - a.n).slice(0, 3),
+      worstOffenders: worstOffenders.slice(0, 4),
+      lateOffenders: tallyOf(late).slice(0, 3),
+      topWhole: topWhole.slice(0, 3),
+      ifSwapped,
+    };
+  }
+
+  function foodQualitySection(history, targets) {
+    const logged = Object.keys(history || {}).filter((d) => (history[d] || []).length > 0).sort();
+    if (!logged.length) return null;
+    // The week ends on the last day with anything logged, not on today, so a report pulled
+    // on a quiet Monday still rates the week that actually happened.
+    const end = logged[logged.length - 1];
+    const cur = qualityOfWeek(history, windowDays(end, 0, 6), targets);
+    if (!cur) return null;
+    const prev = qualityOfWeek(history, windowDays(end, 7, 13), targets);
+    return {
+      ...cur,
+      weekEnd: end, weekStart: windowDays(end, 0, 6)[6],
+      previous: prev ? { stars: prev.stars, wholePct: prev.wholePct, processedPct: prev.processedPct } : null,
+      starsDelta: prev ? Math.round((cur.stars - prev.stars) * 2) / 2 : null,
     };
   }
 
@@ -1553,36 +1598,58 @@
         <p style="font-size:13px;color:${H.faint};margin:0">Nights where either day had nothing logged are left out, so gaps in tracking are not counted as fasts.</p>
       </div>`);
     }
-    if (!q) pending.push({ t: "Food quality rating", r: "needs at least 10 logged meals" });
+    if (!q) pending.push({ t: "Food quality rating", r: "needs at least 5 meals logged in the last week" });
     else {
-      const against = [];
-      if (q.processedCount) against.push(`${q.processedCount} processed or sugary`);
-      if (q.lateCount) against.push(`${q.lateCount} eaten at or after 22:00`);
       const stars = Math.round(q.stars * 2) / 2;
+      const sf = q.satFat;
+      // Three shares of one whole, drawn as one bar so they visibly add up.
+      const seg = (pct, col) => pct > 0 ? `<div style="width:${pct}%;background:${col}"></div>` : "";
+      const key = (label, pct, col) => `<div style="display:flex;align-items:center;gap:7px;font-size:14px"><span style="width:10px;height:10px;border-radius:3px;background:${col};flex-shrink:0"></span><span style="color:${H.soft}">${label}</span><span style="font-weight:600">${pct}%</span></div>`;
+      // Week on week. Said in words rather than an arrow, since half a star either way is
+      // the whole range most weeks move in.
+      const trend = q.previous === null ? `First full week rated — next week's will be measured against this one.`
+        : q.starsDelta > 0 ? `Up ${q.starsDelta} from ${q.previous.stars} last week.`
+        : q.starsDelta < 0 ? `Down ${Math.abs(q.starsDelta)} from ${q.previous.stars} last week.`
+        : `Level with last week.`;
+      const trendCol = q.previous === null ? H.muted : q.starsDelta > 0 ? H.green : q.starsDelta < 0 ? H.orange : H.muted;
+      // The suggestion names a swap rather than a prohibition: something already in the
+      // week's own whole foods, so it is a thing the person demonstrably eats.
+      const swapFor = (q.topWhole || []).slice(0, 2).map((w) => esc(w.name.toLowerCase())).join(" or ");
+      const challenge = (() => {
+        if (sf && sf.overPct >= 50) return `Next week, keep saturated fat under ${sf.target}g on more days than not — it went over on ${sf.overDays} of ${sf.days}, and that is what is holding this rating down.`;
+        if (q.ifSwapped && q.ifSwapped.stars > stars) return `Next week, leave out the ${esc(q.ifSwapped.name.toLowerCase())}${q.ifSwapped.n > 1 ? `, which came up ${q.ifSwapped.n} times,` : ""}${swapFor ? ` and reach for ${swapFor} instead — already part of your week` : ""}. That one swap would take you to ${q.ifSwapped.stars} stars.`;
+        if (q.lateCount && q.lateCount >= q.processedCount) return `Next week, move the last meal before 22:00. ${q.lateCount} landed after it this week, and each one counts half of a processed item against the rating.`;
+        if (stars >= 4.5) return `Nothing to fix — do next week the way you did this one.`;
+        return `Next week, swap one processed item a day for ${swapFor || "something whole"}. The first 5% of your food is free; it is what sits above that which costs you.`;
+      })();
       half.push(`<div style="background:${H.card};border:1px solid ${H.line};border-radius:20px;padding:36px;display:flex;flex-direction:column;gap:22px">
         <div style="display:flex;flex-direction:column;gap:6px">
           <h2 style="${serif};font-size:28px;margin:0">Food quality</h2>
-          <p style="font-size:15px;color:${H.muted};margin:0">Read from the words in your meal names — a guide, not an audit</p>
+          <p style="font-size:15px;color:${H.muted};margin:0">A guide, not an audit · week ending ${formatDate(q.weekEnd)}</p>
         </div>
-        <div style="display:flex;align-items:baseline;gap:10px">
-          <span style="${serif};font-size:56px;font-weight:600;line-height:1;color:${stars >= 4 ? H.green : stars >= 2.5 ? "#B7791F" : H.orange}">${stars}</span>
-          <span style="font-size:20px;color:${H.muted}">/ 5 stars</span>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:baseline;gap:10px">
+            <span style="${serif};font-size:56px;font-weight:600;line-height:1;color:${stars >= 4 ? H.green : stars >= 2.5 ? "#B7791F" : H.orange}">${stars}</span>
+            <span style="font-size:20px;color:${H.muted}">/ 5 stars</span>
+          </div>
+          <p style="font-size:15px;color:${trendCol};margin:0;font-weight:${q.previous === null ? 400 : 600}">${trend}</p>
+          ${(() => {
+            const lost = Math.round((q.starsBeforeSatFat - q.stars) * 2) / 2;
+            if (lost <= 0) return "";
+            return `<p style="font-size:14px;line-height:1.5;color:${H.orange};margin:2px 0 0">${lost} star${lost !== 1 ? "s" : ""} of that docked for saturated fat running over the limit on ${sf.overPct}% of the week's days.</p>`;
+          })()}
         </div>
-        ${(() => {
-          // What was actually lost, not what was nominally charged: a rating already at the
-          // floor cannot be "down from 0 by 2".
-          const lost = Math.round((q.starsBeforeSatFat - q.stars) * 2) / 2;
-          if (lost <= 0) return "";
-          return `<p style="font-size:14px;line-height:1.5;color:${H.orange};margin:-14px 0 0">Down from ${q.starsBeforeSatFat} — ${lost} star${lost !== 1 ? "s" : ""} docked for saturated fat running over the limit on ${q.satFat.overPct}% of your days.</p>`;
-        })()}
         <div style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;justify-content:space-between;font-size:14px"><span>Whole foods</span><span style="font-weight:600">${q.wholePct}%</span></div>
-          <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(q.wholePct, 0, 100)}%;background:${H.green}"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:14px"><span>Processed or sugary</span><span style="font-weight:600;color:${H.orange}">${q.processedPct}%</span></div>
-          <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(q.processedPct, 0, 100)}%;background:${H.orange}"></div></div>
+          <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;background:${H.track}">${seg(q.wholePct, H.green)}${seg(q.processedPct, H.orange)}${seg(q.neutralPct, "#C9C2B4")}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 20px">
+            ${key("Whole foods", q.wholePct, H.green)}
+            ${key("Processed or sugary", q.processedPct, H.orange)}
+            ${key("Neither", q.neutralPct, "#C9C2B4")}
+          </div>
+          <p style="font-size:13px;color:${H.muted};margin:0;line-height:1.5">${q.totalItems} foods across ${q.totalMeals} meals. "Neither" is food the word list does not recognise either way — it counts in the total but neither for nor against.</p>
         </div>
-        ${q.satFat ? (() => {
-          const sf = q.satFat;
+        ${(q.processedCount || q.lateCount) ? `<p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${[q.processedCount ? `${q.processedCount} processed or sugary` : null, q.lateCount ? `${q.lateCount} eaten at or after 22:00` : null].filter(Boolean).join("; ")}${q.worstOffenders.length ? `. Most often: ${q.worstOffenders.slice(0, 3).map((o) => esc(o.name) + (o.n > 1 ? ` ×${o.n}` : "")).join(", ")}` : ""}.</p>` : `<p style="font-size:15px;color:${H.green};margin:0">Every food this week came through clean.</p>`}
+        ${sf ? (() => {
           // Red only once it is the usual state of affairs rather than the odd heavy day.
           const col = sf.overPct >= 50 ? H.orange : sf.overPct >= 25 ? "#B7791F" : H.green;
           return `<div style="display:flex;flex-direction:column;gap:10px;padding-top:18px;border-top:1px solid ${H.rule}">
@@ -1592,14 +1659,14 @@
           <p style="font-size:13px;line-height:1.5;color:${H.muted};margin:0">The limit is 10% of your daily calories, the usual guidance. Unlike the rating above, this is measured from the analysis rather than read off the meal names.</p>
         </div>`;
         })() : ""}
-        ${against.length ? `<p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${against.join("; ")} — out of ${q.totalItems} foods logged${q.worstOffenders.length ? `. Most often: ${q.worstOffenders.slice(0, 3).map((o) => esc(o.name) + (o.n > 1 ? ` ×${o.n}` : "")).join(", ")}` : ""}.</p>` : `<p style="font-size:15px;color:${H.green};margin:0">All ${q.totalItems} foods came through clean.</p>`}
         <div style="display:flex;gap:14px;align-items:flex-start;background:${H.greenPale};border-radius:12px;padding:16px 18px">
-          <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${H.greenDeep};padding-top:2px;flex-shrink:0">Do</div>
-          <p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${(q.satFat && q.satFat.overPct >= 33) ? `Saturated fat ran over the limit on ${q.satFat.overPct}% of your days. That is the firmest thing on this card to act on — the rating above is read from meal names, this is measured.` : q.stars >= 4.5 ? "Nothing to change — keep the balance you have." : q.processedCount >= q.lateCount ? `Swapping out ${q.worstOffenders[0] ? esc(q.worstOffenders[0].name.toLowerCase()) : "the processed items"} would move this rating the most.` : "Moving your last meal earlier than 22:00 would move this rating the most."}</p>
+          <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${H.greenDeep};padding-top:2px;flex-shrink:0">Try</div>
+          <p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${challenge}</p>
         </div>
       </div>`);
     }
-    if (half.length) parts.push(`<div class="g-2" style="display:grid;grid-template-columns:repeat(${half.length},minmax(0,1fr));gap:24px">${half.join("")}</div>`);
+    
+if (half.length) parts.push(`<div class="g-2" style="display:grid;grid-template-columns:repeat(${half.length},minmax(0,1fr));gap:24px">${half.join("")}</div>`);
 
     // ── nutrient tables ──
     if (!n) pending.push({ t: "Macro and micronutrient tables", r: "needs at least 3 logged days" });
