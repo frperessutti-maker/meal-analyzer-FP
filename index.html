@@ -689,7 +689,42 @@
     if (hit(WHOLE_FOOD_WORDS)) return "whole";
     return "neutral";
   }
-  function foodQualitySection(history) {
+  // The rest of this section reads meal names, which is guesswork. Saturated fat is the
+  // one thing here that is actually measured, so it is worth counting properly — and it is
+  // counted by day, not by meal, because the limit is a daily one: three modest meals can
+  // add up past it while no single meal looks like a problem.
+  function satFatDays(history, targets) {
+    const row = ((targets && targets.macros) || []).find((m) => m.key === "satFat");
+    if (!row || !row.target) return null;
+    const scored = [];
+    let noBreakdown = 0;
+    Object.keys(history || {}).forEach((d) => {
+      const meals = history[d] || [];
+      if (!meals.length) return;
+      const sat = meals.reduce((t, m) => t + (Number(m.satFat) || 0), 0);
+      const unsat = meals.reduce((t, m) => t + (Number(m.unsatFat) || 0), 0);
+      const fat = meals.reduce((t, m) => t + (Number(m.fat) || 0), 0);
+      // A day logged before the breakdown existed carries a fat total and no split. Left
+      // in, it would count as a flawless 0g day and quietly flatter the percentage.
+      if (fat >= 1 && sat + unsat < 0.5) { noBreakdown++; return; }
+      scored.push({ date: d, sat });
+    });
+    if (scored.length < 3) return null;
+    const over = scored.filter((x) => x.sat > row.target);
+    const worst = scored.reduce((a, b) => (b.sat > a.sat ? b : a));
+    return {
+      target: row.target,
+      days: scored.length,
+      overDays: over.length,
+      overPct: Math.round((over.length / scored.length) * 100),
+      avg: Math.round((scored.reduce((t, x) => t + x.sat, 0) / scored.length) * 10) / 10,
+      worstDate: worst.date,
+      worstGrams: Math.round(worst.sat * 10) / 10,
+      noBreakdown,
+    };
+  }
+
+  function foodQualitySection(history, targets) {
     const meals = [];
     Object.keys(history || {}).forEach((d) => (history[d] || []).forEach((m) => meals.push(m)));
     if (meals.length < 10) return null;
@@ -710,6 +745,7 @@
     const lateTally = {};
     late.forEach((r) => { const k = r.name.toLowerCase(); lateTally[k] = lateTally[k] || { name: r.name, n: 0 }; lateTally[k].n++; });
     return {
+      satFat: satFatDays(history, targets),
       stars, totalItems: rows.length, totalMeals: meals.length,
       wholeCount: whole.length, wholePct: Math.round(whole.length / rows.length * 100),
       processedCount: processed.length, processedPct: Math.round(processed.length / rows.length * 100),
@@ -826,7 +862,7 @@
       tier4: tier4(history, rpp, sunlight, sleep, hydration),
       gi: giSection(history, giDistress),
       fasting: fastingSection(history, state.templates, state.skipped),
-      foodQuality: foodQualitySection(history),
+      foodQuality: foodQualitySection(history, state.targets),
       nutrients: nutrientSection(history, state.targets, state.dailyExtras),
     };
   }
@@ -1530,10 +1566,21 @@
           <div style="display:flex;justify-content:space-between;font-size:14px"><span>Processed or sugary</span><span style="font-weight:600;color:${H.orange}">${q.processedPct}%</span></div>
           <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(q.processedPct, 0, 100)}%;background:${H.orange}"></div></div>
         </div>
+        ${q.satFat ? (() => {
+          const sf = q.satFat;
+          // Red only once it is the usual state of affairs rather than the odd heavy day.
+          const col = sf.overPct >= 50 ? H.orange : sf.overPct >= 25 ? "#B7791F" : H.green;
+          return `<div style="display:flex;flex-direction:column;gap:10px;padding-top:18px;border-top:1px solid ${H.rule}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:14px"><span>Days over the saturated-fat limit</span><span style="font-weight:600;color:${col}">${sf.overPct}%</span></div>
+          <div style="height:12px;border-radius:6px;background:${H.track};overflow:hidden"><div style="height:12px;width:${clamp(sf.overPct, 0, 100)}%;background:${col}"></div></div>
+          <p style="font-size:14px;line-height:1.55;color:${H.soft};margin:0">${sf.overDays} of ${sf.days} day${sf.days !== 1 ? "s" : ""} went past ${sf.target}g, averaging ${sf.avg}g a day${sf.overDays ? `. Heaviest was ${sf.worstGrams}g on ${formatDate(sf.worstDate)}` : ""}.${sf.noBreakdown ? ` ${sf.noBreakdown} further day${sf.noBreakdown !== 1 ? "s are" : " is"} left out, logged before meals were split into saturated and unsaturated.` : ""}</p>
+          <p style="font-size:13px;line-height:1.5;color:${H.muted};margin:0">The limit is 10% of your daily calories, the usual guidance. Unlike the rating above, this is measured from the analysis rather than read off the meal names.</p>
+        </div>`;
+        })() : ""}
         ${against.length ? `<p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${against.join("; ")} — out of ${q.totalItems} foods logged${q.worstOffenders.length ? `. Most often: ${q.worstOffenders.slice(0, 3).map((o) => esc(o.name) + (o.n > 1 ? ` ×${o.n}` : "")).join(", ")}` : ""}.</p>` : `<p style="font-size:15px;color:${H.green};margin:0">All ${q.totalItems} foods came through clean.</p>`}
         <div style="display:flex;gap:14px;align-items:flex-start;background:${H.greenPale};border-radius:12px;padding:16px 18px">
           <div style="font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${H.greenDeep};padding-top:2px;flex-shrink:0">Do</div>
-          <p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${q.stars >= 4.5 ? "Nothing to change — keep the balance you have." : q.processedCount >= q.lateCount ? `Swapping out ${q.worstOffenders[0] ? esc(q.worstOffenders[0].name.toLowerCase()) : "the processed items"} would move this rating the most.` : "Moving your last meal earlier than 22:00 would move this rating the most."}</p>
+          <p style="font-size:15px;line-height:1.55;color:${H.soft};margin:0">${(q.satFat && q.satFat.overPct >= 33) ? `Saturated fat ran over the limit on ${q.satFat.overPct}% of your days. That is the firmest thing on this card to act on — the rating above is read from meal names, this is measured.` : q.stars >= 4.5 ? "Nothing to change — keep the balance you have." : q.processedCount >= q.lateCount ? `Swapping out ${q.worstOffenders[0] ? esc(q.worstOffenders[0].name.toLowerCase()) : "the processed items"} would move this rating the most.` : "Moving your last meal earlier than 22:00 would move this rating the most."}</p>
         </div>
       </div>`);
     }
