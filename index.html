@@ -1823,10 +1823,16 @@ function MacroDonut({split,centre,sub}){
   </svg>;
 }
 
+// Four controls on a meal row do not fit across a phone at a size worth aiming at, so
+// they sit as two rows of two — time and chart above, edit and delete below — each in a
+// box big enough to hit.
+const ICON_TAP={width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",borderRadius:9};
+const ROW_CONTROLS={display:"grid",gridTemplateColumns:"auto auto",gap:"4px 6px",alignItems:"center",justifyItems:"center",flexShrink:0};
+
 // The clickable glyph on a meal row — drawn rather than an emoji, since no emoji reads
 // unambiguously as a pie chart.
-function PieIcon(){
-  return<svg viewBox="0 0 20 20" style={{width:18,height:18,display:"block"}}>
+function PieIcon({size=22}){
+  return<svg viewBox="0 0 20 20" style={{width:size,height:size,display:"block"}}>
     <circle cx="10" cy="10" r="8.2" fill="none" stroke="var(--ink-soft)" strokeWidth="1.5"/>
     <path d="M10 10 L10 1.8 A8.2 8.2 0 0 1 18.2 10 Z" fill="var(--rose)"/>
     <path d="M10 10 L18.2 10 A8.2 8.2 0 0 1 13.8 17.1 Z" fill="var(--ink-soft)" opacity="0.45"/>
@@ -2859,12 +2865,12 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
               </div>)}
             </div>}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <div style={ROW_CONTROLS}>
             {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
             :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
-            <span onClick={()=>setPieMeal(m)} style={{cursor:"pointer",display:"flex"}} title="Macro breakdown"><PieIcon/></span>
-            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">✏️</span>
-            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
+            <span onClick={()=>setPieMeal(m)} style={ICON_TAP} title="Macro breakdown"><PieIcon/></span>
+            <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{...ICON_TAP,fontSize:19}} title="Edit">✏️</span>
+            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{...ICON_TAP,fontSize:23,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
           </div>
         </div>
       )}
@@ -2878,7 +2884,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
               <span style={{fontSize:10,fontWeight:600,color:"var(--rose)",background:"var(--rose-soft)",padding:"2px 7px",borderRadius:100,letterSpacing:.2}}>RECURRING</span>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+          <div style={eraseIdx===idx?{display:"flex",alignItems:"center",gap:6,flexShrink:0}:ROW_CONTROLS}>
             {eraseIdx===idx?<>
               <span style={{fontSize:12,color:"var(--bad)"}}>Erase?</span>
               <button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==idx));setEraseIdx(null)}}>Yes</button>
@@ -2886,9 +2892,9 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
             </>:<>
               {editTmplTimeIdx===idx?<input type="time" autoFocus value={t.time||""} onChange={e=>updateTemplateTime(idx,e.target.value)} onBlur={()=>setEditTmplTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
               :<span onClick={()=>setEditTmplTimeIdx(idx)} title="Set the time this recurring meal is usually eaten — it sticks until you change it again" style={{fontSize:12,fontWeight:600,color:t.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{t.time||"set time"}</span>}
-              <span onClick={()=>setPieMeal(t)} style={{cursor:"pointer",display:"flex"}} title="Macro breakdown"><PieIcon/></span>
+              <span onClick={()=>setPieMeal(t)} style={ICON_TAP} title="Macro breakdown"><PieIcon/></span>
               <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
-              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{fontSize:15}}>🗑</button>
+              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{...ICON_TAP,fontSize:19}}>🗑</button>
             </>}
           </div>
         </div>;
