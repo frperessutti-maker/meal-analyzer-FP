@@ -2201,8 +2201,15 @@ ITEMS: also split the meal into the separate foods it is made of.
 - If the meal is a single food, return one item whose name is that food.
 - Every item needs its own calories and macros, and the items must add up to the meal totals.
 
+WHAT YOU ARE GIVEN: text typed quickly on a phone. Expect misspellings, missing accents, mixed languages, autocorrect damage, stray punctuation and words that have nothing to do with food. None of that is a reason to stop.
+- Work out the most likely food behind a mangled name and analyse that. "chikn ceasr salat" is a chicken caesar salad.
+- Ignore anything that is not food or drink: notes to yourself, stray characters, times, places, names.
+- Never refuse, never ask for clarification, never return an error, never return prose instead of JSON. Analyse whatever you can understand and move on.
+- "note": one short plain sentence, only when it is worth saying — you had to guess at a food, or you ignored part of what was typed. Say what you assumed. Leave it as "" whenever the entry was clear, which is most of the time.
+- If nothing in the entry is recognisable as food or drink at all, return every number as 0, put the original text in mealName, and explain in "note" that nothing edible was recognised.
+
 Respond ONLY with JSON:
-{"mealName":"description","calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
+{"mealName":"description","note":"","calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
 }
 
 // Dates are the user's own calendar day, not UTC. toISOString() gave the UTC date, so for
@@ -2393,10 +2400,68 @@ async function fetchUrlContent(url){
   try{const r=await fetch(`${API_URL}/fetch-url?url=${encodeURIComponent(url)}`);const d=await r.json();return d.text||null}catch{return null}
 }
 
+// A request dropped because the app went to the background must not be retried while it
+// is still in the background — it would be dropped again. Wait for the user to come back.
+function whenVisible(){
+  if(typeof document==="undefined"||document.visibilityState!=="hidden")return Promise.resolve();
+  return new Promise(res=>{
+    const on=()=>{if(document.visibilityState!=="hidden"){document.removeEventListener("visibilitychange",on);res()}};
+    document.addEventListener("visibilitychange",on);
+  });
+}
+// What the browser threw, said in terms of what the user should do about it. "Load failed"
+// is Safari's wording for a connection that died, which tells nobody anything.
+function networkErrorText(e){
+  const m=String((e&&e.message)||e||"");
+  if(/abort/i.test(m))return "The analysis took too long to come back. Your text is still here — try again.";
+  if(/load failed|failed to fetch|networkerror|network request failed/i.test(m))return "Could not reach the server. Check your connection — your text is still here.";
+  return m||"Analysis failed.";
+}
+// Whatever gets typed on a phone should not be able to stop an analysis: autocorrect
+// debris, pasted formatting, invisible characters from another app. Emoji are left alone,
+// they often are the meal. A very long paste is cut: past a point it costs tokens and
+// time without adding anything the model needs.
+const MAX_MEAL_TEXT=1200;
+function sanitizeMealText(t){
+  let s=String(t==null?"":t);
+  s=s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g," ");   // control characters
+  s=s.replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g,"");                // zero-width and bidi marks
+  s=s.replace(/[\uE000-\uF8FF]/g," ");                                  // private-use glyphs
+  s=s.replace(/\s+/g," ").trim();
+  return s.length>MAX_MEAL_TEXT?s.slice(0,MAX_MEAL_TEXT).trim()+" …":s;
+}
+// Analyses fail for reasons that have nothing to do with the meal: a phone changing
+// network, Safari killing an in-flight fetch when the app is backgrounded, or the
+// server's own four-second anti-burst cooldown catching a retry. None of those are worth
+// losing a typed meal over, so the request is retried rather than surfaced. Each retry
+// outwaits that cooldown, otherwise it would earn a 429 and look like a second failure.
+async function postAnalyze(body){
+  const ATTEMPTS=3,COOLDOWN_MS=4500,TIMEOUT_MS=90000;
+  let last=null;
+  for(let i=0;i<ATTEMPTS;i++){
+    if(i>0){await whenVisible();await new Promise(r=>setTimeout(r,COOLDOWN_MS));}
+    const ctrl=typeof AbortController!=="undefined"?new AbortController():null;
+    const timer=ctrl?setTimeout(()=>ctrl.abort(),TIMEOUT_MS):null;
+    try{
+      const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),...(ctrl?{signal:ctrl.signal}:{})});
+      if(timer)clearTimeout(timer);
+      const d=await r.json().catch(()=>null);
+      if(!d){last=new Error("The server sent back something unreadable.");continue}
+      // 429 is the server asking us to wait, not a refusal — worth another go.
+      if(r.status===429&&i<ATTEMPTS-1){last=new Error((d.error&&d.error.message)||"Busy");continue}
+      return d;
+    }catch(e){
+      if(timer)clearTimeout(timer);
+      last=e;                                                // abort, or a dropped connection
+    }
+  }
+  throw new Error(networkErrorText(last));
+}
+
 async function doAnalyze(text,img,prompt){
   const c=[];
   if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
-  let cleanText=text?cleanUrl(text):text;
+  let cleanText=text?sanitizeMealText(cleanUrl(text)):text;
   // If URL found, fetch its content and include as context
   const urlMatch=cleanText&&cleanText.match(/https?:\/\/[^\s]+/);
   let pageContext="";
@@ -2407,9 +2472,12 @@ async function doAnalyze(text,img,prompt){
   }
   c.push({type:"text",text:`${prompt}${pageContext}\n\nMeal: ${cleanText}`});
   const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}],userKey:currentUserKey,kind:"meal_analysis"};
-  const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
-  const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
+  const d=await postAnalyze(body);
+  if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
+  // A well-formed answer that carries no content is still an answer, and reading .filter
+  // off undefined would surface as a stack trace rather than something actionable.
+  if(!d||!Array.isArray(d.content))throw new Error("The server answered without an analysis. Try again.");
+  const allText=d.content.filter(b=>b&&b.type==="text").map(b=>b.text).join("\n");
   // The response object now nests an items array, so scan for the matching brace rather
   // than using a flat regex — a "no inner braces" pattern can no longer match it.
   const start=allText.indexOf("{");
@@ -2929,6 +2997,8 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
 /* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
 function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
   const[pieMeal,setPieMeal]=useState(null);
+  // Deleting a meal is one tap next to three other taps, so it asks once first.
+  const[delMealIdx,setDelMealIdx]=useState(null);
   const[mealsOpen,setMealsOpen]=useState(true);
   const[aminoOpen,setAminoOpen]=useState(false);
   const[fatOpen,setFatOpen]=useState(false);
@@ -3027,6 +3097,10 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           <div onClick={()=>setPieMeal(m)} title="See the ingredient breakdown" style={{flex:1,minWidth:0,cursor:"pointer"}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
             <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div>
+            {/* The analysis says when it had to guess or skipped part of the entry. Worth
+                showing: it is the difference between a wrong number and a wrong number you
+                know about. */}
+            {m.note&&<div style={{fontSize:11.5,color:"var(--warn)",marginTop:3,lineHeight:1.4}}>⚠ {m.note}</div>}
             {/* A plate of separate foods is listed out; a single dish has nothing to split. */}
             {isSplitMeal(m)&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:3}}>
               {mealItems(m).map((it,k)=><div key={k} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,color:"var(--ink-soft)"}}>
@@ -3040,7 +3114,9 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
             :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
             <span onClick={()=>setPieMeal(m)} style={ICON_TAP} title="Macro breakdown"><PieIcon/></span>
             <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{...ICON_TAP,fontSize:19}} title="Edit">✏️</span>
-            <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{...ICON_TAP,fontSize:23,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
+            {delMealIdx===i
+              ?<span onClick={()=>{setMeals(p=>p.filter((_,j)=>j!==i));setDelMealIdx(null)}} title="Confirm delete" style={{...ICON_TAP,width:"auto",padding:"0 10px",fontSize:12,fontWeight:700,color:"#fff",background:"var(--bad)"}}>Delete?</span>
+              :<span onClick={()=>setDelMealIdx(i)} style={{...ICON_TAP,fontSize:23,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>}
           </div>
         </div>
       )}

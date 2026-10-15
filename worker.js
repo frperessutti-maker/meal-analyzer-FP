@@ -260,17 +260,38 @@ export default {
         }
       }
 
-      // 4. Forward to Claude
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify(anthropicBody),
-      });
-      const data = await response.json();
+      // 4. Forward to Claude. Upstream hiccups — a 429 or a 5xx from Anthropic, a dropped
+      //    connection — are not the user's doing, and one retry turns most of them into a
+      //    normal answer instead of a failure the user has to notice and repeat.
+      let response = null, data = null, upstreamErr = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 900));
+        try {
+          response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": env.ANTHROPIC_API_KEY,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify(anthropicBody),
+          });
+          data = await response.json();
+          upstreamErr = null;
+          if (response.status < 500 && response.status !== 429) break;   // a real answer, good or bad
+        } catch (e) {
+          upstreamErr = e; data = null;
+        }
+      }
+      // The cooldown was written before the call. Holding a user to it after a failure
+      // they did not cause means their retry is refused for being too quick, which is how
+      // one dropped request turns into two.
+      if (!data || data.error) {
+        await env.USERDATA.delete(rlKey).catch(() => {});
+      }
+      if (!data) {
+        return errorResponse("Could not reach the analysis service. Please try again.", 502, corsHeaders);
+      }
 
       // 5. Record actual spend/usage — only on a real, successful call
       if (!data.error && data.usage) {
