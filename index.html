@@ -119,14 +119,16 @@
   // keyword eaten that day looks like a trigger simply because there is nothing
   // to contrast it against. Below this, the report reports no conclusions.
   const GI_MIN_DAYS = 5;
+  // `kind` is only about how the number reads back: a frequency is a share of days and
+  // means nothing printed as "0.43".
   const HABIT_VARS = [
-    { key: "sun_freq",       label: "Sun exposure frequency" },
-    { key: "hydration_freq", label: "Hydration frequency" },
-    { key: "sleep_quality",  label: "Sleep quality (0-1)" },
-    { key: "avg_protein",    label: "Average daily protein" },
-    { key: "avg_carbs",      label: "Average daily carbs" },
-    { key: "avg_calories",   label: "Average daily calories" },
-    { key: "avg_fiber",      label: "Average daily fiber" },
+    { key: "sun_freq",       label: "Sun exposure",   kind: "freq" },
+    { key: "hydration_freq", label: "Hydration",      kind: "freq" },
+    { key: "sleep_quality",  label: "Sleep quality",  kind: "score" },
+    { key: "avg_protein",    label: "Daily protein",  kind: "amount", unit: "g" },
+    { key: "avg_carbs",      label: "Daily carbs",    kind: "amount", unit: "g" },
+    { key: "avg_calories",   label: "Daily calories", kind: "amount", unit: " Cal" },
+    { key: "avg_fiber",      label: "Daily fiber",    kind: "amount", unit: "g" },
   ];
 
   function parseDateTime(dateStr, timeStr) {
@@ -486,10 +488,16 @@
     while (cursor <= last) { full.push(cursor); cursor = addDays(cursor, 1); }
     const series = { sun_freq: [], hydration_freq: [], sleep_quality: [], avg_protein: [], avg_carbs: [], avg_calories: [], avg_fiber: [], rpp: [] };
     full.forEach((d) => {
-      series.sun_freq.push(sunlight[d] === true ? 1 : 0);
-      series.hydration_freq.push(hydration[d] === true ? 1 : 0);
-      series.sleep_quality.push((l => l === "good" ? 1 : l === "mediocre" ? 0.5 : l === "bad" ? 0 : null)(sleepLvl(sleep[d])));
       const meals = history[d] || [];
+      // Sun and hydration are tick boxes with no "no" — an unticked day and a day the app
+      // was never opened look identical. Counting both as zero meant the detector could
+      // read the user taking up the check-in as the user taking up the habit, which is a
+      // different claim entirely. A day with no sign of use at all is now missing data.
+      const used = meals.length > 0 || rpp[d] !== undefined || sleep[d] !== undefined
+        || sunlight[d] === true || hydration[d] === true;
+      series.sun_freq.push(sunlight[d] === true ? 1 : (used ? 0 : null));
+      series.hydration_freq.push(hydration[d] === true ? 1 : (used ? 0 : null));
+      series.sleep_quality.push((l => l === "good" ? 1 : l === "mediocre" ? 0.5 : l === "bad" ? 0 : null)(sleepLvl(sleep[d])));
       const dm = { protein: 0, carbs: 0, calories: 0, fiber: 0 };
       meals.forEach((m) => { dm.protein += Number(m.protein) || 0; dm.carbs += Number(m.carbs) || 0; dm.calories += Number(m.calories) || 0; dm.fiber += Number(m.fiber) || 0; });
       const hasMeals = meals.length > 0;
@@ -514,7 +522,11 @@
   function tier4(history, rpp, sunlight, sleep, hydration) {
     const { dates, series } = buildDailySeries(history, rpp, sunlight, sleep, hydration);
     if (dates.length < 60) return { changes: [], note: "Need at least 60 days of history for habit-change detection." };
-    const WINDOW = 28, MIN_PERSIST = 14, REL_THRESHOLD = 0.20, RPP_THRESHOLD = 0.4;
+    // RPP_THRESHOLD was set when the score was a free 1-10 and a 28-day mean could drift
+    // by tenths. It is now one of four levels two to two and a half points apart, so a
+    // mean moves in much larger steps and 0.4 waved through noise. A shift worth printing
+    // has to be a third of a level.
+    const WINDOW = 28, MIN_PERSIST = 14, REL_THRESHOLD = 0.20, RPP_THRESHOLD = 0.8, MIN_FREQ_SHIFT = 0.15;
     const changes = [];
     HABIT_VARS.forEach((v) => {
       const s = series[v.key];
@@ -525,18 +537,28 @@
         if (before === 0) continue;
         const relChange = (after - before) / Math.abs(before);
         if (Math.abs(relChange) < REL_THRESHOLD) continue;
+        // A relative threshold is almost free to clear at a low baseline: ticking the
+        // hydration box on 17% of days instead of 21% is a four-point wobble and a 24%
+        // "change". Anything measured as a share of days has to move by a real margin as
+        // well, or the section fills up with noise that reads like findings.
+        if ((v.kind === "freq" || v.kind === "score") && Math.abs(after - before) < MIN_FREQ_SHIFT) continue;
         const persistIdx = Math.min(i + MIN_PERSIST, dates.length - 1);
         const persistVal = rolling[persistIdx];
         if (persistVal === null) continue;
         const persistRel = (persistVal - before) / Math.abs(before);
         if (Math.sign(persistRel) !== Math.sign(relChange)) continue;
         if (Math.abs(persistRel) < REL_THRESHOLD * 0.7) continue;
-        const rppBefore = rollingMean(series.rpp, WINDOW, i - 1);
+        // The habit's "before" level is the 28 days ending at i-WINDOW, so its RPP
+        // baseline has to be the same stretch. Ending it at i-1 took the baseline from the
+        // period in which the habit had already changed, and left it overlapping the
+        // "after" mean by half — two windows sharing fourteen days of data, compared
+        // against each other.
+        const rppBefore = rollingMean(series.rpp, WINDOW, i - WINDOW);
         const rppAfter = rollingMean(series.rpp, WINDOW, persistIdx);
         if (rppBefore === null || rppAfter === null) continue;
         const rppDelta = rppAfter - rppBefore;
         if (Math.abs(rppDelta) < RPP_THRESHOLD) continue;
-        changes.push({ variable: v.key, label: v.label, date: dates[i], before: Math.round(before * 100) / 100, after: Math.round(after * 100) / 100, relChange: Math.round(relChange * 100), rppBefore: Math.round(rppBefore * 10) / 10, rppAfter: Math.round(rppAfter * 10) / 10, rppDelta: Math.round(rppDelta * 10) / 10 });
+        changes.push({ variable: v.key, label: v.label, kind: v.kind, unit: v.unit || "", date: dates[i], before: Math.round(before * 100) / 100, after: Math.round(after * 100) / 100, relChange: Math.round(relChange * 100), rppBefore: Math.round(rppBefore * 10) / 10, rppAfter: Math.round(rppAfter * 10) / 10, rppDelta: Math.round(rppDelta * 10) / 10 });
         i += WINDOW;
       }
     });
@@ -1085,12 +1107,24 @@
     const unit = SLEEP_FACTOR_UNITS[name] || ""; const unitStr = unit ? ` ${unit}` : "";
     return `Nights you slept well followed days averaging ${f.wellMean}${unitStr} for ${f.label.toLowerCase()} (n=${f.nWell}). Poor-sleep nights followed days averaging ${f.poorMean}${unitStr} (n=${f.nPoor}).`;
   }
+  // A frequency is a share of days and reads as nonsense printed as "0.43", or as a
+  // relative change — "up 108%" of a proportion tells you nothing you wanted to know.
+  function habitLevel(c, v) {
+    if (c.kind === "freq") return `${Math.round(v * 100)}% of days`;
+    if (c.kind === "score") return `${Math.round(v * 100)}%`;
+    return `${Math.round(v)}${c.unit || ""}`;
+  }
   function tier4Sentence(c) {
-    const direction = c.rppDelta > 0 ? "rose" : "shifted";
+    const direction = c.rppDelta > 0 ? "rose" : "fell";
     const isCo = c.coOccurring && c.coOccurring.length > 1;
-    if (isCo) return `Around ${formatDate(c.date)}, several habits changed together: ${c.coOccurringLabels.join(", ")}. In the 28 days after, your average RPP ${direction} from ${rppText(c.rppBefore)} to ${rppText(c.rppAfter)}. Because the changes co-occurred, the individual effect of each cannot be separated.`;
-    const relText = `${c.relChange > 0 ? "up" : "down"} ${Math.abs(c.relChange)}%`;
-    return `Around ${formatDate(c.date)}, your ${c.label.toLowerCase()} shifted ${relText} (from ${c.before} to ${c.after}). In the 28 days after, your average RPP ${direction} from ${rppText(c.rppBefore)} to ${rppText(c.rppAfter)}.`;
+    const moved = `${c.label.toLowerCase()} went from ${habitLevel(c, c.before)} to ${habitLevel(c, c.after)}`;
+    // Said as two things that happened in the same stretch of time, because that is all
+    // this is. The detector sweeps seven habits across every date in the history, so some
+    // of what it turns up is coincidence, and a sentence shaped like cause and effect
+    // invites the reader to act on it as though it were not.
+    const tail = `Over the same stretch your average RPP ${direction} from ${rppText(c.rppBefore)} to ${rppText(c.rppAfter)}. The two moved together; which way round, or whether at all, this cannot say.`;
+    if (isCo) return `Around ${formatDate(c.date)}, several habits changed together: ${c.coOccurringLabels.join(", ")}. ${tail} And because they changed at once, no one of them can be separated out.`;
+    return `Around ${formatDate(c.date)}, your ${moved}. ${tail}`;
   }
 
   function tier1Takeaway(tier1) {
@@ -2062,6 +2096,12 @@ function MacroPieModal({meal,onClose}){
                 </div>)}
           </div>;
         })()}
+        {/* What the analysis assumed, at the bottom where it belongs: the row only carries
+            a mark, and this is where someone comes to find out what it meant. */}
+        {meal.note&&<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--border-soft)",display:"flex",gap:8,alignItems:"flex-start"}}>
+          <span style={{fontSize:13,color:meal.uncertain?"var(--warn)":"var(--gray)",flexShrink:0,lineHeight:1.45}}>{meal.uncertain?"⚠":"ⓘ"}</span>
+          <div style={{fontSize:12,color:"var(--ink-soft)",lineHeight:1.5}}>{meal.note}</div>
+        </div>}
         {/* Weight and energy rank the macros differently, so the other split is kept here.
             The numbers alone — the arithmetic behind them does not need spelling out. */}
         <div style={{fontSize:11.5,color:"var(--gray)",marginTop:10,lineHeight:1.5,paddingTop:9,borderTop:"1px solid var(--border-soft)"}}>
@@ -2255,10 +2295,11 @@ WHAT YOU ARE GIVEN: text typed quickly on a phone. Expect misspellings, missing 
 - Ignore anything that is not food or drink: notes to yourself, stray characters, times, places, names.
 - Never refuse, never ask for clarification, never return an error, never return prose instead of JSON. Analyse whatever you can understand and move on.
 - "note": one short plain sentence, only when it is worth saying — you had to guess at a food, or you ignored part of what was typed. Say what you assumed. Leave it as "" whenever the entry was clear, which is most of the time.
+- "uncertain": true ONLY when the guessing was big enough that the numbers could be materially wrong — a food you could not identify, a portion with nothing to go on, most of the entry unreadable. A tidied-up spelling or an assumed standard serving is not material; those get a note with "uncertain": false. Most entries are false.
 - If nothing in the entry is recognisable as food or drink at all, return every number as 0, put the original text in mealName, and explain in "note" that nothing edible was recognised.
 
 Respond ONLY with JSON:
-{"mealName":"description","note":"","calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
+{"mealName":"description","note":"","uncertain":false,"calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
 }
 
 // Dates are the user's own calendar day, not UTC. toISOString() gave the UTC date, so for
@@ -3146,10 +3187,10 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           <div onClick={()=>setPieMeal(m)} title="See the ingredient breakdown" style={{flex:1,minWidth:0,cursor:"pointer"}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
             <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div>
-            {/* The analysis says when it had to guess or skipped part of the entry. Worth
-                showing: it is the difference between a wrong number and a wrong number you
-                know about. */}
-            {m.note&&<div style={{fontSize:11.5,color:"var(--warn)",marginTop:3,lineHeight:1.4}}>⚠ {m.note}</div>}
+            {/* Flagged only when the analysis thinks the numbers could be materially off,
+                and as a mark rather than a sentence — the row is a list, not a place to
+                read. What it says is in the sheet the row opens. */}
+            {m.uncertain&&<span title="The analysis was unsure — tap for what it assumed" style={{fontSize:13,color:"var(--warn)",marginTop:2,display:"inline-block"}}>⚠</span>}
             {/* A plate of separate foods is listed out; a single dish has nothing to split. */}
             {isSplitMeal(m)&&<div style={{marginTop:6,display:"flex",flexDirection:"column",gap:3}}>
               {mealItems(m).map((it,k)=><div key={k} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,color:"var(--ink-soft)"}}>
