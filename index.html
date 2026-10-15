@@ -1958,15 +1958,10 @@ function MacroPieModal({meal,onClose}){
                 </div>)}
           </div>;
         })()}
-        {/* Weight and energy rank the macros differently, because fat carries 9 Cal a gram
-            against 4 for the other two. Worth one line so a meal that looks light on fat
-            here is not assumed to be light on fat in the calorie count. */}
+        {/* Weight and energy rank the macros differently, so the other split is kept here.
+            The numbers alone — the arithmetic behind them does not need spelling out. */}
         <div style={{fontSize:11.5,color:"var(--gray)",marginTop:10,lineHeight:1.5,paddingTop:9,borderTop:"1px solid var(--border-soft)"}}>
           By calories instead: {split.parts.map(x=>x.label.toLowerCase()+" "+x.calPct+"%").join(" · ")}.
-          {(()=>{const f=split.parts.find(x=>x.key==="fat");
-            // Only true while there is something else in the meal — a dish of pure oil is
-            // 100% fat whichever way you count it.
-            return f&&f.calPct>f.pct?" Fat carries 9 Cal a gram against 4 for the other two, so it takes a bigger share there than here.":""})()}
         </div>
         {/* The two figures rarely match exactly: the analysis estimates calories and macros
             separately, and alcohol carries energy that none of the three slices hold. */}
