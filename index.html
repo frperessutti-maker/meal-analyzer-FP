@@ -2308,7 +2308,20 @@ function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(
 function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
 function datesSince(fromISO){const cursor=new Date(fromISO+"T12:00:00");const now=new Date();const out=[];while(cursor<=now){out.push(isoDay(cursor));cursor.setDate(cursor.getDate()+1)}return out}
 function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>{const v=Number(m[k]);t[k]+=isNaN(v)?0:v}));return t}
-function sunVitD(ds){const m=new Date(ds+"T12:00:00").getMonth();return(m>=10||m<=1)?1000:2000}
+// What a day of sun exposure contributes to vitamin D, in IU, given what the food on that
+// day already provided. The sun behaves two different ways over the year, so the rule does
+// too, and the half-year split is the usual one for these latitudes:
+//   April to September the sun is strong enough to cover the day outright, so an exposed
+//   day is topped up to the target and no further — the result is 100%, whether the food
+//   contributed nothing or half of it.
+//   October to March it cannot, so it adds half a day's worth on top of whatever was
+//   eaten, and the day can land anywhere.
+const VITD_TARGET=(MICROS.find(m=>m.key==="vitaminD")||{target:2000}).target;
+function sunStrongMonth(ds){const m=new Date(ds+"T12:00:00").getMonth();return m>=3&&m<=8}
+function sunVitD(ds,foodVitD){
+  const food=Math.max(0,Number(foodVitD)||0);
+  return sunStrongMonth(ds)?Math.max(0,VITD_TARGET-food):VITD_TARGET*0.5;
+}
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
 function userKey(fn,ln,pin){return(fn.trim()+"-"+ln.trim()+"-"+(pin||"0000")).toLowerCase().replace(/\s+/g,"-")}
@@ -2870,7 +2883,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
-  if(sunlight[today()])tot.vitaminD+=sunVitD(today());
+  if(sunlight[today()])tot.vitaminD+=sunVitD(today(),tot.vitaminD);
   const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setEditMealErr("Edit failed: "+e.message)}finally{setEditMealLd(false);refreshQuota&&refreshQuota()}};
   const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x));setEditTimeIdx(null)};
   // A recurring meal's time is stored on the template itself, so changing it here
@@ -3069,7 +3082,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0,base:dayBaseline(d)}));
   const breakdownDD=dd.filter(d=>d.date!==today());
   const wd=dd.filter(d=>d.totals);
-  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date)+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
+  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date,(d.totals[n.key]||0)+(d.base[n.key]||0))+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===isoDay(y))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
@@ -3079,7 +3092,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   // slice() first — dd is ordered newest-first, and reverse() mutates in place.
   const seriesFor=(key)=>dd.slice().reverse().map(d=>({
     date:d.date,
-    v:d.totals?(d.totals[key]||0)+(d.base[key]||0)+(key==="vitaminD"&&sunlight[d.date]?sunVitD(d.date):0):null,
+    v:d.totals?(d.totals[key]||0)+(d.base[key]||0)+(key==="vitaminD"&&sunlight[d.date]?sunVitD(d.date,(d.totals[key]||0)+(d.base[key]||0)):0):null,
     isToday:d.date===today(),
     shortLabel:d.date===today()?"Today":new Date(d.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short"}),
   }));
@@ -3113,7 +3126,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
     {(()=>{
       const days=last10();const wd=days.filter(d=>history[d]);
       if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
-      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d)+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
+      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d,(sum(history[d])[k]||0)+(baseline[k]||0))+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
       const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
       const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
       const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
@@ -3171,7 +3184,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
           ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[],m);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
           :<button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+ Add meal</button>}
         <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
-          {hasSun&&<span>☀️ Sun{(new Date(d.date+"T12:00:00").getMonth()>=10||new Date(d.date+"T12:00:00").getMonth()<=1)?" (50%)":""}</span>}
+          {hasSun&&<span title={sunStrongMonth(d.date)?"April to September: a day in the sun covers the vitamin D target":"October to March: the sun adds half a day of vitamin D on top of the food"}>☀️ Sun{sunStrongMonth(d.date)?"":" (50%)"}</span>}
           {hasHydration&&<span>💧 Hydrated</span>}
           {hasGi&&<span style={{color:"var(--bad)"}}>🤢 GI distress</span>}
           {sleepLevel(daySleep)&&<span style={{color:SLEEP_META[sleepLevel(daySleep)].color,fontWeight:500}}>😴 {SLEEP_META[sleepLevel(daySleep)].label} sleep</span>}
@@ -3250,7 +3263,7 @@ IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet$
         })}
         {d.totals&&<>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
+        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date,(d.totals[m.key]||0)+(d.base[m.key]||0)):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
         </>}
       </div>}
     </div>})}
@@ -3268,7 +3281,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
     macros:[{key:"calories",label:"Calories",unit:" Cal",target:DT.calories},{key:"protein",label:"Protein",unit:"g",target:DT.protein},{key:"carbs",label:"Carbs",unit:"g",target:DT.carbs},{key:"fat",label:"Fat",unit:"g",target:DT.fat},{key:"satFat",label:"Saturated fat",unit:"g",target:DT.satFat,ceiling:true,partial:true},{key:"unsatFat",label:"Unsaturated fat",unit:"g",target:DT.unsatFat,partial:true},{key:"fiber",label:"Fiber",unit:"g",target:DT.fiber}],
     micros:MICROS.map(m=>({key:m.key,label:m.name,unit:m.unit,target:DT[m.key]})),
   };
-  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{if(sunlight[d])a[d]={vitaminD:sunVitD(d)};return a},{});
+  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{if(sunlight[d])a[d]={vitaminD:sunVitD(d,sum(history[d]||[]).vitaminD||0)};return a},{});
   const[showToast,setShowToast]=useState(false);
   const[reportHtml,setReportHtml]=useState(null);
   const reportFrame=useRef(null);
