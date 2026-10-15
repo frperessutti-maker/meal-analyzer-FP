@@ -1338,7 +1338,7 @@
   window.buildPerformanceReport = buildReport;
   /* ─── HTML RENDERER ───
      The report is a styled HTML document rather than a drawn PDF: the design depends on
-     cards, gradients and dumbbell charts that jsPDF cannot produce. Open it in a browser
+     cards, gradients and layouts that jsPDF cannot produce. Open it in a browser
      and print to PDF from there if a PDF is wanted. Every number here comes from the same
      report object the PDF used — nothing is invented for the layout. */
   const H = {
@@ -1375,19 +1375,6 @@
   const rppWord = (v) => (RPP_WORDS.find(([min]) => v > min) || RPP_WORDS[3])[1];
   const rppText = (v) => `${rppWord(v)} (${v})`;
 
-  // The dumbbell used throughout: two RPP values on a rail spanning the four levels, Bad
-  // at one end and Excellent at the other. It used to span 6-10, which was fine for a
-  // free 1-10 score but would stack Bad and Mediocre on top of each other now.
-  function dumbbell(worse, better) {
-    const pos = (v) => clamp(((v - 2) / 7) * 100, 0, 100);
-    const a = pos(worse), b = pos(better), lo = Math.min(a, b), hi = Math.max(a, b);
-    return `<div style="position:relative;height:28px">
-      <div style="position:absolute;left:0;right:0;top:13px;height:2px;background:${H.hair}"></div>
-      <div style="position:absolute;top:12px;height:4px;border-radius:2px;background:${H.greenBar};left:${lo}%;width:${hi - lo}%"></div>
-      <div style="position:absolute;top:7px;width:14px;height:14px;border-radius:7px;background:${H.card};border:2px solid ${H.faint};box-sizing:border-box;transform:translateX(-7px);left:${a}%"></div>
-      <div style="position:absolute;top:4px;width:20px;height:20px;border-radius:10px;transform:translateX(-10px);left:${b}%;background:${H.green}"></div>
-    </div>`;
-  }
   const statusColor = (tone) => tone === "bad" ? H.orange : tone === "warn" ? "#B7791F" : tone === "good" ? H.green : H.muted;
   const statusChip = (st) => `<span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;color:${statusColor(st.tone)};background:${st.tone === "good" ? H.greenPale : st.tone === "bad" ? H.orangePale : "#FAF2E2"}">${esc(st.word)}</span>`;
 
@@ -1489,31 +1476,33 @@
           const better = x.direction === "positive" ? x.groups.high : x.groups.low;
           const worse = x.direction === "positive" ? x.groups.low : x.groups.high;
           const u = MACRO_UNITS[x.macro];
+          // One line per group, both sides named. "Lower fat -> Good" above "Higher fat ->
+          // Mediocre" is the comparison itself; a sentence with a "vs" buried in it makes
+          // the reader assemble it.
+          const side = (grp, high) => grp.macroAvg === 0 ? "Nothing eaten"
+            : `${high ? "Higher" : "Lower"} ${MACRO_LABELS[x.macro]} (${grp.macroAvg} ${u})`;
+          const betterHigh = x.direction === "positive";
           rows.push({ label: `${WINDOW_SHORT[x.window]} · ${MACRO_LABELS[x.macro]}`,
-            text: `<span style="font-weight:600;color:${H.green}">${better.macroAvg === 0 ? "Nothing eaten" : `${x.direction === "positive" ? "Higher" : "Lower"} ${MACRO_LABELS[x.macro]}`} (${better.macroAvg} ${u})</span> → ${rppText(better.rppAvg)} &nbsp; <span style="color:${H.muted}">vs ${worse.macroAvg} ${u} → ${rppText(worse.rppAvg)}</span>`,
-            worse: worse.rppAvg, better: better.rppAvg, conf: x.confidence });
+            text: `<div style="font-weight:600;color:${H.green}">${side(better, betterHigh)} → ${rppText(better.rppAvg)}</div>`
+                + `<div style="color:${H.muted};margin-top:4px">${side(worse, !betterHigh)} → ${rppText(worse.rppAvg)}</div>`,
+            conf: x.confidence });
         });
         (d.supplements || []).forEach((x) => {
           rows.push({ label: `${WINDOW_SHORT[x.window]} · supplement`,
-            text: `<span style="font-weight:600;color:${H.green}">${esc(x.label)}</span> → ${rppText(x.meanWith)} &nbsp; <span style="color:${H.muted}">without → ${rppText(x.meanWithout)}</span>`,
-            worse: x.meanWithout, better: x.meanWith, conf: x.confidence });
+            text: `<div style="font-weight:600;color:${H.green}">With ${esc(x.label)} → ${rppText(x.meanWith)}</div>`
+                + `<div style="color:${H.muted};margin-top:4px">Without it → ${rppText(x.meanWithout)}</div>`,
+            conf: x.confidence });
         });
         return `<div style="display:flex;flex-direction:column;gap:0">
           <div style="display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid ${H.rule}">
-            <span style="padding:4px 10px;border-radius:6px;background:${H.dark};color:${H.bg};font-size:13px;font-weight:600;letter-spacing:0.06em">${esc(iconOfType(type))}</span>
             <h3 style="${serif};font-size:22px;margin:0">${esc(labelOfType(type))}</h3>
             <span style="font-size:15px;color:${H.muted}">· ${d.n} session${d.n !== 1 ? "s" : ""}</span>
-            <div style="flex-grow:1"></div>
-            <div class="rpp-rail" style="position:relative;width:360px;height:16px;font-size:12px;color:${H.muted};margin-right:150px">
-              <span style="position:absolute;left:0">Bad</span><span style="position:absolute;left:28.6%;transform:translateX(-50%)">Mediocre</span><span style="position:absolute;left:64.3%;transform:translateX(-50%)">Good</span><span style="position:absolute;right:0">Excellent</span>
-            </div>
           </div>
-          ${rows.map((r) => `<div class="r-diet" style="display:grid;grid-template-columns:minmax(0,1fr) 360px 126px;gap:24px;align-items:center;min-height:78px;padding:10px 0;border-bottom:1px solid ${H.hair}">
+          ${rows.map((r) => `<div class="r-diet" style="display:grid;grid-template-columns:minmax(0,1fr) 126px;gap:24px;align-items:center;min-height:60px;padding:10px 0;border-bottom:1px solid ${H.hair}">
             <div style="display:flex;flex-direction:column;gap:4px">
               <div style="${LABEL}">${esc(r.label)}</div>
               <div style="font-size:16px;line-height:1.45">${r.text}</div>
             </div>
-            ${dumbbell(r.worse, r.better)}
             ${pill(r.conf)}
           </div>`).join("")}
         </div>`;
@@ -1808,8 +1797,7 @@ p{margin:0;text-wrap:pretty}
   h3{font-size:18px!important}
   .g-kpi{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .g-2{grid-template-columns:1fr!important}
-  .rpp-rail{display:none!important}
-  /* diet-impact rows: sentence, then the dumbbell, then the confidence */
+  /* diet-impact rows: the two statements, then the confidence */
   .r-diet{grid-template-columns:1fr!important;gap:12px!important;min-height:0!important;padding:14px 0!important}
   /* nutrient and gap tables: one block per row, its own column headers dropped */
   .h-tbl{display:none!important}
@@ -1883,7 +1871,7 @@ const blankSession=()=>({score:0,trainingTime:"",trainingType:""});
 // Performance is logged as one of four levels, the sleep check-in's vocabulary plus a top
 // rung. Underneath it is still a number on the original 1-10 scale: the report's
 // statistics are calibrated to that scale (group means, the 0.4-point persistence
-// threshold, the dumbbell rail), and keeping it means a score logged before the levels
+// threshold), and keeping it means a score logged before the levels
 // existed stays on the same footing as one logged after. Each level stores the midpoint
 // of its band.
 const RPP_LEVELS=[
