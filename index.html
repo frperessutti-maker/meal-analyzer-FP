@@ -1787,6 +1787,88 @@ function migrateRppScale(rpp){
 }
 function rppScaleChanged(a,b){return JSON.stringify(a)!==JSON.stringify(b)}
 
+// Share of a meal's energy by macro. Carbs and protein are 4 Cal a gram, fat 9, so the
+// split by weight and the split by energy are different stories — the pie tells the
+// energy one, which is the one that explains the calorie count. Fiber is a kind of carb
+// and so is already inside that slice; it is listed under the chart rather than given one
+// of its own, which would double-count it.
+function macroSplit(m){
+  const parts=[
+    {key:"protein",label:"Protein",grams:Math.max(0,Number(m.protein)||0),perG:4,color:"var(--rose)"},
+    {key:"carbs",  label:"Carbs",  grams:Math.max(0,Number(m.carbs)||0),  perG:4,color:"var(--ink)"},
+    {key:"fat",    label:"Fat",    grams:Math.max(0,Number(m.fat)||0),    perG:9,color:"var(--gray)"},
+  ].map(x=>({...x,cal:x.grams*x.perG}));
+  const total=parts.reduce((a,b)=>a+b.cal,0);
+  if(total<=0)return null;
+  // Rounded percentages are made to add up to 100 by giving the last slice the remainder,
+  // while the drawing itself uses the exact shares.
+  let used=0;
+  parts.forEach((x,i)=>{x.frac=x.cal/total;x.pct=i<parts.length-1?Math.round(x.frac*100):100-used;if(i<parts.length-1)used+=x.pct});
+  return {parts,total};
+}
+
+// A donut rather than a full pie: the hole carries the calorie count, which is what the
+// slices are a breakdown of.
+function MacroDonut({split,centre,sub}){
+  let cum=0;
+  return<svg viewBox="0 0 42 42" style={{width:168,height:168,display:"block",margin:"0 auto"}}>
+    <circle cx="21" cy="21" r="15.91549431" fill="none" stroke="var(--track)" strokeWidth="6.5"/>
+    {split.parts.filter(x=>x.cal>0).map(x=>{
+      const dash=x.frac*100,off=-cum;cum+=dash;
+      return<circle key={x.key} cx="21" cy="21" r="15.91549431" fill="none" stroke={x.color} strokeWidth="6.5"
+        strokeDasharray={dash+" "+(100-dash)} strokeDashoffset={off} transform="rotate(-90 21 21)"/>;
+    })}
+    <text x="21" y="20.4" textAnchor="middle" style={{fontSize:5.2,fontWeight:700,fill:"var(--ink)"}}>{centre}</text>
+    <text x="21" y="25" textAnchor="middle" style={{fontSize:2.9,fill:"var(--ink-soft)"}}>{sub}</text>
+  </svg>;
+}
+
+// The clickable glyph on a meal row — drawn rather than an emoji, since no emoji reads
+// unambiguously as a pie chart.
+function PieIcon(){
+  return<svg viewBox="0 0 20 20" style={{width:18,height:18,display:"block"}}>
+    <circle cx="10" cy="10" r="8.2" fill="none" stroke="var(--ink-soft)" strokeWidth="1.5"/>
+    <path d="M10 10 L10 1.8 A8.2 8.2 0 0 1 18.2 10 Z" fill="var(--rose)"/>
+    <path d="M10 10 L18.2 10 A8.2 8.2 0 0 1 13.8 17.1 Z" fill="var(--ink-soft)" opacity="0.45"/>
+  </svg>;
+}
+
+function MacroPieModal({meal,onClose}){
+  const split=macroSplit(meal);
+  const fiber=Math.max(0,Number(meal.fiber)||0);
+  const sat=Math.max(0,Number(meal.satFat)||0),unsat=Math.max(0,Number(meal.unsatFat)||0);
+  const stated=Math.round(Number(meal.calories)||0);
+  return<div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"var(--card-bg)",borderRadius:18,padding:22,maxWidth:360,width:"100%",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:4}}>
+        <span style={{fontSize:16,fontWeight:700,fontFamily:"var(--serif)",lineHeight:1.3}}>{meal.mealName}</span>
+        <button onClick={onClose} className="btn-x" style={{fontSize:20,color:"var(--gray)",lineHeight:1,flexShrink:0}}>×</button>
+      </div>
+      <div style={{fontSize:12,color:"var(--ink-soft)",marginBottom:6}}>Where this meal's energy comes from</div>
+      {!split?<div style={{fontSize:13,color:"var(--gray)",padding:"18px 0"}}>This meal has no macros recorded, so there is nothing to break down.</div>:<>
+        <MacroDonut split={split} centre={Math.round(split.total)} sub="Cal from macros"/>
+        <div style={{marginTop:14}}>
+          {split.parts.map(x=><div key={x.key}>
+            <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderTop:"1px solid var(--border-soft)"}}>
+              <span style={{width:11,height:11,borderRadius:3,background:x.color,flexShrink:0}}/>
+              <span style={{flex:1,fontSize:13.5,fontWeight:600}}>{x.label}</span>
+              <span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(x.grams*10)/10}g</span>
+              <span style={{fontSize:13,fontWeight:700,width:40,textAlign:"right"}}>{x.pct}%</span>
+            </div>
+            {x.key==="fat"&&(sat+unsat)>0.5&&<div style={{fontSize:11.5,color:"var(--gray)",paddingLeft:20,paddingBottom:5}}>{Math.round(sat*10)/10}g saturated · {Math.round(unsat*10)/10}g unsaturated</div>}
+            {x.key==="carbs"&&fiber>0&&<div style={{fontSize:11.5,color:"var(--gray)",paddingLeft:20,paddingBottom:5}}>{Math.round(fiber*10)/10}g of that is fiber</div>}
+          </div>)}
+        </div>
+        {/* The two figures rarely match exactly: the analysis estimates calories and macros
+            separately, and alcohol carries energy that none of the three slices hold. */}
+        {Math.abs(split.total-stated)>Math.max(60,stated*0.12)&&<div style={{fontSize:11,color:"var(--gray)",marginTop:10,lineHeight:1.45}}>
+          The macros add up to {Math.round(split.total)} Cal against the {stated} Cal logged for this meal — the two are estimated separately, so they can drift apart.
+        </div>}
+      </>}
+    </div>
+  </div>;
+}
+
 // The four levels as one row of buttons. Tapping the chosen one clears it, matching how
 // the 1-10 row behaved.
 function RppPicker({score,onPick,small}){
@@ -2672,6 +2754,7 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
 }
 /* ── TODAY SUMMARY (meals logged + today's nutrition) ── */
 function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,toggleSkip,profile,DT,prompt,refreshQuota}){
+  const[pieMeal,setPieMeal]=useState(null);
   const[mealsOpen,setMealsOpen]=useState(true);
   const[aminoOpen,setAminoOpen]=useState(false);
   const[fatOpen,setFatOpen]=useState(false);
@@ -2779,6 +2862,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
             {editTimeIdx===i?<input type="time" autoFocus value={m.time||""} onChange={e=>updateMealTime(i,e.target.value)} onBlur={()=>setEditTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
             :<span onClick={()=>setEditTimeIdx(i)} style={{fontSize:12,fontWeight:600,color:"var(--ink-soft)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{m.time||"set time"}</span>}
+            <span onClick={()=>setPieMeal(m)} style={{cursor:"pointer",display:"flex"}} title="Macro breakdown"><PieIcon/></span>
             <span onClick={()=>{setEditMealIdx(i);setEditMealTxt(m.mealName)}} style={{cursor:"pointer",fontSize:15}} title="Edit">✏️</span>
             <span onClick={()=>setMeals(p=>p.filter((_,j)=>j!==i))} style={{cursor:"pointer",fontSize:17,color:"var(--bad)",lineHeight:1}} title="Delete">×</span>
           </div>
@@ -2802,6 +2886,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
             </>:<>
               {editTmplTimeIdx===idx?<input type="time" autoFocus value={t.time||""} onChange={e=>updateTemplateTime(idx,e.target.value)} onBlur={()=>setEditTmplTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
               :<span onClick={()=>setEditTmplTimeIdx(idx)} title="Set the time this recurring meal is usually eaten — it sticks until you change it again" style={{fontSize:12,fontWeight:600,color:t.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{t.time||"set time"}</span>}
+              <span onClick={()=>setPieMeal(t)} style={{cursor:"pointer",display:"flex"}} title="Macro breakdown"><PieIcon/></span>
               <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
               <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{fontSize:15}}>🗑</button>
             </>}
@@ -2812,6 +2897,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
 
     <h3 className="stit">Micronutrients today</h3>
     <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
+    {pieMeal&&<MacroPieModal meal={pieMeal} onClose={()=>setPieMeal(null)}/>}
   </div>
 }
 
