@@ -1942,13 +1942,20 @@ function MacroPieModal({meal,onClose}){
             about. Only when the analysis actually split the meal. */}
         {(()=>{
           const items=mealItems(meal);
-          if(items.length<2)return null;
+          const g=v=>Math.round((Number(v)||0)*10)/10;
           return<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--border-soft)"}}>
             <div style={{fontSize:10.5,fontWeight:600,letterSpacing:.4,color:"var(--gray)",textTransform:"uppercase",marginBottom:5}}>What it is made of</div>
-            {items.map((it,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:12.5,padding:"3px 0"}}>
-              <span style={{color:"var(--ink-soft)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.name}</span>
-              <span style={{flexShrink:0,color:"var(--gray)"}}>{Math.round(Number(it.calories)||0)} Cal · {Math.round((Number(it.fat)||0)*10)/10}g fat</span>
-            </div>)}
+            {/* One item means the analysis never split it, so the macros above already are
+                the whole breakdown. Saying so beats leaving a gap where a list should be. */}
+            {items.length<2
+              ? <div style={{fontSize:12,color:"var(--gray)",lineHeight:1.5}}>Logged as one item, so the figures above are the whole of it. Naming the parts when you log it — "salad with 1 tbsp olive oil" — gets them listed separately.</div>
+              : items.map((it,i)=><div key={i} style={{padding:"6px 0",borderTop:i?"1px solid var(--border-soft)":"none"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:13}}>
+                    <span style={{fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.name}</span>
+                    <span style={{flexShrink:0,color:"var(--ink-soft)",fontWeight:600}}>{Math.round(Number(it.calories)||0)} Cal</span>
+                  </div>
+                  <div style={{fontSize:11.5,color:"var(--gray)",marginTop:2}}>Protein {g(it.protein)}g · Carbs {g(it.carbs)}g · Fat {g(it.fat)}g{(Number(it.fiber)||0)>0?` · Fiber ${g(it.fiber)}g`:""}</div>
+                </div>)}
           </div>;
         })()}
         {/* Weight and energy rank the macros differently, because fat carries 9 Cal a gram
@@ -2952,7 +2959,9 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
       {meals.map((m,i)=>editMealIdx===i?
         <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
         :<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
-          <div style={{flex:1,minWidth:0}}>
+          {/* The row itself opens the meal, not only the chart glyph — tapping the thing
+              you want to know about is the first thing anyone tries. */}
+          <div onClick={()=>setPieMeal(m)} title="See the ingredient breakdown" style={{flex:1,minWidth:0,cursor:"pointer"}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
             <div style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(m.calories)} Cal</div>
             {/* A plate of separate foods is listed out; a single dish has nothing to split. */}
@@ -2975,7 +2984,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
       {templates.map((t,idx)=>{
         const isSkipped=skipped.includes(idx);
         return<div key={"t"+idx} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,opacity:isSkipped?0.55:1}}>
-          <div style={{flex:1,minWidth:0}}>
+          <div onClick={()=>setPieMeal(t)} title="See the ingredient breakdown" style={{flex:1,minWidth:0,cursor:"pointer"}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)",textDecoration:isSkipped?"line-through":"none"}}>{t.mealName}</div>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(t.calories)} Cal</span>
