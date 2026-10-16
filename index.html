@@ -1908,7 +1908,7 @@ const{useState,useEffect,useRef,useCallback}=React;
 // are served for asset paths; /analyze, /sync, /quota and /fetch-url fall through to
 // the Worker. Left as a constant so it can be pointed elsewhere for local testing.
 const API_URL="";
-let currentUserKey=null; // mirrors App()'s userKey_; read by doAnalyze/getSug so the worker can enforce per-user usage limits
+let currentUserKey=null; // mirrors App()'s userKey_; read by doAnalyze so the worker can enforce per-user usage limits
 
 const MICROS=[{name:"Iron",key:"iron",unit:"mg",target:8},{name:"Zinc",key:"zinc",unit:"mg",target:11},{name:"Magnesium",key:"magnesium",unit:"mg",target:400},{name:"Potassium",key:"potassium",unit:"mg",target:3500},{name:"Vit D",key:"vitaminD",unit:"IU",target:2000},{name:"Vit C",key:"vitaminC",unit:"mg",target:90},{name:"Vit A",key:"vitaminA",unit:"mcg",target:900},{name:"B6",key:"vitaminB6",unit:"mg",target:1.5},{name:"B12",key:"vitaminB12",unit:"mcg",target:2.4},{name:"Folate",key:"folate",unit:"mcg",target:400},{name:"Calcium",key:"calcium",unit:"mg",target:1000},{name:"Iodine",key:"iodine",unit:"mcg",target:150},{name:"Omega-3",key:"omega3",unit:"g",target:1.5}];
 const MK=["calories","protein","fat","carbs","fiber"];
@@ -2456,7 +2456,6 @@ function reportAvailability(history,lastReportWindowStart){
   return{enabled:true,activeDaysLogged,label:"Report available — download now"};
 }
 function last7(){const d=[];for(let i=0;i<7;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
-function last10(){const d=[];for(let i=0;i<10;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
 function last180(){const d=[];for(let i=0;i<180;i++){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
 function datesSince(fromISO){const cursor=new Date(fromISO+"T12:00:00");const now=new Date();const out=[];while(cursor<=now){out.push(isoDay(cursor));cursor.setDate(cursor.getDate()+1)}return out}
 function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.forEach(k=>{const v=Number(m[k]);t[k]+=isNaN(v)?0:v}));return t}
@@ -3273,7 +3272,6 @@ function NutrientChart({label,unit,target,series,ceiling,note}){
 
 function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rpp,setRpp,sleep,templates,skipped,toggleSkip,customTypes,DT,prompt,profile}){
   const[editTimeKey,setEditTimeKey]=useState(null);
-  const[suggestions,setSuggestions]=useState(null),[sugIdx,setSugIdx]=useState(0),[sugLd,setSugLd]=useState(false),[sugErr,setSugErr]=useState(null);
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
@@ -3343,43 +3341,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
       <NutrientChart label="Unsaturated fat" unit="g" target={DT.unsatFat} series={fatSplitSeries("unsatFat")}/>
     </>}
 
-    <h3 className="stit" style={{marginTop:8}}>Lifestyle suggestions</h3>
-    {(()=>{
-      const days=last10();const wd=days.filter(d=>history[d]);
-      if(wd.length<2)return<div className="panel" style={{marginBottom:24,fontSize:13,color:"var(--gray)"}}>Log a couple more days and standing deficiencies and lifestyle suggestions will show up here.</div>;
-      const avg={};AK.forEach(k=>{avg[k]=wd.reduce((s,d)=>s+(k==="vitaminD"&&sunlight[d]?sunVitD(d,(sum(history[d])[k]||0)+(baseline[k]||0))+(sum(history[d])[k]||0):(sum(history[d])[k]||0)),0)/wd.length+(baseline[k]||0)});
-      const allN=[{l:"Calories",k:"calories",t:DT.calories,u:"kcal"},{l:"Protein",k:"protein",t:DT.protein,u:"g"},{l:"Fat",k:"fat",t:DT.fat,u:"g"},{l:"Carbs",k:"carbs",t:DT.carbs,u:"g"},{l:"Fiber",k:"fiber",t:DT.fiber,u:"g"},...MICROS.map(m=>({l:m.name,k:m.key,t:DT[m.key],u:m.unit}))];
-      const defs=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)<70);
-      const excesses=allN.filter(n=>Math.round((avg[n.k]/n.t)*100)>200);
-      if(defs.length===0&&excesses.length===0)return<div className="panel" style={{marginBottom:24,textAlign:"center",fontSize:14,color:"var(--good)",fontWeight:500}}>✓ No major deficiencies or excesses over the last {wd.length} days</div>;
-      const defText=defs.map(d=>`${d.l}: ${Math.round(avg[d.k])}/${d.t}${d.u} (${Math.round((avg[d.k]/d.t)*100)}%)`).join(", ");
-const getSug=async()=>{setSugLd(true);setSugIdx(0);setSugErr(null);try{const dietLabel=DIETS.find(d=>d.id===profile.diet)?.label||"Omnivore";const intolList=(profile.intolerances||[]).map(i=>INTOLERANCES.find(x=>x.id===i)?.label).filter(Boolean);const r=await fetch(`${API_URL}/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:`You are a practical nutrition advisor. Based on the deficiencies below, suggest 3 SIMPLE lifestyle food habits — not complex recipes, but easy daily additions like "add a handful of almonds as a snack", "have a yogurt with berries after training", "add pasta or bread to your meals". Keep it practical and easy to include in a daily routine.
-
-User: ${profile.weight}kg ${profile.gender}, ${profile.trainingHours}h/day training, goal: ${profile.goal||"maintain"}.
-Diet: ${dietLabel}.${intolList.length>0?`\nIntolerances/allergies: ${intolList.join(", ")}. NEVER suggest foods containing these.`:""}
-${defs.length>0?`\nDeficiencies: ${defText}`:""}
-${excesses.length>0?`\nExcesses (>200%): ${excesses.map(e=>`${e.l}: ${Math.round((avg[e.k]/e.t)*100)}%`).join(", ")}`:""}
-
-IMPORTANT: All suggestions MUST be compatible with the user's ${dietLabel} diet${intolList.length>0?` and avoid ${intolList.join(", ")}`:""}. Respond ONLY with a JSON array (no markdown, no backticks):
-[{"tip":"simple habit","helps":"what it addresses"},{"tip":"...","helps":"..."},{"tip":"...","helps":"..."}]`}],userKey:currentUserKey,kind:"lifestyle_suggestion"})});const d=await r.json();if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));const allText=d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");const match=allText.match(/\[[\s\S]*\]/);if(!match)throw new Error("Could not parse suggestions");setSuggestions(JSON.parse(match[0]))}catch(e){setSuggestions(null);setSugErr(e.message)}finally{setSugLd(false)}};
-      return<div className="panel" style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
-        {sugErr&&<div className="err">{sugErr}</div>}
-        {!suggestions&&!sugLd&&<button className="btn" onClick={getSug}>Get lifestyle suggestion</button>}
-        {sugLd&&<div style={{textAlign:"center",padding:12,fontSize:14,color:"var(--ink-soft)"}}>Thinking…</div>}
-        {suggestions&&<div>
-          <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5,marginBottom:10,background:"var(--page-bg)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontWeight:600,color:"var(--ink)",marginBottom:4}}>{suggestions[sugIdx].tip}</div>
-            <div style={{color:"var(--good)",fontWeight:500}}>Helps with: {suggestions[sugIdx].helps}</div>
-          </div>
-          <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:14}}>
-            <button onClick={()=>setSugIdx(p=>(p-1+suggestions.length)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>←</button>
-            <div style={{display:"flex",gap:6}}>{suggestions.map((_,i)=><div key={i} style={{width:6,height:6,borderRadius:"50%",background:i===sugIdx?"var(--rose)":"var(--track)"}}/>)}</div>
-            <button onClick={()=>setSugIdx(p=>(p+1)%suggestions.length)} style={{width:32,height:32,borderRadius:"50%",border:"1px solid var(--border)",background:"#fff",cursor:"pointer"}}>→</button>
-          </div>
-          <button className="btn btn-o" style={{marginTop:10}} onClick={getSug}>Refresh</button>
-        </div>}
-      </div>;
-    })()}
 
     {wd.length>=2&&<div style={{marginBottom:24}}>
       <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>

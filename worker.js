@@ -16,7 +16,6 @@ const MEAL_MAX_BALANCE = 100;            // ceiling on accumulated (unused) meal
 // grant later, change MEAL_GRANT_ID (any new string) and set the floor you want.
 const MEAL_GRANT_ID = "2026-09-09-open50";
 const MEAL_GRANT_FLOOR = 50;
-const DAILY_LIFESTYLE_LIMIT = 3;         // lifestyle-suggestion calls per user per day (no rollover)
 const MIN_MS_BETWEEN_REQUESTS = 4000;    // per-user cooldown — blunts rapid-fire/agentic loops
 const KV_TTL_SECONDS = 172800;           // 2 days — auto-expire daily counters
 // A meal balance must outlive gaps in usage, otherwise a user who stops logging for
@@ -173,10 +172,8 @@ export default {
       const day = todayKey();
       const { key: balKey, rec } = await readMealBalance(env, qKey, day);
       await writeMealBalance(env, balKey, rec);
-      const lifeUsed = await getCounter(env, `quota:lifestyle:${qKey}:${day}`);
       return new Response(JSON.stringify({
-        meal: { remaining: rec.balance, max: MEAL_MAX_BALANCE, perDay: MEAL_DAILY_REFILL },
-        lifestyle: { remaining: Math.max(0, DAILY_LIFESTYLE_LIMIT - lifeUsed), perDay: DAILY_LIFESTYLE_LIMIT }
+        meal: { remaining: rec.balance, max: MEAL_MAX_BALANCE, perDay: MEAL_DAILY_REFILL }
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -243,21 +240,12 @@ export default {
         return errorResponse("The app has reached its shared daily analysis budget. Please try again tomorrow.", 429, corsHeaders);
       }
 
-      // 3. Per-user quota. Lifestyle suggestions stay a flat daily limit; meal
-      //    analyses draw on the accumulating balance (see readMealBalance).
-      const isLifestyle = kind === "lifestyle_suggestion";
-      const lifestyleKey = `quota:lifestyle:${userKey}:${day}`;
-      let lifestyleUsed = 0, mealBal = null;
-      if (isLifestyle) {
-        lifestyleUsed = await getCounter(env, lifestyleKey);
-        if (lifestyleUsed >= DAILY_LIFESTYLE_LIMIT) {
-          return errorResponse(`Daily lifestyle-suggestion limit reached (${DAILY_LIFESTYLE_LIMIT}/day). Please try again tomorrow.`, 429, corsHeaders);
-        }
-      } else {
-        mealBal = await readMealBalance(env, userKey, day);
-        if (mealBal.rec.balance <= 0) {
-          return errorResponse(`You've used all your meal analyses. You get ${MEAL_DAILY_REFILL} more tomorrow — unused ones stack up to ${MEAL_MAX_BALANCE}.`, 429, corsHeaders);
-        }
+      // 3. Per-user quota: every call draws on the accumulating meal balance (see
+      //    readMealBalance). `kind` is still read off the body and ignored, so a client
+      //    that has not reloaded yet is answered rather than rejected.
+      const mealBal = await readMealBalance(env, userKey, day);
+      if (mealBal.rec.balance <= 0) {
+        return errorResponse(`You've used all your meal analyses. You get ${MEAL_DAILY_REFILL} more tomorrow — unused ones stack up to ${MEAL_MAX_BALANCE}.`, 429, corsHeaders);
       }
 
       // 4. Forward to Claude. Upstream hiccups — a 429 or a 5xx from Anthropic, a dropped
@@ -298,17 +286,13 @@ export default {
         const cost = (data.usage.input_tokens || 0) * PRICE_PER_INPUT_TOKEN
                    + (data.usage.output_tokens || 0) * PRICE_PER_OUTPUT_TOKEN;
         await env.USERDATA.put(budgetKey, String(spentSoFar + cost), { expirationTtl: KV_TTL_SECONDS });
-        if (isLifestyle) {
-          await env.USERDATA.put(lifestyleKey, String(lifestyleUsed + 1), { expirationTtl: KV_TTL_SECONDS });
-        } else {
-          mealBal.rec.balance = Math.max(0, mealBal.rec.balance - 1);
-          await writeMealBalance(env, mealBal.key, mealBal.rec);
-        }
+        mealBal.rec.balance = Math.max(0, mealBal.rec.balance - 1);
+        await writeMealBalance(env, mealBal.key, mealBal.rec);
       }
 
       // Piggyback the remaining balance so the client can update its counter without
       // a second round-trip. Anthropic never returns a `_quota` field of its own.
-      if (!isLifestyle && mealBal) data._quota = { mealRemaining: mealBal.rec.balance, mealMax: MEAL_MAX_BALANCE, mealPerDay: MEAL_DAILY_REFILL };
+      data._quota = { mealRemaining: mealBal.rec.balance, mealMax: MEAL_MAX_BALANCE, mealPerDay: MEAL_DAILY_REFILL };
 
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
