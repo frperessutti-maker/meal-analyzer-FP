@@ -3446,9 +3446,12 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
 // Oldest first, so a chart reads left to right.
 function lastNDays(n){const d=[];for(let i=n-1;i>=0;i--){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
 
-// A day-by-day line over a fixed window. A day with nothing recorded breaks the line
-// rather than being drawn as a zero — a gap in tracking is not a bad day, and joining
-// across it would invent a slope that never happened.
+// A day-by-day line over a fixed window. The line runs unbroken through every recorded
+// day; a day with nothing logged sits on it as a hollow dot at the value the line passes
+// through there. That keeps the shape of the month readable while still marking which
+// days are a reading and which are a straight line drawn between two readings. Days
+// before the first record or after the last get no dot — there is nothing to interpolate
+// between, and a guess at the end of a line is just a guess.
 function DayLine({days,min,max,ticks,color,empty}){
   const W=340,H=132,PADL=54,PADR=10,PADT=10,PADB=20;
   const n=days.length;
@@ -3457,10 +3460,17 @@ function DayLine({days,min,max,ticks,color,empty}){
   const pts=days.map((d,i)=>({...d,x:px(i),y:d.v==null?null:py(d.v)}));
   const have=pts.filter(p=>p.y!==null);
   if(!have.length)return<div style={{fontSize:13,color:"var(--gray)",padding:"16px 0"}}>{empty}</div>;
-  // Runs of consecutive recorded days. A run of one gets its dot but no line.
-  const segs=[];let cur=[];
-  pts.forEach(p=>{if(p.y===null){if(cur.length>1)segs.push(cur);cur=[]}else cur.push(p)});
-  if(cur.length>1)segs.push(cur);
+  const first=have[0],last=have[have.length-1];
+  // Interpolated stand-ins. They land exactly on the drawn line, since that line joins
+  // the same two recorded points this reads between.
+  const gaps=[];
+  pts.forEach(p=>{
+    if(p.y!==null||p.x<first.x||p.x>last.x)return;
+    let prev=null,next=null;
+    have.forEach(h=>{if(h.x<p.x)prev=h;else if(next===null&&h.x>p.x)next=h});
+    if(!prev||!next)return;
+    gaps.push({date:p.date,x:p.x,y:prev.y+((p.x-prev.x)/(next.x-prev.x))*(next.y-prev.y)});
+  });
   const label=ds=>{const x=new Date(ds+"T12:00:00");return `${x.getDate()}/${x.getMonth()+1}`};
   const xTicks=[0,Math.floor((n-1)/2),n-1];
   return<svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block",overflow:"visible"}}>
@@ -3468,8 +3478,9 @@ function DayLine({days,min,max,ticks,color,empty}){
       <line x1={PADL} x2={W-PADR} y1={py(t.v)} y2={py(t.v)} stroke="var(--border)" strokeWidth="1" strokeDasharray={t.v===min?"":"3 3"}/>
       <text x={PADL-7} y={py(t.v)+3.5} textAnchor="end" style={{fontSize:9,fill:"var(--gray)"}}>{t.label}</text>
     </g>)}
-    {segs.map((sg,i)=><polyline key={i} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
-      points={sg.map(p=>`${p.x},${p.y}`).join(" ")}/>)}
+    {have.length>1&&<polyline fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+      points={have.map(p=>`${p.x},${p.y}`).join(" ")}/>}
+    {gaps.map(p=><circle key={"g"+p.date} cx={p.x} cy={p.y} r="2.4" fill="var(--card-bg)" stroke={color} strokeWidth="1.3"><title>{p.date} · not logged</title></circle>)}
     {have.map(p=><circle key={p.date} cx={p.x} cy={p.y} r="2.4" fill={color}><title>{p.date}</title></circle>)}
     {xTicks.map(i=><text key={i} x={px(i)} y={H-6} textAnchor={i===0?"start":i===n-1?"end":"middle"} style={{fontSize:9,fill:"var(--gray)"}}>{label(days[i].date)}</text>)}
   </svg>;
