@@ -3306,7 +3306,8 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
 
-  const[chartNutrient,setChartNutrient]=useState("");
+  // Calories by default: the page should open showing something rather than a prompt.
+  const[chartNutrient,setChartNutrient]=useState("calories");
   const chartN=allN.find(n=>n.key===chartNutrient)||allN[0];
   // slice() first — dd is ordered newest-first, and reverse() mutates in place.
   const seriesFor=(key)=>dd.slice().reverse().map(d=>({
@@ -3325,16 +3326,14 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const fatSplitMissing=chartNutrient==="fat"?(()=>{const sp=fatSplitSeries("satFat"),ft=seriesFor("fat");return sp.filter((d,i)=>d.v===null&&ft[i].v!=null).length})():0;
 
   return<div>
-    {/* No heading: the unselected <select> reads "Track a nutrient" and does that job,
-        and the chart only appears once a nutrient is actually picked. */}
-    <select value={chartNutrient} onChange={e=>setChartNutrient(e.target.value)} style={{marginBottom:chartNutrient?16:24}}>
-      <option value="">Track a nutrient</option>
+    {/* No heading: the <select> names what is being charted and does that job. */}
+    <select value={chartNutrient} onChange={e=>setChartNutrient(e.target.value)} style={{marginBottom:16}}>
       {[{k:"calories",l:"Calories"},{k:"protein",l:"Protein"},{k:"carbs",l:"Carbs"},{k:"fat",l:"Fat"},{k:"fiber",l:"Fiber"}].map(o=><option key={o.k} value={o.k}>{o.l}</option>)}
     </select>
-    {chartNutrient&&<NutrientChart label={chartN.label} unit={chartN.unit} target={chartN.target} series={chartDays}/>}
-    {/* Fat reads as two opposite stories, so the halves get a chart each rather than being
-        averaged into one bar: saturated is a ceiling to stay under, unsaturated a share to
-        reach, matching the colour rule on the Summary page. */}
+    {/* Fat gets no chart of its own. The halves read as opposite stories — saturated is a
+        ceiling to stay under, unsaturated a share to reach — and a single bar of their sum
+        says neither, while sitting above the two charts that do. */}
+    {chartNutrient!=="fat"&&<NutrientChart label={chartN.label} unit={chartN.unit} target={chartN.target} series={chartDays}/>}
     {chartNutrient==="fat"&&<>
       <NutrientChart label="Saturated fat" unit="g" target={DT.satFat} series={fatSplitSeries("satFat")} ceiling
         note={fatSplitMissing>0?`${fatSplitMissing} of these days were logged before the breakdown existed, so they show as no data.`:null}/>
