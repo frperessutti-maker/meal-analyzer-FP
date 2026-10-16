@@ -3443,6 +3443,38 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
 }
 
 /* ── WEEKLY REPORT ── */
+// Oldest first, so a chart reads left to right.
+function lastNDays(n){const d=[];for(let i=n-1;i>=0;i--){const x=new Date();x.setDate(x.getDate()-i);d.push(isoDay(x))}return d}
+
+// A day-by-day line over a fixed window. A day with nothing recorded breaks the line
+// rather than being drawn as a zero — a gap in tracking is not a bad day, and joining
+// across it would invent a slope that never happened.
+function DayLine({days,min,max,ticks,color,empty}){
+  const W=340,H=132,PADL=54,PADR=10,PADT=10,PADB=20;
+  const n=days.length;
+  const px=i=>PADL+(n<2?0:(i*(W-PADL-PADR))/(n-1));
+  const py=v=>PADT+(1-(v-min)/(max-min))*(H-PADT-PADB);
+  const pts=days.map((d,i)=>({...d,x:px(i),y:d.v==null?null:py(d.v)}));
+  const have=pts.filter(p=>p.y!==null);
+  if(!have.length)return<div style={{fontSize:13,color:"var(--gray)",padding:"16px 0"}}>{empty}</div>;
+  // Runs of consecutive recorded days. A run of one gets its dot but no line.
+  const segs=[];let cur=[];
+  pts.forEach(p=>{if(p.y===null){if(cur.length>1)segs.push(cur);cur=[]}else cur.push(p)});
+  if(cur.length>1)segs.push(cur);
+  const label=ds=>{const x=new Date(ds+"T12:00:00");return `${x.getDate()}/${x.getMonth()+1}`};
+  const xTicks=[0,Math.floor((n-1)/2),n-1];
+  return<svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block",overflow:"visible"}}>
+    {ticks.map(t=><g key={t.label}>
+      <line x1={PADL} x2={W-PADR} y1={py(t.v)} y2={py(t.v)} stroke="var(--border)" strokeWidth="1" strokeDasharray={t.v===min?"":"3 3"}/>
+      <text x={PADL-7} y={py(t.v)+3.5} textAnchor="end" style={{fontSize:9,fill:"var(--gray)"}}>{t.label}</text>
+    </g>)}
+    {segs.map((sg,i)=><polyline key={i} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+      points={sg.map(p=>`${p.x},${p.y}`).join(" ")}/>)}
+    {have.map(p=><circle key={p.date} cx={p.x} cy={p.y} r="2.4" fill={color}><title>{p.date}</title></circle>)}
+    {xTicks.map(i=><text key={i} x={px(i)} y={H-6} textAnchor={i===0?"start":i===n-1?"end":"middle"} style={{fontSize:9,fill:"var(--gray)"}}>{label(days[i].date)}</text>)}
+  </svg>;
+}
+
 function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,skipped,DT,lastReportWindowStart,setLastReportWindowStart}){
   // The engine has no idea which nutrients exist or what this user targets, so hand it
   // both. dailyExtras carries what is not in the food itself — vitamin D from sunlight.
@@ -3470,11 +3502,6 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
       setShowToast(true);clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setShowToast(false),2600);
     }catch(e){alert("Couldn't generate the report: "+e.message)}
   };
-  const preview=(()=>{try{return window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,templates,skipped,targets:reportTargets,dailyExtras})}catch{return null}})();
-  const t2Label={sun:"sun exposure",hydration:"hydration",sleep:"a well-slept night"};
-  const bestT2=preview&&preview.tier2?Object.entries(preview.tier2).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
-  const bestT3=preview&&preview.tier3&&preview.tier3.factors?Object.entries(preview.tier3.factors).sort((a,b)=>b[1].confidence-a[1].confidence)[0]:null;
-  const bestGi=preview&&preview.gi&&preview.gi.triggers&&preview.gi.triggers.length>0?preview.gi.triggers[0]:null;
   return<div>
     {/* The report opens here rather than downloading. A .html file handed to iOS becomes a
         document for whatever app claims that type — which is how it landed in an "Open in
@@ -3499,39 +3526,61 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
     {!reportState.enabled&&<div className="info" style={{fontSize:13}}>{reportState.label}</div>}
     {showToast&&<div style={{background:"var(--ink)",color:"#fff",fontSize:12.5,fontWeight:500,padding:"10px 14px",borderRadius:12,marginBottom:16}}>✓ Report generated — the next one unlocks in 7 days</div>}
 
-    <h3 className="stit">Performance</h3>
-    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Lifestyle &amp; performance</div>
-      {bestT2?<>
-        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>On the {bestT2[1].nTrue} days you logged {t2Label[bestT2[0]]||bestT2[0]}, your average performance was <b style={{color:"var(--ink)"}}>{bestT2[1].meanTrue}</b> — {Math.abs(bestT2[1].delta)} points {bestT2[1].delta>0?"higher":"lower"} than the {bestT2[1].nFalse} days without ({bestT2[1].meanFalse}).</div>
-        <div style={{display:"flex",gap:20,alignItems:"flex-end",height:64,padding:"0 10px"}}>
-          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,height:"100%",justifyContent:"flex-end"}}><div style={{width:40,borderRadius:"6px 6px 2px 2px",background:"var(--good)",height:`${Math.max(6,bestT2[1].meanTrue/10*100)}%`}}/><div style={{fontSize:10,color:"var(--ink-soft)"}}>with</div></div>
-          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,height:"100%",justifyContent:"flex-end"}}><div style={{width:40,borderRadius:"6px 6px 2px 2px",background:"var(--bad)",height:`${Math.max(6,bestT2[1].meanFalse/10*100)}%`}}/><div style={{fontSize:10,color:"var(--ink-soft)"}}>without</div></div>
+    {/* Thirty days, day by day. Averaged where a day holds more than one session, and
+        broken where nothing was recorded — an unlogged day is not a zero. */}
+    {(()=>{
+      const win=lastNDays(30);
+      const rppDays=win.map(d=>{
+        const ss=sessionsOf(rpp[d]).map(x=>Number(x.score)).filter(v=>v>0);
+        return {date:d,v:ss.length?ss.reduce((a,b)=>a+b,0)/ss.length:null};
+      });
+      const sleepDays=win.map(d=>{
+        const l=sleepLevel(sleep[d]);
+        return {date:d,v:l==="good"?1:l==="mediocre"?0.5:l==="bad"?0:null};
+      });
+      // Sun is a tick box with no "no", so an unticked day and a day the app was never
+      // opened look the same. A day with some other sign of use reads as "no sun"; a day
+      // with none at all is a gap, the same rule the habit detector uses.
+      const sunDays=win.map(d=>{
+        const used=(history[d]||[]).length>0||rpp[d]!==undefined||sleep[d]!==undefined||sunlight[d]===true||hydration[d]===true;
+        return {date:d,v:sunlight[d]===true?1:(used?0:null)};
+      });
+      const nRpp=rppDays.filter(x=>x.v!==null).length;
+      const nSleep=sleepDays.filter(x=>x.v!==null).length;
+      const sunCount=sunDays.filter(x=>x.v===1).length, sunKnown=sunDays.filter(x=>x.v!==null).length;
+      const avgRpp=nRpp?rppDays.filter(x=>x.v!==null).reduce((a,b)=>a+b.v,0)/nRpp:null;
+      return<>
+        <h3 className="stit">Performance</h3>
+        <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
+            <span style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Last 30 days</span>
+            {avgRpp!==null&&<span style={{fontSize:12.5,color:"var(--ink-soft)"}}>{nRpp} session day{nRpp!==1?"s":""} · averaging {rppLabel(avgRpp)}</span>}
+          </div>
+          <DayLine days={rppDays} min={1} max={10} color="var(--rose)" empty="No sessions logged in the last 30 days."
+            ticks={RPP_LEVELS.map(l=>({v:l.score,label:l.label}))}/>
         </div>
-      </>:<div style={{fontSize:13,color:"var(--gray)"}}>Not enough data yet to correlate lifestyle factors with performance.</div>}
-    </div>
 
-    <h3 className="stit">Sleep</h3>
-    <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Habits &amp; sleep</div>
-      {bestT3?<>
-        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>{bestT3[1].wellRate!==undefined?
-          `${bestT3[1].label} occurred on ${bestT3[1].wellRate}% of well-slept nights vs ${bestT3[1].poorRate}% of poor-sleep nights.`
-          :bestT3[0]==="last_meal_hour"
-            ?`${bestT3[1].wellMean<bestT3[1].poorMean?"An earlier":"A later"} last meal goes with better sleep — ${bestT3[1].wellClock} on well-slept nights against ${bestT3[1].poorClock} on poor ones.`
-            :`Well-slept nights averaged ${bestT3[1].wellMean} for ${bestT3[1].label.toLowerCase()}, vs ${bestT3[1].poorMean} on poor-sleep nights.`}</div>
-        <div className="pbg" style={{height:10}}><div className="pf" style={{width:`${bestT3[1].wellRate!==undefined?bestT3[1].wellRate:Math.min(100,Math.round(preview.tier3.nWell/(preview.tier3.nWell+preview.tier3.nPoor)*100))}%`,background:"var(--good)"}}/></div>
-      </>:<div style={{fontSize:13,color:"var(--gray)"}}>Not enough sleep data yet, or no factor showed a meaningful pattern.</div>}
-    </div>
+        <h3 className="stit">Sleep</h3>
+        <div className="panel" style={{marginBottom:20,display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
+            <span style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Last 30 days</span>
+            {nSleep>0&&<span style={{fontSize:12.5,color:"var(--ink-soft)"}}>{nSleep} night{nSleep!==1?"s":""} logged</span>}
+          </div>
+          <DayLine days={sleepDays} min={0} max={1} color="var(--good)" empty="No sleep logged in the last 30 days."
+            ticks={[{v:0,label:"Bad"},{v:0.5,label:"Mediocre"},{v:1,label:"Good"}]}/>
+        </div>
 
-    <h3 className="stit">GI distress</h3>
-    <div className="panel" style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Nutrition &amp; GI distress</div>
-      {bestGi?<>
-        <div style={{fontSize:13,color:"var(--ink-soft)",lineHeight:1.5}}>"{bestGi.word}" appeared in {bestGi.total} meals; {bestGi.giCount} of those were on days you reported GI distress ({Math.round(bestGi.giCount/bestGi.total*100)}%).</div>
-        <div className="pbg" style={{height:10}}><div className="pf" style={{width:`${bestGi.confidence}%`,background:"var(--bad)"}}/></div>
-      </>:<div style={{fontSize:13,color:"var(--gray)"}}>{preview&&preview.gi&&preview.gi.belowThreshold?`GI distress logged on ${preview.gi.giDays} of ${preview.gi.totalDays} days — ${preview.gi.minDays} are needed before food patterns can be compared.`:preview&&preview.gi?"A pattern was logged but no food keyword stood out yet.":"Not enough GI-distress reports yet to look for a pattern."}</div>}
-    </div>
+        <h3 className="stit">Sunlight</h3>
+        <div className="panel" style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
+            <span style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Last 30 days</span>
+            {sunKnown>0&&<span style={{fontSize:12.5,color:"var(--ink-soft)"}}>{sunCount} of {sunKnown} day{sunKnown!==1?"s":""}</span>}
+          </div>
+          <DayLine days={sunDays} min={0} max={1} color="var(--warn)" empty="No sunlight logged in the last 30 days."
+            ticks={[{v:0,label:"No"},{v:1,label:"Yes"}]}/>
+        </div>
+      </>;
+    })()}
   </div>
 }
 
