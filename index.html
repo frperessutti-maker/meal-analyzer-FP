@@ -3087,26 +3087,16 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
       <RppPicker score={0} onPick={v=>writeSessions([...sessions,{...blankSession(),score:v}])}/>
     </div>
 
-    {/* Three levels, plus a way back to none. The percentages are on the buttons because
-        "low" and "high" mean nothing on their own, and what they are worth depends on the
-        month — half the vitamin D target in summer is a different number from in winter. */}
+    {/* Three levels and a way back to none. */}
     {showSunPrompt&&<div onClick={()=>setShowSunPrompt(false)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"26px 24px",maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
         <div style={{fontSize:30,marginBottom:6}}>☀️</div>
-        <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>How much sun today?</div>
-        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:20,lineHeight:1.45}}>
-          {sunStrongMonth(today())
-            ?"April to September the sun is strong enough that a full day covers your vitamin D on its own."
-            :"October to March it cannot cover the day on its own, so it tops up what the food gave."}
-        </p>
+        <div style={{fontSize:19,fontWeight:700,marginBottom:20,fontFamily:"var(--serif)"}}>How much sun today?</div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>{setSun(today(),null);setShowSunPrompt(false)}} className="btn" style={{background:"var(--gray)",margin:0,flex:1,padding:"12px 6px"}}>None</button>
           {SUN_LEVELS.map(l=><button key={l} onClick={()=>{setSun(today(),l);setShowSunPrompt(false)}} className="btn" style={{background:SUN_META[l].color,margin:0,flex:1,padding:"12px 6px"}}>{SUN_META[l].label}</button>)}
         </div>
-        <div style={{fontSize:11.5,color:"var(--gray)",marginTop:12,lineHeight:1.45}}>
-          Low counts as half of high — {sunStrongMonth(today())?"50% and 100%":"25% and 50%"} of your daily vitamin D this time of year.
-        </div>
-        <button onClick={()=>setShowSunPrompt(false)} style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:14}}>Cancel</button>
+        <button onClick={()=>setShowSunPrompt(false)} style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:16}}>Cancel</button>
       </div>
     </div>}
     {/* Naming a workout. Only recurring ones are worth adding: the report needs several
