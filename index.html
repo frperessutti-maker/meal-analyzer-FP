@@ -3275,7 +3275,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   const[ad,setAd]=useState(null),[ex,setEx]=useState(null),[di,setDi]=useState(""),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   const[rppEditDate,setRppEditDate]=useState(null);
   const[editHistDate,setEditHistDate]=useState(null),[editHistIdx,setEditHistIdx]=useState(null),[editHistTxt,setEditHistTxt]=useState(""),[editHistLd,setEditHistLd]=useState(false);
-  const[avgOpen,setAvgOpen]=useState(false);
   const[tmplEditKey,setTmplEditKey]=useState(null),[tmplTxt,setTmplTxt]=useState(""),[tmplLd,setTmplLd]=useState(false),[tmplErr,setTmplErr]=useState(null);
   const[tmplTimeKey,setTmplTimeKey]=useState(null),[tmplEraseKey,setTmplEraseKey]=useState(null);
   // A recurring meal is a template shared by every day, so it cannot be edited in place for
@@ -3292,16 +3291,13 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
     finally{setTmplLd(false)}
   };
   const handleEditHist=async(date,idx)=>{if(!editHistTxt.trim())return;const orig=(history[date]||[])[idx];const textChanged=editHistTxt.trim()!==orig?.mealName;if(!textChanged){setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("");return}setEditHistLd(true);try{const m=await doAnalyze(editHistTxt,null,prompt);m.time=orig?.time||"";m.date=date;onDel(date,idx);onAdd(date,m);setEditHistDate(null);setEditHistIdx(null);setEditHistTxt("")}catch(e){setErr("Edit failed: "+e.message)}finally{setEditHistLd(false)}};
-  // 7-day window: averages cover all 7 (today included), the day cards cover the 6
-  // completed days, and the chart renders oldest-to-newest so today sits on the right.
-  const days=last7();const baseline=sum(templates);
+  // 7-day window: the chart covers all 7 with today on the right, the day cards below it
+  // cover the 6 completed ones.
+  const days=last7();
   const dayBaseline=(d)=>{const ds=skipped[d]||[];return sum(templates.filter((_,i)=>!ds.includes(i)))};
-  const MACRO_KEYS=["calories","protein","fat","carbs","fiber"];
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0,base:dayBaseline(d)}));
   const breakdownDD=dd.filter(d=>d.date!==today());
-  const wd=dd.filter(d=>d.totals);
-  const avg={};allN.forEach(n=>{avg[n.key]=wd.length>0?wd.reduce((s,d)=>s+((n.key==="vitaminD"&&sunlight[d.date])?sunVitD(d.date,(d.totals[n.key]||0)+(d.base[n.key]||0))+(d.totals[n.key]||0):(d.totals[n.key]||0)),0)/wd.length+(baseline[n.key]||0):0});
   const fmt=ds=>{const t=today();if(ds===t)return"Today";const y=new Date();y.setDate(y.getDate()-1);if(ds===isoDay(y))return"Yesterday";return new Date(ds+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})};
   const pc=p=>p>=90?"#16a34a":p>=70?"#ca8a04":"#dc2626";
 
@@ -3341,12 +3337,6 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
     </>}
 
 
-    {wd.length>=2&&<div style={{marginBottom:24}}>
-      <button className="collapse-btn" onClick={()=>setAvgOpen(!avgOpen)} style={{marginBottom:avgOpen?12:0,fontSize:13,textTransform:"uppercase",letterSpacing:.4}}>
-        {avgOpen?"▾":"▸"} {wd.length}-day averages
-      </button>
-      {avgOpen&&<div className="gm">{allN.filter(n=>{if(MACRO_KEYS.includes(n.key))return true;const p=Math.round((avg[n.key]/n.target)*100);return p<75||p>200}).map(n=>{const v=Math.round(avg[n.key]*10)/10,p=Math.round((v/n.target)*100);return<div key={n.key} style={{background:"#fff",border:`1px solid ${MACRO_KEYS.includes(n.key)?(p>=90?"var(--good)":p>=70?"var(--warn)":"var(--bad)"):"var(--bad)"}`,borderRadius:14,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:11,color:"var(--ink-soft)",fontWeight:500,marginBottom:4}}>{n.label}</div><div style={{fontSize:14,fontWeight:600,color:"var(--ink)"}}>{n.key==="calories"?Math.round(v):v}</div><div style={{fontSize:11,color:pc(p),marginTop:2,fontWeight:500}}>{p}%</div></div>})}</div>}
-    </div>}
     <h3 className="slab">Past 6 days</h3>
     {breakdownDD.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const isExpanded=ex===d.date;return<div key={d.date} className="dc">
       <div onClick={()=>setEx(isExpanded?null:d.date)} style={{padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
