@@ -391,6 +391,12 @@
   const sleepLvl = (v) => v === true ? "good" : v === false ? "bad"
     : (v === "good" || v === "mediocre" || v === "bad") ? v : undefined;
 
+  // Sun went from a tick box to three levels. An older record is a bare true, which was
+  // a day in the sun; a day with no record is none. The weight is what the day is worth
+  // where sun is a quantity, and anything above zero counts where it is a yes or no.
+  const SUN_WEIGHT = { high: 1, low: 0.5 };
+  const sunValue = (v) => (v === true ? 1 : (SUN_WEIGHT[v] || 0));
+
   function tier2(sessions, sunlight, sleep, hydration) {
     const results = {};
     const check = (name, predicate) => {
@@ -405,7 +411,7 @@
       if (confidence <= MIN_CONFIDENCE) return null;
       return { meanTrue: Math.round(meanTrue * 10) / 10, meanFalse: Math.round(meanFalse * 10) / 10, nTrue: withTrue.length, nFalse: withFalse.length, delta: Math.round(delta * 10) / 10, confidence };
     };
-    const sun = check("sun", (d) => !!sunlight[d]); if (sun) results.sun = sun;
+    const sun = check("sun", (d) => sunValue(sunlight[d]) > 0); if (sun) results.sun = sun;
     const hyd = check("hydration", (d) => !!hydration[d]); if (hyd) results.hydration = hyd;
     const slp = check("sleep", (d) => sleepLvl(sleep[d]) === "good"); if (slp) results.sleep = slp;
     return results;
@@ -429,7 +435,7 @@
       });
       const lateTraining = trainingDT ? trainingDT.getHours() >= 20 : false;
       return { date: d, slept_well: sleepLvl(sleep[d]) === "good", carbs: totals.carbs, calories: totals.calories, last_meal_hour: lastMealHour,
-        supps: supplementsIn(dayMeals, [...SUPPLEMENTS, ...SLEEP_AIDS]), late_training: lateTraining, sun: !!sunlight[d] };
+        supps: supplementsIn(dayMeals, [...SUPPLEMENTS, ...SLEEP_AIDS]), late_training: lateTraining, sun: sunValue(sunlight[d]) > 0 };
     });
     const well = nights.filter((n) => n.slept_well);
     const poor = nights.filter((n) => !n.slept_well);
@@ -494,8 +500,10 @@
       // read the user taking up the check-in as the user taking up the habit, which is a
       // different claim entirely. A day with no sign of use at all is now missing data.
       const used = meals.length > 0 || rpp[d] !== undefined || sleep[d] !== undefined
-        || sunlight[d] === true || hydration[d] === true;
-      series.sun_freq.push(sunlight[d] === true ? 1 : (used ? 0 : null));
+        || sunValue(sunlight[d]) > 0 || hydration[d] === true;
+      // A half-day of sun is half a day of sun here: the habit detector is tracking how
+      // much, not how often, so a shift from high to low shows up as the drop it is.
+      series.sun_freq.push(sunValue(sunlight[d]) > 0 ? sunValue(sunlight[d]) : (used ? 0 : null));
       series.hydration_freq.push(hydration[d] === true ? 1 : (used ? 0 : null));
       series.sleep_quality.push((l => l === "good" ? 1 : l === "mediocre" ? 0.5 : l === "bad" ? 0 : null)(sleepLvl(sleep[d])));
       const dm = { protein: 0, carbs: 0, calories: 0, fiber: 0 };
@@ -2419,6 +2427,18 @@ function defaultPastMealTime(dayMeals,meal){
 // Sleep quality is a three-level scale. Stored as "bad" | "mediocre" | "good"; nights
 // logged before the middle level existed are booleans, so every read normalises first.
 const SLEEP_LEVELS=["bad","mediocre","good"];
+// Sunlight is three levels. It began as a tick box, so an older record is a bare `true`,
+// which reads as a day spent in the sun — the strongest thing it could have meant.
+// "none" is never stored; an absent day is none.
+const SUN_LEVELS=["low","high"];
+const SUN_META={
+  low: {label:"Low",  short:"low",  color:"var(--warn)", soft:"var(--warn-soft)", factor:0.5},
+  high:{label:"High", short:"high", color:"var(--good)", soft:"var(--good-soft)", factor:1},
+};
+function sunLevel(v){
+  if(v===true)return"high";
+  return SUN_META[v]?v:null;
+}
 const SLEEP_META={
   bad:     {label:"Bad",      color:"var(--bad)",  soft:"var(--bad-soft)"},
   mediocre:{label:"Mediocre", color:"var(--warn)", soft:"var(--warn-soft)"},
@@ -2469,9 +2489,17 @@ function sum(meals){const t={};AK.forEach(k=>t[k]=0);(meals||[]).forEach(m=>AK.f
 //   eaten, and the day can land anywhere.
 const VITD_TARGET=(MICROS.find(m=>m.key==="vitaminD")||{target:2000}).target;
 function sunStrongMonth(ds){const m=new Date(ds+"T12:00:00").getMonth();return m>=3&&m<=8}
-function sunVitD(ds,foodVitD){
+// A full day in the sun covers the requirement outright between April and September, so
+// it tops the day up to the target; the rest of the year it cannot, and adds half a day's
+// worth on top of the food. Low is half of whichever of those applies — a quarter of the
+// target in winter, half of it in summer. The level is read here rather than guarded at
+// every call site, so "no sun" simply contributes nothing.
+function sunVitD(ds,foodVitD,level){
+  const lv=sunLevel(level);
+  if(!lv)return 0;
   const food=Math.max(0,Number(foodVitD)||0);
-  return sunStrongMonth(ds)?Math.max(0,VITD_TARGET-food):VITD_TARGET*0.5;
+  const full=sunStrongMonth(ds)?Math.max(0,VITD_TARGET-food):VITD_TARGET*0.5;
+  return full*SUN_META[lv].factor;
 }
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
@@ -2767,7 +2795,7 @@ function ProfileSetup({onSave,initial,firstName,lastName}){
 }
 
 /* ── LOG (meal entry + today's totals) ── */
-function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templates,setTemplates,skipped,sun,toggleSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
+function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templates,setTemplates,skipped,sun,setSun,hydrated,toggleHydration,gi,toggleGi,sleep,setSleep,rpp,setRpp,profile,DT,prompt,quota,refreshQuota,reportState,onGoToReport}){
   // meal-entry state
   const[mode,setMode]=useState("text"),[txt,setTxt]=useState(""),[imgP,setImgP]=useState(null),[img64,setImg64]=useState(null),[ld,setLd]=useState(false),[err,setErr]=useState(null);
   // recurring-meal state
@@ -2836,6 +2864,7 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
   const writeSessions=(next)=>setRpp(next);
   const patchSession=(i,patch)=>writeSessions(sessions.map((s,j)=>j===i?{...s,...patch}:s));
   const removeSession=(i)=>writeSessions(sessions.filter((_,j)=>j!==i));
+  const[showSunPrompt,setShowSunPrompt]=useState(false);
   const[addTypeFor,setAddTypeFor]=useState(null),[newType,setNewType]=useState(""),[typeErr,setTypeErr]=useState(null);
   const confirmNewType=()=>{
     const label=newType.trim();
@@ -2984,10 +3013,14 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
         for the Good/Bad buttons — so the top and bottom boxes came out different widths.
         The right column is the wider of the two because it carries more content. */}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1.15fr",gridAutoRows:"1fr",gap:8,marginBottom:16}}>
-      <div style={{minWidth:0,display:"flex",alignItems:"center",gap:8,padding:"12px",background:sun?"var(--warn-soft)":"#fff",border:`1px solid ${sun?"var(--warn)":"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={toggleSun}>
-        <input type="checkbox" checked={sun} readOnly style={{width:16,height:16,accentColor:"var(--warn)",pointerEvents:"none",flexShrink:0}}/>
-        <span style={{fontSize:13,fontWeight:500}}>☀️ Sunlight exposure</span>
-      </div>
+      {/* Three levels do not fit a tick box, so this one opens a sheet. The box still
+          shows the answer at a glance, which is what the other three do. */}
+      {(()=>{const lv=sunLevel(sun);const m=lv&&SUN_META[lv];
+        return<div style={{minWidth:0,display:"flex",alignItems:"center",gap:8,padding:"12px",background:m?m.soft:"#fff",border:`1px solid ${m?m.color:"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={()=>setShowSunPrompt(true)}>
+          <input type="checkbox" checked={!!m} readOnly style={{width:16,height:16,accentColor:"var(--warn)",pointerEvents:"none",flexShrink:0}}/>
+          <span style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>☀️ Sunlight{m?`: ${m.label}`:""}</span>
+        </div>;
+      })()}
       <div style={{minWidth:0,display:"flex",alignItems:"center",gap:8,padding:"12px",background:hydrated?"var(--rose-soft)":"#fff",border:`1px solid ${hydrated?"var(--rose)":"var(--border)"}`,borderRadius:12,cursor:"pointer"}} onClick={toggleHydration}>
         <input type="checkbox" checked={hydrated} readOnly style={{width:16,height:16,accentColor:"var(--rose)",pointerEvents:"none",flexShrink:0}}/>
         <span style={{fontSize:13,fontWeight:500}}>💧 Water: {profile?calcHydration(profile):2.5}L</span>
@@ -3054,6 +3087,28 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
       <RppPicker score={0} onPick={v=>writeSessions([...sessions,{...blankSession(),score:v}])}/>
     </div>
 
+    {/* Three levels, plus a way back to none. The percentages are on the buttons because
+        "low" and "high" mean nothing on their own, and what they are worth depends on the
+        month — half the vitamin D target in summer is a different number from in winter. */}
+    {showSunPrompt&&<div onClick={()=>setShowSunPrompt(false)} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"26px 24px",maxWidth:340,width:"100%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",textAlign:"center"}}>
+        <div style={{fontSize:30,marginBottom:6}}>☀️</div>
+        <div style={{fontSize:19,fontWeight:700,marginBottom:6,fontFamily:"var(--serif)"}}>How much sun today?</div>
+        <p style={{fontSize:13,color:"var(--ink-soft)",marginBottom:20,lineHeight:1.45}}>
+          {sunStrongMonth(today())
+            ?"April to September the sun is strong enough that a full day covers your vitamin D on its own."
+            :"October to March it cannot cover the day on its own, so it tops up what the food gave."}
+        </p>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>{setSun(today(),null);setShowSunPrompt(false)}} className="btn" style={{background:"var(--gray)",margin:0,flex:1,padding:"12px 6px"}}>None</button>
+          {SUN_LEVELS.map(l=><button key={l} onClick={()=>{setSun(today(),l);setShowSunPrompt(false)}} className="btn" style={{background:SUN_META[l].color,margin:0,flex:1,padding:"12px 6px"}}>{SUN_META[l].label}</button>)}
+        </div>
+        <div style={{fontSize:11.5,color:"var(--gray)",marginTop:12,lineHeight:1.45}}>
+          Low counts as half of high — {sunStrongMonth(today())?"50% and 100%":"25% and 50%"} of your daily vitamin D this time of year.
+        </div>
+        <button onClick={()=>setShowSunPrompt(false)} style={{background:"none",border:"none",color:"var(--gray)",cursor:"pointer",fontSize:13,marginTop:14}}>Cancel</button>
+      </div>
+    </div>}
     {/* Naming a workout. Only recurring ones are worth adding: the report needs several
         sessions of the same type before it can say anything about it. */}
     {addTypeFor!==null&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -3097,7 +3152,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
-  if(sunlight[today()])tot.vitaminD+=sunVitD(today(),tot.vitaminD);
+  tot.vitaminD+=sunVitD(today(),tot.vitaminD,sunlight[today()]);
   const handleEditMeal=async(idx)=>{if(!editMealTxt.trim())return;const orig=meals[idx];const textChanged=editMealTxt.trim()!==orig.mealName;if(!textChanged){setEditMealIdx(null);setEditMealTxt("");return}setEditMealLd(true);try{const m=await doAnalyze(editMealTxt,null,prompt);m.time=orig.time||nowTime();m.date=orig.date||today();setMeals(p=>p.map((x,j)=>j===idx?m:x));setEditMealIdx(null);setEditMealTxt("")}catch(e){setEditMealErr("Edit failed: "+e.message)}finally{setEditMealLd(false);refreshQuota&&refreshQuota()}};
   const updateMealTime=(idx,time)=>{setMeals(p=>p.map((x,j)=>j===idx?{...x,time}:x));setEditTimeIdx(null)};
   // A recurring meal's time is stored on the template itself, so changing it here
@@ -3308,7 +3363,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   // slice() first — dd is ordered newest-first, and reverse() mutates in place.
   const seriesFor=(key)=>dd.slice().reverse().map(d=>({
     date:d.date,
-    v:d.totals?(d.totals[key]||0)+(d.base[key]||0)+(key==="vitaminD"&&sunlight[d.date]?sunVitD(d.date,(d.totals[key]||0)+(d.base[key]||0)):0):null,
+    v:d.totals?(d.totals[key]||0)+(d.base[key]||0)+(key==="vitaminD"?sunVitD(d.date,(d.totals[key]||0)+(d.base[key]||0),sunlight[d.date]):0):null,
     isToday:d.date===today(),
     shortLabel:d.date===today()?"Today":new Date(d.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short"}),
   }));
@@ -3338,7 +3393,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
 
 
     <h3 className="slab">Past 6 days</h3>
-    {breakdownDD.map(d=>{const hasSun=!!sunlight[d.date];const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const isExpanded=ex===d.date;return<div key={d.date} className="dc">
+    {breakdownDD.map(d=>{const sunLv=sunLevel(sunlight[d.date]);const hasGi=!!giDistress[d.date];const hasHydration=!!hydration[d.date];const daySleep=sleep[d.date];const isExpanded=ex===d.date;return<div key={d.date} className="dc">
       <div onClick={()=>setEx(isExpanded?null:d.date)} style={{padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
         <div>
           <div style={{fontWeight:700,fontSize:15,color:"var(--ink)",fontFamily:"var(--serif)"}}>{fmt(d.date)}</div>
@@ -3355,7 +3410,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
           ?<div className="panel" style={{padding:14}}><textarea value={di} onChange={e=>setDi(e.target.value)} placeholder="e.g., Grilled chicken 200g, rice" style={{minHeight:60,marginBottom:8}}/>{err&&<div className="err">{err}</div>}<div className="fr"><button className="btn btn-rose btn-s" onClick={async()=>{if(!di.trim())return;setLd(true);setErr(null);try{const m=await doAnalyze(di,null,prompt);m.date=d.date;m.time=d.date===today()?defaultMealTime(history[d.date]||[],m):defaultPastMealTime(history[d.date]||[],m);onAdd(d.date,m);setAd(null);setDi("")}catch(e){setErr("Failed: "+e.message)}finally{setLd(false)}}} disabled={ld||!di.trim()}>{ld?"Analyzing…":"Add meal"}</button><button className="btn btn-o btn-s" onClick={()=>{setAd(null);setErr(null)}}>Cancel</button></div></div>
           :<button className="btn btn-o btn-s" style={{alignSelf:"flex-start"}} onClick={()=>{setAd(d.date);setDi("");setErr(null)}}>+ Add meal</button>}
         <div style={{display:"flex",gap:14,fontSize:12.5,color:"var(--ink-soft)",flexWrap:"wrap"}}>
-          {hasSun&&<span title={sunStrongMonth(d.date)?"April to September: a day in the sun covers the vitamin D target":"October to March: the sun adds half a day of vitamin D on top of the food"}>☀️ Sun{sunStrongMonth(d.date)?"":" (50%)"}</span>}
+          {sunLv&&<span style={{color:SUN_META[sunLv].color,fontWeight:500}} title={sunStrongMonth(d.date)?"April to September: a full day in the sun covers the vitamin D target, half a day covers half of it":"October to March: a full day adds half the vitamin D target on top of the food, half a day a quarter"}>☀️ Sun · {SUN_META[sunLv].label}</span>}
           {hasHydration&&<span>💧 Hydrated</span>}
           {hasGi&&<span style={{color:"var(--bad)"}}>🤢 GI distress</span>}
           {sleepLevel(daySleep)&&<span style={{color:SLEEP_META[sleepLevel(daySleep)].color,fontWeight:500}}>😴 {SLEEP_META[sleepLevel(daySleep)].label} sleep</span>}
@@ -3434,7 +3489,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
         })}
         {d.totals&&<>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
-        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"&&hasSun?sunVitD(d.date,(d.totals[m.key]||0)+(d.base[m.key]||0)):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
+        {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"?sunVitD(d.date,(d.totals[m.key]||0)+(d.base[m.key]||0),sunlight[d.date]):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
         </>}
       </div>}
     </div>})}
@@ -3495,7 +3550,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
     macros:[{key:"calories",label:"Calories",unit:" Cal",target:DT.calories},{key:"protein",label:"Protein",unit:"g",target:DT.protein},{key:"carbs",label:"Carbs",unit:"g",target:DT.carbs},{key:"fat",label:"Fat",unit:"g",target:DT.fat},{key:"satFat",label:"Saturated fat",unit:"g",target:DT.satFat,ceiling:true,partial:true},{key:"unsatFat",label:"Unsaturated fat",unit:"g",target:DT.unsatFat,partial:true},{key:"fiber",label:"Fiber",unit:"g",target:DT.fiber}],
     micros:MICROS.map(m=>({key:m.key,label:m.name,unit:m.unit,target:DT[m.key]})),
   };
-  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{if(sunlight[d])a[d]={vitaminD:sunVitD(d,sum(history[d]||[]).vitaminD||0)};return a},{});
+  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{const iu=sunVitD(d,sum(history[d]||[]).vitaminD||0,sunlight[d]);if(iu>0)a[d]={vitaminD:iu};return a},{});
   const[showToast,setShowToast]=useState(false);
   const[reportHtml,setReportHtml]=useState(null);
   const reportFrame=useRef(null);
@@ -3553,12 +3608,13 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
       // opened look the same. A day with some other sign of use reads as "no sun"; a day
       // with none at all is a gap, the same rule the habit detector uses.
       const sunDays=win.map(d=>{
-        const used=(history[d]||[]).length>0||rpp[d]!==undefined||sleep[d]!==undefined||sunlight[d]===true||hydration[d]===true;
-        return {date:d,v:sunlight[d]===true?1:(used?0:null)};
+        const lv=sunLevel(sunlight[d]);
+        const used=(history[d]||[]).length>0||rpp[d]!==undefined||sleep[d]!==undefined||!!lv||hydration[d]===true;
+        return {date:d,v:lv?SUN_META[lv].factor:(used?0:null)};
       });
       const nRpp=rppDays.filter(x=>x.v!==null).length;
       const nSleep=sleepDays.filter(x=>x.v!==null).length;
-      const sunCount=sunDays.filter(x=>x.v===1).length, sunKnown=sunDays.filter(x=>x.v!==null).length;
+      const sunHigh=sunDays.filter(x=>x.v===1).length, sunLow=sunDays.filter(x=>x.v===0.5).length, sunKnown=sunDays.filter(x=>x.v!==null).length;
       const avgRpp=nRpp?rppDays.filter(x=>x.v!==null).reduce((a,b)=>a+b.v,0)/nRpp:null;
       return<>
         <h3 className="stit">Performance</h3>
@@ -3585,10 +3641,10 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
         <div className="panel" style={{display:"flex",flexDirection:"column",gap:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10}}>
             <span style={{fontSize:15,fontWeight:700,color:"var(--ink)",fontFamily:"var(--serif)"}}>Last 30 days</span>
-            {sunKnown>0&&<span style={{fontSize:12.5,color:"var(--ink-soft)"}}>{sunCount} of {sunKnown} day{sunKnown!==1?"s":""}</span>}
+            {sunKnown>0&&<span style={{fontSize:12.5,color:"var(--ink-soft)"}}>{sunHigh} high · {sunLow} low · of {sunKnown} day{sunKnown!==1?"s":""}</span>}
           </div>
           <DayLine days={sunDays} min={0} max={1} color="var(--warn)" empty="No sunlight logged in the last 30 days."
-            ticks={[{v:0,label:"No"},{v:1,label:"Yes"}]}/>
+            ticks={[{v:0,label:"None"},{v:0.5,label:"Low"},{v:1,label:"High"}]}/>
         </div>
       </>;
     })()}
@@ -3814,7 +3870,8 @@ function App(){
   const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
   useEffect(()=>{lss("nt-templates",templates);scheduleSync()},[templates]);
   useEffect(()=>{if(profile){lss("nt-profile",profile);scheduleSync()}},[profile]);
-  const toggleSun=(date)=>{setSunlight_(p=>{const u={...p,[date]:!p[date]};lss("nt-sunlight",u);scheduleSync();return u})};
+  // Setting the same level again clears it, which is how the box gets back to "none".
+  const setSun=(date,level)=>{setSunlight_(p=>{const u={...p};if(!level||sunLevel(p[date])===level)delete u[date];else u[date]=level;lss("nt-sunlight",u);scheduleSync();return u})};
   const toggleGi=(date)=>{setGiDistress_(p=>{const u={...p};if(u[date]){delete u[date]}else{u[date]=nowTime()}lss("nt-gi",u);scheduleSync();return u})};
   const setSleep=(date,val)=>{setSleep_(p=>{const u={...p,[date]:val};lss("nt-sleep",u);scheduleSync();return u})};
   const setLastReportWindowStart=(v)=>{setLastReportWindowStart_(v);lss("nt-last-report-window",v);scheduleSync()};
@@ -3930,7 +3987,7 @@ function App(){
       {weightErr&&<p style={{fontSize:12,color:"var(--bad)",marginTop:6}}>{weightErr}</p>}
     </div>}
 
-    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} allRpp={rpp} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={!!sunlight[today()]} toggleSun={()=>toggleSun(today())} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
+    {tab==="log"&&<LogPage meals={meals} setMeals={wrap} history={history} allRpp={rpp} customTypes={customTypes} setCustomTypes={setCustomTypes} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} sun={sunlight[today()]} setSun={setSun} hydrated={!!hydration[today()]} toggleHydration={()=>toggleHydration(today())} gi={!!giDistress[today()]} toggleGi={()=>toggleGi(today())} sleep={sleep[today()]} setSleep={v=>setSleep(today(),v)} rpp={rpp[today()]||0} setRpp={v=>setRpp(today(),v)} profile={profile} DT={DT} prompt={prompt} quota={quota} refreshQuota={refreshQuota} reportState={(()=>{const rs=reportAvailability(history,lastReportWindowStart);const cycle=lastReportWindowStart||"first";return (rs.enabled&&bannerSeen===cycle)?{...rs,enabled:false}:rs})()} onGoToReport={()=>{const cycle=lastReportWindowStart||"first";setBannerSeen_(cycle);lss("nt-report-banner-seen",cycle);setTab("report")}}/>}
     {tab==="summary"&&<SummaryPage meals={meals} setMeals={wrap} sunlight={sunlight} templates={templates} setTemplates={v=>{const r=typeof v==="function"?v(templates):v;setTemplates_(r);lss("nt-templates",r);scheduleSync()}} skipped={skipped[today()]||[]} toggleSkip={idx=>toggleSkip(today(),idx)} profile={profile} DT={DT} prompt={prompt} refreshQuota={refreshQuota}/>}
     {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} toggleSkip={toggleSkip} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} templates={templates} skipped={skipped} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
