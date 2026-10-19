@@ -2575,7 +2575,33 @@ async function postAnalyze(body){
   throw new Error(networkErrorText(last));
 }
 
+// An analysis outlives the page that started it only while that page stays mounted, and
+// switching tab unmounts it: the result then lands on a dead component, the meal is
+// dropped, and the draft stashed at the start is read back on return as "the analysis
+// didn't finish" — an error for something that was still working.
+//
+// Keeping the work alive across tabs means hoisting the whole in-flight analysis, its
+// time prompt included, out of the Log page; the prompt is what makes that awkward, since
+// it would either be invisible on another tab or drag the user back to Log uninvited.
+// So the tab bar is held instead, for the seconds an analysis takes. Every analysis goes
+// through doAnalyze, so counting here covers the Log page, recurring meals, and the edits
+// started from Summary and History.
+const analysisBusy={n:0,subs:new Set()};
+function markAnalysis(delta){
+  analysisBusy.n=Math.max(0,analysisBusy.n+delta);
+  analysisBusy.subs.forEach(f=>f(analysisBusy.n>0));
+}
+function useAnalysisBusy(){
+  const[busy,setBusy]=useState(analysisBusy.n>0);
+  useEffect(()=>{analysisBusy.subs.add(setBusy);setBusy(analysisBusy.n>0);return()=>{analysisBusy.subs.delete(setBusy)}},[]);
+  return busy;
+}
+
 async function doAnalyze(text,img,prompt){
+  markAnalysis(1);
+  try{return await runAnalysis(text,img,prompt)}finally{markAnalysis(-1)}
+}
+async function runAnalysis(text,img,prompt){
   const c=[];
   if(img){const mt=img.startsWith("data:image/png")?"image/png":"image/jpeg";c.push({type:"image",source:{type:"base64",media_type:mt,data:img.split(",")[1]}})}
   let cleanText=text?sanitizeMealText(cleanUrl(text)):text;
@@ -3813,6 +3839,7 @@ function App(){
 
   // Remaining meal-analysis balance, shown as a counter in the Log tab. Refreshed on
   // login and after each analysis; the worker is the source of truth.
+  const analysing=useAnalysisBusy();
   const[quota,setQuota]=useState(null);
   const refreshQuota=useCallback(()=>{
     if(!userKey_)return;
@@ -3982,8 +4009,14 @@ function App(){
     {tab==="history"&&<HistoryPage history={history} customTypes={customTypes} onAdd={addHist} onDel={delHist} onUpd={updHist} sunlight={sunlight} giDistress={giDistress} hydration={hydration} rpp={rpp} setRpp={setRpp} sleep={sleep} templates={templates} skipped={skipped} toggleSkip={toggleSkip} DT={DT} prompt={prompt} profile={profile}/>}
     {tab==="report"&&<ReportPage history={history} rpp={rpp} templates={templates} skipped={skipped} DT={DT} sunlight={sunlight} sleep={sleep} hydration={hydration} giDistress={giDistress} lastReportWindowStart={lastReportWindowStart} setLastReportWindowStart={setLastReportWindowStart}/>}
 
+    {/* Held while an analysis is running — see markAnalysis. The reason is said out loud,
+        because a tab bar that silently ignores taps reads as a broken app. */}
+    {analysing&&<div style={{position:"fixed",left:0,right:0,bottom:"calc(env(safe-area-inset-bottom) + 58px)",display:"flex",justifyContent:"center",pointerEvents:"none",zIndex:150}}>
+      <div style={{background:"var(--ink)",color:"#fff",fontSize:12,fontWeight:500,padding:"7px 14px",borderRadius:100,boxShadow:"0 6px 20px rgba(0,0,0,0.25)"}}>Analysing — hold on a moment</div>
+    </div>}
     <div className="tabbar">
-      {tabsDef.map(([key,label])=><button key={key} className={"tab"+(tab===key?" on":"")} onClick={()=>setTab(key)}>
+      {tabsDef.map(([key,label])=><button key={key} disabled={analysing&&key!==tab} className={"tab"+(tab===key?" on":"")}
+        style={analysing&&key!==tab?{opacity:.4}:undefined} onClick={()=>{if(!analysing||key===tab)setTab(key)}}>
         <div className="tab-dot"/>
         <div className="tab-label">{label}</div>
       </button>)}
