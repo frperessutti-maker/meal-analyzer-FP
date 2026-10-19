@@ -2303,7 +2303,10 @@ WHAT YOU ARE GIVEN: text typed quickly on a phone. Expect misspellings, missing 
 - Ignore anything that is not food or drink: notes to yourself, stray characters, times, places, names.
 - Never refuse, never ask for clarification, never return an error, never return prose instead of JSON. Analyse whatever you can understand and move on.
 - "note": one short plain sentence, only when it is worth saying — you had to guess at a food, or you ignored part of what was typed. Say what you assumed. Leave it as "" whenever the entry was clear, which is most of the time.
-- "uncertain": true ONLY when the guessing was big enough that the numbers could be materially wrong — a food you could not identify, a portion with nothing to go on, most of the entry unreadable. A tidied-up spelling or an assumed standard serving is not material; those get a note with "uncertain": false. Most entries are false.
+- "uncertain": true ONLY when the guessing was big enough that the numbers could be materially wrong — a word you could not work out the meaning of, a food you could not identify, a portion with nothing to go on, most of the entry unreadable. A tidied-up spelling or an assumed standard serving is not material; those get a note with "uncertain": false. Most entries are false.
+- Any word you cannot make sense of as food, drink, a quantity or a time MUST be named in "note" and MUST set "uncertain": true, even if you analysed the rest of the entry confidently. Say which word, and what you did with it. Never silently drop a word you did not understand.
+
+OUTPUT: raw JSON and nothing else. No code fences, no explanation before or after it, no trailing comma. Every numeric field must be a bare number, not a string and not a number with a unit after it: 12, never "12" or "12g". Keep "note" to one sentence — a long note can run the answer out of room and truncate the JSON.
 - If nothing in the entry is recognisable as food or drink at all, return every number as 0, put the original text in mealName, and explain in "note" that nothing edible was recognised.
 
 Respond ONLY with JSON:
@@ -2614,29 +2617,99 @@ async function runAnalysis(text,img,prompt){
     cleanText=cleanText.replace(urlMatch[0],"").trim();
   }
   c.push({type:"text",text:`${prompt}${pageContext}\n\nMeal: ${cleanText}`});
-  const body={model:"claude-sonnet-4-6",max_tokens:2000,messages:[{role:"user",content:c}],userKey:currentUserKey,kind:"meal_analysis"};
+  // 2000 was enough for the original handful of fields. The answer now carries five
+  // macros, the fat split, thirteen micros, three amino acids, a per-item breakdown and
+  // a note — a few items more and it ran out mid-object, which arrives as JSON that is
+  // valid right up to where it stops.
+  const body={model:"claude-sonnet-4-6",max_tokens:4000,messages:[{role:"user",content:c}],userKey:currentUserKey,kind:"meal_analysis"};
   const d=await postAnalyze(body);
   if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
   // A well-formed answer that carries no content is still an answer, and reading .filter
   // off undefined would surface as a stack trace rather than something actionable.
   if(!d||!Array.isArray(d.content))throw new Error("The server answered without an analysis. Try again.");
   const allText=d.content.filter(b=>b&&b.type==="text").map(b=>b.text).join("\n");
-  // The response object now nests an items array, so scan for the matching brace rather
-  // than using a flat regex — a "no inner braces" pattern can no longer match it.
-  const start=allText.indexOf("{");
-  if(start!==-1){
-    let depth=0,inStr=false,esc=false;
-    for(let i=start;i<allText.length;i++){
-      const ch=allText[i];
-      if(inStr){ if(esc)esc=false; else if(ch==="\\")esc=true; else if(ch==='"')inStr=false; continue }
-      if(ch==='"')inStr=true;
-      else if(ch==="{")depth++;
-      else if(ch==="}"){ depth--; if(depth===0){ try{return JSON.parse(allText.slice(start,i+1))}catch{break} } }
-    }
+  const parsed=parseMealJSON(allText);
+  if(!parsed)throw new Error("The analysis came back in a form this app could not read. Try again — your text is still here.");
+  return normaliseMeal(parsed);
+}
+
+function stripTrailingCommas(s){return s.replace(/,(\s*[}\]])/g,"$1")}
+
+// A reply cut off mid-object is valid JSON up to the point it stops, so it can be closed
+// rather than thrown away. Cut back to the last comma that sat outside a string, drop
+// the half-written pair after it, and shut whatever containers were still open at that
+// point — half a number is worse than no number.
+function repairTruncatedJSON(t){
+  const stack=[];let inStr=false,esc=false,cut=null;
+  for(let i=0;i<t.length;i++){
+    const ch=t[i];
+    if(inStr){ if(esc)esc=false; else if(ch==="\\")esc=true; else if(ch==='"')inStr=false; continue }
+    if(ch==='"')inStr=true;
+    else if(ch==="{"||ch==="[")stack.push(ch==="{"?"}":"]");
+    else if(ch==="}"||ch==="]")stack.pop();
+    else if(ch===",")cut={i,closers:stack.slice()};
   }
-  const broad=allText.match(/\{[\s\S]*\}/);
-  if(broad)return JSON.parse(broad[0]);
-  throw new Error("Analysis failed. Try describing the product manually.");
+  if(!stack.length||!cut)return null;
+  return stripTrailingCommas(t.slice(0,cut.i))+cut.closers.reverse().join("");
+}
+
+// The model is asked for JSON and nearly always sends it. "Nearly" is not good enough
+// when the cost is a lost meal, so the answer is taken apart defensively: code fences,
+// prose on either side, trailing commas, and a reply that ran out of room.
+function parseMealJSON(raw){
+  let t=String(raw||"").replace(/```[a-z]*/gi,"");
+  const start=t.indexOf("{");
+  if(start===-1)return null;
+  t=t.slice(start);
+  const tryParse=s=>{try{const v=JSON.parse(s);return(v&&typeof v==="object")?v:null}catch{return null}};
+  // The first complete object, if the reply contains one.
+  let depth=0,inStr=false,esc=false;
+  for(let i=0;i<t.length;i++){
+    const ch=t[i];
+    if(inStr){ if(esc)esc=false; else if(ch==="\\")esc=true; else if(ch==='"')inStr=false; continue }
+    if(ch==='"')inStr=true;
+    else if(ch==="{")depth++;
+    else if(ch==="}"){ depth--; if(depth===0){
+      const whole=t.slice(0,i+1);
+      const ok=tryParse(whole)||tryParse(stripTrailingCommas(whole));
+      if(ok)return ok;
+      break;
+    } }
+  }
+  const repaired=repairTruncatedJSON(t);
+  return repaired?tryParse(repaired):null;
+}
+
+// Whatever survives parsing still has to be numbers. The model occasionally writes "12g"
+// or "about 300", and one string in a macro propagates as NaN through every total on
+// every page, which is far harder to notice than a wrong number.
+function normaliseMeal(m){
+  const out={...m};
+  const num=v=>{
+    if(typeof v==="number")return isFinite(v)?v:0;
+    if(v==null)return 0;
+    const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));
+    return isFinite(n)?n:0;
+  };
+  AK.forEach(k=>{if(out[k]!==undefined)out[k]=num(out[k])});
+  out.calories=num(out.calories);
+  out.mealName=String(out.mealName==null?"":out.mealName).trim()||"Meal";
+  out.note=String(out.note==null?"":out.note).trim();
+  out.uncertain=out.uncertain===true||out.uncertain==="true";
+  if(Array.isArray(out.items)){
+    out.items=out.items.filter(it=>it&&it.name).map(it=>({
+      name:String(it.name).trim(),
+      calories:num(it.calories),protein:num(it.protein),fat:num(it.fat),carbs:num(it.carbs),fiber:num(it.fiber),
+    }));
+    if(!out.items.length)delete out.items;
+  }else delete out.items;
+  // Nothing came back with a number in it. That is not a 0 Cal meal, it is an analysis
+  // that failed to understand the entry, and it should say so rather than log a blank.
+  if(!AK.some(k=>num(out[k])>0)){
+    out.uncertain=true;
+    if(!out.note)out.note="Nothing here was recognised as food or drink, so no nutrition could be worked out. Try naming the dish more plainly.";
+  }
+  return out;
 }
 
 function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
