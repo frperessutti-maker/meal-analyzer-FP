@@ -1924,7 +1924,7 @@ const MK=["calories","protein","fat","carbs","fiber"];
 // breakdown under Fat. satFat carries a ceiling, unsatFat a target.
 const FAT_SPLIT=["satFat","unsatFat"];
 // Sugar is to carbs what saturated is to fat: a component with a ceiling, not a row of
-// its own. What is left after sugar and fiber is starch and the rest, derived rather
+// its own. What is left after sugar and fiber is starch and others, derived rather
 // than analysed, so it needs no key.
 const CARB_SPLIT=["sugar"];
 const AMINOS_BASE=[{name:"Leucine",key:"leucine",pctOfProtein:0.065,unit:"g"},{name:"Glutamine",key:"glutamine",pctOfProtein:0.06,unit:"g"},{name:"Beta-Alanine",key:"betaAlanine",fixedTarget:1.2,unit:"g"}];
@@ -2073,7 +2073,7 @@ function macroParts(m){
   if(m.sugar!==undefined&&(sugar+fiber)<=carbs+0.5&&carbs>0){
     out.push({key:"sugar",label:"Sugar",grams:sugar,perG:4,color:"var(--bad)",under:"Carbs"});
     out.push({key:"fiber",label:"Fiber",grams:fiber,perG:4,color:"var(--good)",under:"Carbs"});
-    out.push({key:"starch",label:"Starch and the rest",grams:Math.max(0,carbs-sugar-fiber),perG:4,color:"var(--ink)",under:"Carbs"});
+    out.push({key:"starch",label:"Starch and others",grams:Math.max(0,carbs-sugar-fiber),perG:4,color:"var(--ink)",under:"Carbs"});
   }else out.push({key:"carbs",label:"Carbs",grams:carbs,perG:4,color:"var(--ink)"});
   const sat=g("satFat"),unsat=g("unsatFat");
   if((sat+unsat)>0.5&&(sat+unsat)<=fat+0.5){
@@ -3057,7 +3057,6 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
     {label:"Protein",key:"protein",value:Math.round(logTot.protein),target:DT.protein,color:"var(--rose)"},
     {label:"Carbs",key:"carbs",value:Math.round(logTot.carbs),target:DT.carbs,color:"var(--ink)"},
     {label:"Fat",key:"fat",value:Math.round(logTot.fat),target:DT.fat,color:"var(--gray)"},
-    {label:"Fiber",key:"fiber",value:Math.round(logTot.fiber||0),target:DT.fiber,color:"var(--good)"},
   ];
   // Workouts for today. rpp is an array now; older single-object days normalise on read.
   const sessions=sessionsOf(rpp);
@@ -3362,7 +3361,6 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
     {label:"Protein",key:"protein",value:Math.round(tot.protein),target:DT.protein,color:"var(--rose)"},
     {label:"Carbs",key:"carbs",value:Math.round(tot.carbs),target:DT.carbs,color:"var(--ink)"},
     {label:"Fat",key:"fat",value:Math.round(tot.fat),target:DT.fat,color:"var(--gray)"},
-    {label:"Fiber",key:"fiber",value:Math.round(tot.fiber||0),target:DT.fiber,color:"var(--good)"},
   ];
   return<div>
 
@@ -3393,7 +3391,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           <button className="collapse-btn" onClick={()=>setCarbOpen(!carbOpen)}>{carbOpen?"▾":"▸"} Sugar / fiber / starch</button>
           {carbOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
             {/* Sugar is a ceiling, fiber a target, and what is left of the carbs is neither
-                — starch and the rest, derived by subtraction rather than analysed, so it
+                — starch and others, derived by subtraction rather than analysed, so it
                 carries no bar and no verdict. */}
             {(()=>{
               const carbs=tot.carbs||0, sugar=tot.sugar||0, fiber=tot.fiber||0;
@@ -3418,7 +3416,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
                   <div style={{fontSize:11,color:r.over?"var(--bad)":"var(--gray)",marginTop:3}}>{r.note}</div>
                 </div>)}
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"var(--ink-soft)",paddingTop:6,borderTop:"1px solid var(--border)"}}>
-                  <span style={{fontWeight:500}}>Starch and the rest</span><span>{Math.round(starch*10)/10}g</span>
+                  <span style={{fontWeight:500}}>Starch and others</span><span>{Math.round(starch*10)/10}g</span>
                 </div>
               </>;
             })()}
@@ -3738,7 +3736,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
           </div>;
         })}
         {d.totals&&<>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"},{l:"Fibers",v:(d.totals.fiber||0)+(d.base.fiber||0),t:DT.fiber,c:"var(--good)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px"}}>{[{l:"Proteins",v:(d.totals.protein||0)+(d.base.protein||0),t:DT.protein,c:"var(--rose)"},{l:"Fats",v:(d.totals.fat||0)+(d.base.fat||0),t:DT.fat,c:"var(--gray)"},{l:"Carbs",v:(d.totals.carbs||0)+(d.base.carbs||0),t:DT.carbs,c:"var(--ink)"}].map(m=><div key={m.l}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}><span style={{fontWeight:500}}>{m.l}</span><span style={{color:"var(--ink-soft)"}}>{Math.round(m.v)}/{m.t}g</span></div><PB value={m.v} max={m.t} color={m.c}/></div>)}</div>
         {(()=>{const flags=MICROS.map(m=>{const val=(d.totals[m.key]||0)+(d.base[m.key]||0)+(m.key==="vitaminD"?sunVitD(d.date,(d.totals[m.key]||0)+(d.base[m.key]||0),sunlight[d.date]):0);const p=Math.round((val/DT[m.key])*100);return{m,p}}).filter(x=>x.p<90);return flags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,paddingTop:6,borderTop:"1px solid var(--border-soft)"}}>{flags.map(({m,p})=><span key={m.key} className="pill" style={{background:p>=70?"var(--warn-soft)":"var(--bad-soft)",color:pc(p)}}>{m.name} · {p}%</span>)}</div>;})()}
         </>}
       </div>}
