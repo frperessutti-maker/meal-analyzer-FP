@@ -2714,10 +2714,14 @@ function normaliseMeal(m){
 
 function PB({value,max,color}){const p=Math.min(Math.round((value/max)*100),100);return<div className="pbg"><div className="pf" style={{width:`${p}%`,background:color}}/></div>}
 function MC({name,value,target,unit,infoKey}){
-  const p=Math.round((value/target)*100),met=p>=100;
+  // Read off the amounts, not the rounded percentage: 99.7% of a target rounds to 100
+  // and would otherwise colour green and claim the target was met. Floored for the same
+  // reason — the number shown must not say 100% while the box is still short.
+  const p=target>0?Math.floor((value/target)*100):0;
+  const met=value>=target;
   // Out of range either way — too little or far too much — reads red, matching the
   // thresholds the History averages use.
-  const off=p<75||p>200;
+  const off=value<target*0.75||value>target*2;
   return<div style={{background:off?"var(--bad-soft)":met?"#f0fdf4":"#fafafa",border:`1px solid ${off?"var(--bad)":met?"#86efac":"#e5e5e5"}`,borderRadius:8,padding:"10px 12px",textAlign:"center"}}>
     <div style={{fontSize:12,color:"#666",fontWeight:500,marginBottom:4,display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>{name}{infoKey&&<InfoBtn id={infoKey}/>}</div>
     <div style={{fontSize:15,fontWeight:600}}>{Math.round(value*10)/10}</div>
@@ -3288,14 +3292,19 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
                 green once it is there. No amber in between — either there is room or there isn't. */}
             {(()=>{
               const sat=tot.satFat||0, unsat=tot.unsatFat||0;
-              const satPct=Math.round((sat/DT.satFat)*100), unsatPct=Math.round((unsat/DT.unsatFat)*100);
+              // Decided on the grams, never on the rounded percentage. 34.9g against a 35g
+              // limit is 99.7%, which rounds to 100 and then read as over the limit — the
+              // display's rounding was being used as the comparison. The percentage is
+              // floored for the same reason: it must not show 100% while still under.
+              const satOver=sat>DT.satFat, unsatMet=unsat>=DT.unsatFat;
+              const pctOf=(v,t)=>t>0?Math.floor((v/t)*100):0;
               const rows=[
-                {name:"Saturated",v:sat,target:DT.satFat,pct:satPct,over:satPct>=100,
-                 note:satPct>=100?"over the daily limit":"of the daily limit",
-                 color:satPct>=100?"var(--bad)":"var(--good)"},
-                {name:"Unsaturated",v:unsat,target:DT.unsatFat,pct:unsatPct,over:false,
-                 note:unsatPct>=100?"target reached":"of target",
-                 color:unsatPct>=100?"var(--good)":"var(--bad)"},
+                {name:"Saturated",v:sat,target:DT.satFat,pct:pctOf(sat,DT.satFat),over:satOver,
+                 note:satOver?"over the daily limit":"of the daily limit",
+                 color:satOver?"var(--bad)":"var(--good)"},
+                {name:"Unsaturated",v:unsat,target:DT.unsatFat,pct:pctOf(unsat,DT.unsatFat),over:false,
+                 note:unsatMet?"target reached":"of target",
+                 color:unsatMet?"var(--good)":"var(--bad)"},
               ];
               return rows.map(r=><div key={r.name} style={{marginBottom:10}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
