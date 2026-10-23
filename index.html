@@ -1923,9 +1923,13 @@ const MK=["calories","protein","fat","carbs","fiber"];
 // Tracked and summed like any nutrient, but not macro rows of their own: they live in a
 // breakdown under Fat. satFat carries a ceiling, unsatFat a target.
 const FAT_SPLIT=["satFat","unsatFat"];
+// Sugar is to carbs what saturated is to fat: a component with a ceiling, not a row of
+// its own. What is left after sugar and fiber is starch and the rest, derived rather
+// than analysed, so it needs no key.
+const CARB_SPLIT=["sugar"];
 const AMINOS_BASE=[{name:"Leucine",key:"leucine",pctOfProtein:0.065,unit:"g"},{name:"Glutamine",key:"glutamine",pctOfProtein:0.06,unit:"g"},{name:"Beta-Alanine",key:"betaAlanine",fixedTarget:1.2,unit:"g"}];
 function getAminos(protTarget){return AMINOS_BASE.map(a=>({...a,target:a.fixedTarget||Math.round(protTarget*a.pctOfProtein*10)/10}))}
-const AK=[...MK,...FAT_SPLIT,...MICROS.map(m=>m.key),...AMINOS_BASE.map(a=>a.key)];
+const AK=[...MK,...FAT_SPLIT,...CARB_SPLIT,...MICROS.map(m=>m.key),...AMINOS_BASE.map(a=>a.key)];
 const GOALS=[
   {id:"maintain",label:"Maintain weight",calAdj:0,protMult:2},
   {id:"lose_weight",label:"Lose weight",calAdj:-500,protMult:2.2},
@@ -2002,12 +2006,30 @@ function rppScaleChanged(a,b){return JSON.stringify(a)!==JSON.stringify(b)}
 // The energy split is a different story and is kept alongside, as a line of text rather
 // than a second chart: fat carries 9 Cal a gram against 4 for the other two, so a meal
 // that is a fifth fat by weight can be half fat by calories.
+// The components each macro is made of, where the analysis recorded them. A meal logged
+// before sugar or the fat split existed has none, and is drawn as the three whole macros
+// instead of being shown as carbs that are entirely starch.
+function macroParts(m){
+  const g=k=>Math.max(0,Number(m[k])||0);
+  const carbs=g("carbs"),fat=g("fat");
+  const out=[{key:"protein",label:"Protein",grams:g("protein"),perG:4,color:"var(--rose)"}];
+  const sugar=g("sugar"),fiber=g("fiber");
+  if(m.sugar!==undefined&&(sugar+fiber)<=carbs+0.5&&carbs>0){
+    out.push({key:"sugar",label:"Sugar",grams:sugar,perG:4,color:"var(--bad)",under:"Carbs"});
+    out.push({key:"fiber",label:"Fiber",grams:fiber,perG:4,color:"var(--good)",under:"Carbs"});
+    out.push({key:"starch",label:"Starch and the rest",grams:Math.max(0,carbs-sugar-fiber),perG:4,color:"var(--ink)",under:"Carbs"});
+  }else out.push({key:"carbs",label:"Carbs",grams:carbs,perG:4,color:"var(--ink)"});
+  const sat=g("satFat"),unsat=g("unsatFat");
+  if((sat+unsat)>0.5&&(sat+unsat)<=fat+0.5){
+    out.push({key:"unsatFat",label:"Unsaturated fat",grams:unsat,perG:9,color:"var(--gray)",under:"Fat"});
+    out.push({key:"satFat",label:"Saturated fat",grams:sat,perG:9,color:"var(--warn)",under:"Fat"});
+    const rest=Math.max(0,fat-sat-unsat);
+    if(rest>0.5)out.push({key:"fatRest",label:"Fat, unsplit",grams:rest,perG:9,color:"var(--ink-faint)",under:"Fat"});
+  }else out.push({key:"fat",label:"Fat",grams:fat,perG:9,color:"var(--gray)"});
+  return out;
+}
 function macroSplit(m){
-  const parts=[
-    {key:"protein",label:"Protein",grams:Math.max(0,Number(m.protein)||0),perG:4,color:"var(--rose)"},
-    {key:"carbs",  label:"Carbs",  grams:Math.max(0,Number(m.carbs)||0),  perG:4,color:"var(--ink)"},
-    {key:"fat",    label:"Fat",    grams:Math.max(0,Number(m.fat)||0),    perG:9,color:"var(--gray)"},
-  ].map(x=>({...x,cal:x.grams*x.perG}));
+  const parts=macroParts(m).map(x=>({...x,cal:x.grams*x.perG}));
   const grams=parts.reduce((a,b)=>a+b.grams,0);
   const cal=parts.reduce((a,b)=>a+b.cal,0);
   if(grams<=0)return null;
@@ -2058,8 +2080,6 @@ function PieIcon({size=22}){
 
 function MacroPieModal({meal,onClose}){
   const split=macroSplit(meal);
-  const fiber=Math.max(0,Number(meal.fiber)||0);
-  const sat=Math.max(0,Number(meal.satFat)||0),unsat=Math.max(0,Number(meal.unsatFat)||0);
   const stated=Math.round(Number(meal.calories)||0);
   return<div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"var(--card-bg)",borderRadius:18,padding:22,maxWidth:360,width:"100%",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
@@ -2071,16 +2091,29 @@ function MacroPieModal({meal,onClose}){
       {!split?<div style={{fontSize:13,color:"var(--gray)",padding:"18px 0"}}>This meal has no macros recorded, so there is nothing to break down.</div>:<>
         <MacroDonut split={split} centre={Math.round(split.grams)+"g"} sub="of macros"/>
         <div style={{marginTop:14}}>
-          {split.parts.map(x=><div key={x.key}>
-            <div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderTop:"1px solid var(--border-soft)"}}>
-              <span style={{width:11,height:11,borderRadius:3,background:x.color,flexShrink:0}}/>
-              <span style={{flex:1,fontSize:13.5,fontWeight:600}}>{x.label}</span>
-              <span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(x.grams*10)/10}g</span>
-              <span style={{fontSize:13,fontWeight:700,width:40,textAlign:"right"}}>{x.pct}%</span>
-            </div>
-            {x.key==="fat"&&(sat+unsat)>0.5&&<div style={{fontSize:11.5,color:"var(--gray)",paddingLeft:20,paddingBottom:5}}>{Math.round(sat*10)/10}g saturated · {Math.round(unsat*10)/10}g unsaturated</div>}
-            {x.key==="carbs"&&fiber>0&&<div style={{fontSize:11.5,color:"var(--gray)",paddingLeft:20,paddingBottom:5}}>{Math.round(fiber*10)/10}g of that is fiber</div>}
-          </div>)}
+        <div style={{marginTop:14}}>
+          {/* Components sit indented under the macro they came out of, so the three
+              familiar numbers are still readable down the page while the slices show
+              what each is made of. */}
+          {split.parts.map((x,i)=>{
+            const parent=x.under&&(i===0||split.parts[i-1].under!==x.under);
+            const parentGrams=x.under?split.parts.filter(p=>p.under===x.under).reduce((a,p)=>a+p.grams,0):0;
+            const parentPct=x.under?split.parts.filter(p=>p.under===x.under).reduce((a,p)=>a+p.pct,0):0;
+            return<div key={x.key}>
+              {parent&&<div style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0 3px",borderTop:"1px solid var(--border-soft)"}}>
+                <span style={{flex:1,fontSize:13.5,fontWeight:600}}>{x.under}</span>
+                <span style={{fontSize:13,color:"var(--ink-soft)"}}>{Math.round(parentGrams*10)/10}g</span>
+                <span style={{fontSize:13,fontWeight:700,width:40,textAlign:"right"}}>{parentPct}%</span>
+              </div>}
+              <div style={{display:"flex",alignItems:"center",gap:9,padding:x.under?"3px 0":"7px 0",borderTop:x.under?"none":"1px solid var(--border-soft)",paddingLeft:x.under?12:0}}>
+                <span style={{width:11,height:11,borderRadius:3,background:x.color,flexShrink:0}}/>
+                <span style={{flex:1,fontSize:x.under?12.5:13.5,fontWeight:x.under?400:600,color:x.under?"var(--ink-soft)":"var(--ink)"}}>{x.label}</span>
+                <span style={{fontSize:x.under?12.5:13,color:"var(--ink-soft)"}}>{Math.round(x.grams*10)/10}g</span>
+                <span style={{fontSize:x.under?12.5:13,fontWeight:x.under?500:700,width:40,textAlign:"right"}}>{x.pct}%</span>
+              </div>
+            </div>;
+          })}
+        </div>
         </div>
         {/* Which part of the plate carries the fat. A dressing can be most of a salad's
             fat while being a small part of the plate, and the meal-level donut cannot show
@@ -2249,6 +2282,9 @@ function calcTargets(p){
   // worth actually reaching. Derived after any custom override so the two still add up.
   t.satFat=Math.max(Math.round(t.calories*0.10/9),1);
   t.unsatFat=Math.max(t.fat-t.satFat,0);
+  // Free sugars under 10% of energy is the usual guidance, and sugar carries 4 Cal a
+  // gram. A ceiling, like saturated fat — there is no amount you are trying to reach.
+  t.sugar=Math.max(Math.round(t.calories*0.10/4),1);
   return t;
 }
 
@@ -2288,6 +2324,8 @@ Always estimate amino acids based on these references. Do NOT return 0 for leuci
 
 FATS: also split fat into satFat (saturated) and unsatFat (mono + polyunsaturated), both in g. They must add up to fat.
 
+CARBS: also give sugar in g — all sugars present, whether added or naturally occurring in fruit, milk and juice. Sugar and fiber are both part of the carbs total and must never exceed it between them; what is left over is starch and is not reported separately.
+
 Units: protein/fat/carbs/fiber/omega3 in g, iron/zinc/magnesium/potassium/calcium in mg, vitaminC in mg, vitaminA in mcg RAE, vitaminD in IU, B6 in mg, B12/folate/iodine in mcg. Amino acids (leucine/glutamine/betaAlanine) in grams.
 
 ITEMS: also split the meal into the separate foods it is made of.
@@ -2310,7 +2348,7 @@ OUTPUT: raw JSON and nothing else. No code fences, no explanation before or afte
 - If nothing in the entry is recognisable as food or drink at all, return every number as 0, put the original text in mealName, and explain in "note" that nothing edible was recognised.
 
 Respond ONLY with JSON:
-{"mealName":"description","note":"","uncertain":false,"calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
+{"mealName":"description","note":"","uncertain":false,"calories":0,"protein":0,"fat":0,"satFat":0,"unsatFat":0,"carbs":0,"sugar":0,"fiber":0,"iron":0,"zinc":0,"magnesium":0,"potassium":0,"vitaminD":0,"vitaminC":0,"vitaminA":0,"vitaminB6":0,"vitaminB12":0,"folate":0,"calcium":0,"iodine":0,"omega3":0,"leucine":0,"glutamine":0,"betaAlanine":0,"items":[{"name":"food","calories":0,"protein":0,"fat":0,"carbs":0,"fiber":0}]}`;
 }
 
 // Dates are the user's own calendar day, not UTC. toISOString() gave the UTC date, so for
@@ -3239,6 +3277,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   const[mealsOpen,setMealsOpen]=useState(true);
   const[aminoOpen,setAminoOpen]=useState(false);
   const[fatOpen,setFatOpen]=useState(false);
+  const[carbOpen,setCarbOpen]=useState(false);
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
@@ -3281,6 +3320,47 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:500,display:"flex",alignItems:"center"}}>{a.name}<InfoBtn id={a.key}/></span><span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(v*10)/10}g / {a.target}g ({pct}%)</span></div>
               <PB value={v} max={a.target} color={pct>=90?"var(--rose)":pct>=70?"var(--warn)":"var(--bad)"}/>
             </div>})}
+          </div>}
+        </div>}
+        {row.key==="carbs"&&<div style={{marginTop:8}}>
+          <button className="collapse-btn" onClick={()=>setCarbOpen(!carbOpen)}>{carbOpen?"▾":"▸"} Sugar / fiber / starch</button>
+          {carbOpen&&<div style={{marginTop:8,padding:"12px 14px",background:"var(--page-bg)",borderRadius:12}}>
+            {/* Sugar is a ceiling, fiber a target, and what is left of the carbs is neither
+                — starch and the rest, derived by subtraction rather than analysed, so it
+                carries no bar and no verdict. */}
+            {(()=>{
+              const carbs=tot.carbs||0, sugar=tot.sugar||0, fiber=tot.fiber||0;
+              const starch=Math.max(0,carbs-sugar-fiber);
+              const pctOf=(v,t)=>t>0?Math.floor((v/t)*100):0;
+              const sugarOver=sugar>DT.sugar, fiberMet=fiber>=DT.fiber;
+              const rows=[
+                {name:"Sugar",v:sugar,target:DT.sugar,pct:pctOf(sugar,DT.sugar),over:sugarOver,
+                 note:sugarOver?"over the daily limit":"of the daily limit",
+                 color:sugarOver?"var(--bad)":"var(--good)"},
+                {name:"Fiber",v:fiber,target:DT.fiber,pct:pctOf(fiber,DT.fiber),over:false,
+                 note:fiberMet?"target reached":"of target",
+                 color:fiberMet?"var(--good)":"var(--bad)"},
+              ];
+              return<>
+                {rows.map(r=><div key={r.name} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:13,fontWeight:500}}>{r.name}</span>
+                    <span style={{fontSize:12,color:"var(--ink-soft)"}}>{Math.round(r.v*10)/10}g / {r.target}g ({r.pct}%)</span>
+                  </div>
+                  <PB value={r.v} max={r.target} color={r.color}/>
+                  <div style={{fontSize:11,color:r.over?"var(--bad)":"var(--gray)",marginTop:3}}>{r.note}</div>
+                </div>)}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"var(--ink-soft)",paddingTop:6,borderTop:"1px solid var(--border)"}}>
+                  <span style={{fontWeight:500}}>Starch and the rest</span><span>{Math.round(starch*10)/10}g</span>
+                </div>
+              </>;
+            })()}
+            {(() => {
+              // Meals analysed before sugar was tracked carry carbs and no sugar figure,
+              // which would otherwise read as a day with no sugar in it at all.
+              const noSugar=(meals||[]).concat(activeTemplates||[]).filter(m=>(Number(m.carbs)||0)>1&&m.sugar===undefined).length;
+              return noSugar>0 ? <div style={{fontSize:11,color:"var(--gray)",marginTop:8,lineHeight:1.45}}>{noSugar} meal{noSugar!==1?"s":""} logged before sugar was tracked, so {noSugar!==1?"their":"its"} carbs are counted here as starch.</div> : null;
+            })()}
           </div>}
         </div>}
         {row.key==="fat"&&<div style={{marginTop:8}}>
