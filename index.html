@@ -3344,6 +3344,25 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   const[aminoOpen,setAminoOpen]=useState(false);
   const[fatOpen,setFatOpen]=useState(false);
   const[carbOpen,setCarbOpen]=useState(false);
+  const[tmplEditIdx,setTmplEditIdx]=useState(null),[tmplTxt,setTmplTxt]=useState(""),[tmplLd,setTmplLd]=useState(false),[tmplErr,setTmplErr]=useState(null);
+  // A recurring meal is one template shared by every day, so it cannot be edited in place
+  // for today alone. Today takes its own copy instead: the template is skipped for today
+  // and an ordinary logged meal stands in its place, carrying the change. Tomorrow the
+  // template comes back untouched. Same move the History page makes for a past day.
+  const saveTmplToday=async(idx)=>{
+    const t=templates[idx];
+    if(!t||!tmplTxt.trim())return;
+    if(tmplTxt.trim()===t.mealName){setTmplEditIdx(null);setTmplTxt("");return}
+    setTmplLd(true);setTmplErr(null);
+    try{
+      const m=await doAnalyze(tmplTxt,null,prompt);
+      m.date=today();m.time=t.time||nowTime();m.fromRecurring=true;
+      setMeals(p=>[...p,m]);
+      if(!skipped.includes(idx))toggleSkip(idx);
+      setTmplEditIdx(null);setTmplTxt("");
+    }catch(e){setTmplErr("Edit failed: "+e.message)}
+    finally{setTmplLd(false);refreshQuota&&refreshQuota()}
+  };
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
   const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
@@ -3514,6 +3533,15 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
       )}
       {templates.map((t,idx)=>{
         const isSkipped=skipped.includes(idx);
+        if(tmplEditIdx===idx)return<div key={"t"+idx} className="panel" style={{padding:14}}>
+          <textarea value={tmplTxt} onChange={e=>setTmplTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/>
+          {tmplErr&&<div className="err" style={{marginBottom:8}}>{tmplErr}</div>}
+          <div style={{fontSize:11.5,color:"var(--gray)",marginBottom:8,lineHeight:1.45}}>Re-analysed and saved for today only. The recurring meal itself is unchanged and comes back as it was tomorrow.</div>
+          <div className="fr">
+            <button className="btn btn-rose btn-s" onClick={()=>saveTmplToday(idx)} disabled={tmplLd||!tmplTxt.trim()}>{tmplLd?"Saving…":"Save for today"}</button>
+            <button className="btn btn-o btn-s" onClick={()=>{setTmplEditIdx(null);setTmplTxt("");setTmplErr(null)}}>Cancel</button>
+          </div>
+        </div>;
         return<div key={"t"+idx} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,opacity:isSkipped?0.55:1}}>
           <div onClick={()=>setPieMeal(t)} title="See the ingredient breakdown" style={{flex:1,minWidth:0,cursor:"pointer"}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)",textDecoration:isSkipped?"line-through":"none"}}>{t.mealName}</div>
@@ -3530,7 +3558,9 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
             </>:<>
               {editTmplTimeIdx===idx?<input type="time" autoFocus value={t.time||""} onChange={e=>updateTemplateTime(idx,e.target.value)} onBlur={()=>setEditTmplTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
               :<span onClick={()=>setEditTmplTimeIdx(idx)} title="Set the time this recurring meal is usually eaten — it sticks until you change it again" style={{fontSize:12,fontWeight:600,color:t.time?"var(--ink-soft)":"var(--gray)",background:"var(--page-bg)",border:"1px solid var(--border)",padding:"6px 10px",borderRadius:100,cursor:"pointer",whiteSpace:"nowrap"}}>{t.time||"set time"}</span>}
-              <span onClick={()=>setPieMeal(t)} style={ICON_TAP} title="Macro breakdown"><PieIcon/></span>
+              {/* No chart glyph here: the row itself already opens the sheet, and a fifth
+                  control would leave the 2x2 block with a dangling last item. */}
+              <span onClick={()=>{setTmplEditIdx(idx);setTmplTxt(t.mealName);setTmplErr(null)}} style={{...ICON_TAP,fontSize:19}} title="Change it for today only">✏️</span>
               <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
               <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{...ICON_TAP,fontSize:19}}>🗑</button>
             </>}
