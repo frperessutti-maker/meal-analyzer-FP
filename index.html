@@ -2543,6 +2543,13 @@ function sunVitD(ds,foodVitD,level){
 }
 function ls(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb}catch{return fb}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+// A recurring meal counts from the day it was added (since) until the day it was stopped
+// (until, exclusive). Past days are left as they were: adding one does not rewrite
+// history, and stopping one does not erase it from the days it was eaten. Meals saved
+// before these dates existed carry neither and count on every day, as they always did.
+function tmplOn(t,d){return!!t&&(!t.since||t.since<=d)&&(!t.until||d<t.until)}
+// The recurring meals that count on date d, given that day's skip list (indexes).
+function activeTmpls(templates,d,daySkips){return(templates||[]).filter((t,i)=>tmplOn(t,d)&&!(daySkips||[]).includes(i))}
 function userKey(fn,ln,pin){return(fn.trim()+"-"+ln.trim()+"-"+(pin||"0000")).toLowerCase().replace(/\s+/g,"-")}
 async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);return await r.json()}catch{return null}}
 // Returns whether the write actually landed, so the caller can tell a synced device from
@@ -3003,7 +3010,7 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
     return()=>{document.removeEventListener("visibilitychange",onHide);window.removeEventListener("pagehide",rescue)};
   },[commitPending]);
   // Same totals the Summary page shows: logged meals plus today's un-skipped recurring ones.
-  const logTot=(()=>{const a=sum(meals),b=sum(templates.filter((_,i)=>!skipped.includes(i)));const t={};AK.forEach(k=>{t[k]=(a[k]||0)+(b[k]||0)});return t})();
+  const logTot=(()=>{const a=sum(meals),b=sum(activeTmpls(templates,today(),skipped));const t={};AK.forEach(k=>{t[k]=(a[k]||0)+(b[k]||0)});return t})();
   const logMacroRows=[
     {label:"Protein",key:"protein",value:Math.round(logTot.protein),target:DT.protein,color:"var(--rose)"},
     {label:"Carbs",key:"carbs",value:Math.round(logTot.carbs),target:DT.carbs,color:"var(--ink)"},
@@ -3080,7 +3087,7 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
       setPendingMeal(p=>(p&&!wasConfirmed)?{...p,error:msg}:null);
     }finally{setLd(false);refreshQuota&&refreshQuota()}
   };
-  const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,m]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
+  const doAddRecurring=async()=>{if(!rTxt.trim())return;setRLd(true);setRErr(null);try{const m=await doAnalyze(rTxt,null,prompt);setTemplates(p=>[...p,{...m,since:today()}]);setRTxt("");setAddRecurringOpen(false)}catch(e){setRErr("Failed: "+e.message)}finally{setRLd(false);refreshQuota&&refreshQuota()}};
   return<div>
     {/* Opens the moment Analyze is pressed, with the analysis still running behind it, so
         the wait is spent entering the time rather than watching a spinner. Pre-filled from
@@ -3122,7 +3129,13 @@ function LogPage({meals,setMeals,history,allRpp,customTypes,setCustomTypes,templ
 
     <div className="panel" style={{marginBottom:16}}>
       <div className="tog">{["text","photo"].map(m=><button key={m} className={mode===m?"on":""} onClick={()=>{setMode(m);setErr(null)}}>{m==="text"?"✏️ Type it in":"📷 Photo"}</button>)}</div>
-      {mode==="photo"&&<div>{!imgP?<label className="upl"><div style={{fontSize:40,marginBottom:8,opacity:.5}}>📷</div><div style={{fontSize:15,fontWeight:500}}>Tap to upload</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn btn-rose" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
+      {mode==="photo"&&<div>{!imgP?<div style={{display:"flex",gap:10}}>
+        {/* Two inputs, not one. Recent Android hands a plain image input to the system photo
+            picker, which only offers the gallery; capture opens the camera directly. iOS
+            honours capture too, and its gallery tile still offers the usual menu. */}
+        <label className="upl" style={{flex:1,padding:"24px 12px"}}><div style={{fontSize:34,marginBottom:6,opacity:.5}}>📷</div><div style={{fontSize:14,fontWeight:500}}>Take photo</div><input type="file" accept="image/*" capture="environment" onChange={doPhoto} style={{display:"none"}}/></label>
+        <label className="upl" style={{flex:1,padding:"24px 12px"}}><div style={{fontSize:34,marginBottom:6,opacity:.5}}>🖼️</div><div style={{fontSize:14,fontWeight:500}}>From gallery</div><input type="file" accept="image/*" onChange={doPhoto} style={{display:"none"}}/></label>
+      </div>:<div><img src={imgP} alt="" className="prev"/><div className="fr" style={{marginTop:12}}><button className="btn btn-rose" style={{flex:1}} onClick={handleAnalyze} disabled={ld}>{ld?"Analyzing…":"Analyze photo"}</button><button className="btn btn-o" style={{flex:1}} onClick={()=>{setImgP(null);setImg64(null);setLd(false);setErr(null)}}>Cancel</button></div></div>}</div>}
       {mode==="text"&&<div><textarea value={txt} onChange={e=>setTxt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))handleAnalyze()}} placeholder={"e.g., Grilled salmon 200g, olive oil 15ml, broccoli 150g\nInclude a product URL for exact supplement values"}/><button className="btn btn-rose" onClick={handleAnalyze} disabled={ld||!txt.trim()}>{ld?"Analyzing…":"Analyze meal"}</button></div>}
       {err&&<div className="err" style={{marginTop:12,marginBottom:0}}>{err}</div>}
       {ld&&<div style={{textAlign:"center",padding:12,fontSize:13,color:"var(--ink-soft)"}}>Analyzing…</div>}
@@ -3316,7 +3329,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
   };
   const[editMealIdx,setEditMealIdx]=useState(null),[editMealTxt,setEditMealTxt]=useState(""),[editMealLd,setEditMealLd]=useState(false),[editMealErr,setEditMealErr]=useState(null);
   const[editTimeIdx,setEditTimeIdx]=useState(null),[editTmplTimeIdx,setEditTmplTimeIdx]=useState(null),[eraseIdx,setEraseIdx]=useState(null);
-  const activeTemplates=templates.filter((_,i)=>!skipped.includes(i));
+  const activeTemplates=activeTmpls(templates,today(),skipped);
   const baseline=sum(activeTemplates);
   const loggedTot=sum(meals);
   const tot={};AK.forEach(k=>{tot[k]=(loggedTot[k]||0)+(baseline[k]||0)});
@@ -3444,7 +3457,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
 
     <button className="collapse-btn" onClick={()=>setMealsOpen(!mealsOpen)} style={{marginBottom:mealsOpen?10:20,fontSize:15,textTransform:"uppercase",letterSpacing:.4}}>{mealsOpen?"▾":"▸"} Meals logged today</button>
     {mealsOpen&&<div className="fc" style={{marginBottom:24,gap:10}}>
-      {meals.length===0&&templates.length===0&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — add one from the Log tab.</div>}
+      {meals.length===0&&!templates.some(t=>tmplOn(t,today()))&&<div style={{fontSize:14,color:"var(--gray)",padding:"14px 0"}}>No meals logged yet — add one from the Log tab.</div>}
       {editMealErr&&<div className="err">{editMealErr}</div>}
       {meals.map((m,i)=>editMealIdx===i?
         <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
@@ -3482,6 +3495,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
         })()
       )}
       {templates.map((t,idx)=>{
+        if(!tmplOn(t,today()))return null;
         const isSkipped=skipped.includes(idx);
         if(tmplEditIdx===idx)return<div key={"t"+idx} className="panel" style={{padding:14}}>
           <textarea value={tmplTxt} onChange={e=>setTmplTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/>
@@ -3502,8 +3516,10 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
           </div>
           <div style={eraseIdx===idx?{display:"flex",alignItems:"center",gap:6,flexShrink:0}:ROW_CONTROLS}>
             {eraseIdx===idx?<>
-              <span style={{fontSize:12,color:"var(--bad)"}}>Erase?</span>
-              <button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.filter((_,j)=>j!==idx));setEraseIdx(null)}}>Yes</button>
+              <span style={{fontSize:12,color:"var(--bad)"}}>Stop from today?</span>
+              {/* Stopped, not deleted: the days it was eaten keep it, and the skip lists,
+                  which point at templates by position, stay pointing at the right ones. */}
+              <button className="btn btn-d btn-s" onClick={()=>{setTemplates(p=>p.map((x,j)=>j===idx?{...x,until:today()}:x));setEraseIdx(null)}}>Yes</button>
               <button className="btn btn-o btn-s" onClick={()=>setEraseIdx(null)}>No</button>
             </>:<>
               {editTmplTimeIdx===idx?<input type="time" autoFocus value={t.time||""} onChange={e=>updateTemplateTime(idx,e.target.value)} onBlur={()=>setEditTmplTimeIdx(null)} style={{width:92,padding:"5px 8px",fontSize:12}}/>
@@ -3512,7 +3528,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
                   control would leave the 2x2 block with a dangling last item. */}
               <span onClick={()=>{setTmplEditIdx(idx);setTmplTxt(t.mealName);setTmplErr(null)}} style={{...ICON_TAP,fontSize:19}} title="Change it for today only">✏️</span>
               <button className="btn btn-s" onClick={()=>toggleSkip(idx)} style={isSkipped?{background:"var(--good-soft)",color:"var(--good)",border:"none"}:{background:"var(--page-bg)",color:"var(--ink-soft)",border:"1px solid var(--border)"}} title={isSkipped?"Include again today":"Skip just for today"}>{isSkipped?"restore":"skip"}</button>
-              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Erase from recurring meals" style={{...ICON_TAP,fontSize:19}}>🗑</button>
+              <button className="btn-x" onClick={()=>setEraseIdx(idx)} title="Stop this recurring meal from today — past days keep it" style={{...ICON_TAP,fontSize:19}}>🗑</button>
             </>}
           </div>
         </div>;
@@ -3577,7 +3593,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
   // 7-day window: the chart covers all 7 with today on the right, the day cards below it
   // cover the 6 completed ones.
   const days=last7();
-  const dayBaseline=(d)=>{const ds=skipped[d]||[];return sum(templates.filter((_,i)=>!ds.includes(i)))};
+  const dayBaseline=(d)=>sum(activeTmpls(templates,d,skipped[d]));
   const allN=[{label:"Calories",key:"calories",target:DT.calories,unit:""},{label:"Protein",key:"protein",target:DT.protein,unit:"g"},{label:"Fat",key:"fat",target:DT.fat,unit:"g"},{label:"Carbs",key:"carbs",target:DT.carbs,unit:"g"},{label:"Fiber",key:"fiber",target:DT.fiber,unit:"g"},...MICROS.map(m=>({label:m.name,key:m.key,target:DT[m.key],unit:m.unit}))];
   const dd=days.map(d=>({date:d,totals:history[d]?sum(history[d]):null,mc:history[d]?history[d].length:0,base:dayBaseline(d)}));
   const breakdownDD=dd.filter(d=>d.date!==today());
@@ -3681,7 +3697,7 @@ function HistoryPage({history,onAdd,onDel,onUpd,sunlight,giDistress,hydration,rp
             be listed here as well — otherwise the numbers include food that isn't shown.
             Editing the time or the content, or removing one, applies to this day alone:
             see detachTemplate. The template itself stays on the Summary page. */}
-        {(templates||[]).map((t,ti)=>({t,ti})).filter(({ti})=>!(skipped[d.date]||[]).includes(ti)).map(({t,ti})=>{
+        {(templates||[]).map((t,ti)=>({t,ti})).filter(({t,ti})=>tmplOn(t,d.date)&&!(skipped[d.date]||[]).includes(ti)).map(({t,ti})=>{
           const tkey=d.date+"#"+ti;
           if(tmplEditKey===tkey)return<div key={"rt"+ti} className="panel" style={{padding:12}}>
             <textarea value={tmplTxt} onChange={e=>setTmplTxt(e.target.value)} style={{minHeight:50,marginBottom:8,fontSize:13}}/>
@@ -3778,7 +3794,14 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
     macros:[{key:"calories",label:"Calories",unit:" Cal",target:DT.calories},{key:"protein",label:"Protein",unit:"g",target:DT.protein},{key:"carbs",label:"Carbs",unit:"g",target:DT.carbs},{key:"fat",label:"Fat",unit:"g",target:DT.fat},{key:"satFat",label:"Saturated fat",unit:"g",target:DT.satFat,ceiling:true,partial:true},{key:"unsatFat",label:"Unsaturated fat",unit:"g",target:DT.unsatFat,partial:true},{key:"fiber",label:"Fiber",unit:"g",target:DT.fiber}],
     micros:MICROS.map(m=>({key:m.key,label:m.name,unit:m.unit,target:DT[m.key]})),
   };
-  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{const iu=sunVitD(d,sum(history[d]||[]).vitaminD||0,sunlight[d]);if(iu>0)a[d]={vitaminD:iu};return a},{});
+  // The engine reads food from history alone, so recurring meals are folded into each
+  // logged day they counted on — from the day one was added, minus days it was skipped.
+  // That is what lets the report see a new standing habit (a nightly yoghurt, a morning
+  // shake) in the nutrition it sets against sleep and performance. Days with nothing
+  // logged are left out rather than filled with recurring meals alone, which would read
+  // as a near-empty day. Fasting gets no separate template list: it is all in here now.
+  const reportHistory=Object.keys(history||{}).reduce((a,d)=>{const logged=history[d]||[];if(!logged.length)return a;a[d]=[...logged,...activeTmpls(templates,d,(skipped||{})[d]).map(t=>({...t,date:d,fromRecurring:true}))];return a},{});
+  const dailyExtras=Object.keys(sunlight||{}).reduce((a,d)=>{const iu=sunVitD(d,sum(reportHistory[d]||[]).vitaminD||0,sunlight[d]);if(iu>0)a[d]={vitaminD:iu};return a},{});
   const[showToast,setShowToast]=useState(false);
   const[reportHtml,setReportHtml]=useState(null);
   const reportFrame=useRef(null);
@@ -3786,7 +3809,7 @@ function ReportPage({history,rpp,sunlight,sleep,hydration,giDistress,templates,s
   const reportState=reportAvailability(history,lastReportWindowStart);
   const downloadReport=()=>{
     try{
-      const report=window.buildPerformanceReport({history,rpp,sunlight,sleep,hydration,giDistress,templates,skipped,targets:reportTargets,dailyExtras});
+      const report=window.buildPerformanceReport({history:reportHistory,rpp,sunlight,sleep,hydration,giDistress,templates:[],skipped:{},targets:reportTargets,dailyExtras});
       // Shown inside the app rather than downloaded. Handing iOS a .html file makes it a
       // document for some other installed app to open, which is how this ended up in an
       // "Open in Alibaba.com" sheet. Nothing leaves the app now; Save as PDF is reached
@@ -4136,7 +4159,7 @@ function App(){
   const setRpp=(date,val)=>{setRpp_(p=>{const u={...p,[date]:val};lss("nt-rpp",u);scheduleSync();return u})};
   const toggleSkip=(date,idx)=>{setSkipped_(p=>{const daySkips=p[date]||[];const u={...p,[date]:daySkips.includes(idx)?daySkips.filter(x=>x!==idx):[...daySkips,idx]};lss("nt-skipped",u);scheduleSync();return u})};
   const toggleHydration=(date)=>{setHydration_(p=>{const u={...p,[date]:!p[date]};lss("nt-hydration",u);scheduleSync();return u})};
-  const getActiveBaseline=(date)=>{const daySkips=skipped[date]||[];return sum(templates.filter((_,i)=>!daySkips.includes(i)))};
+  const getActiveBaseline=(date)=>sum(activeTmpls(templates,date,skipped[date]));
   const addToday=m=>update([...meals,{...m}]);
   const addHist=(date,meal)=>{if(date===today()){addToday(meal)}else{setHistory_(p=>{const u={...p,[date]:[...(p[date]||[]),meal]};lss("nt-history",u);scheduleSync();return u})}};
   const delHist=(date,idx)=>{if(date===today()){update(meals.filter((_,i)=>i!==idx))}else{setHistory_(p=>{const dm=[...(p[date]||[])];dm.splice(idx,1);const u={...p};if(dm.length)u[date]=dm;else delete u[date];lss("nt-history",u);scheduleSync();return u})}};
@@ -4167,8 +4190,8 @@ function App(){
     if(loggedDates.length<2){
       msg="Weight saved. Keep logging meals so the next check can fine-tune your portions.";
     }else{
-      const baseline=sum(templates);
-      const avgLoggedCalories=loggedDates.reduce((s,d)=>s+sum(history[d]).calories,0)/loggedDates.length+(baseline.calories||0);
+      // Each day with the recurring meals that counted on that day, not today's set.
+      const avgLoggedCalories=loggedDates.reduce((s,d)=>s+sum(history[d]).calories+(getActiveBaseline(d).calories||0),0)/loggedDates.length;
       const maintenance=calcTDEE(profile);
       const expectedDeltaKg=(avgLoggedCalories-maintenance)*diffDays/7700;
       const observedDeltaKg=newWeight-oldWeight;
