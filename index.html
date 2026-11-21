@@ -2006,62 +2006,6 @@ function rppScaleChanged(a,b){return JSON.stringify(a)!==JSON.stringify(b)}
 // The energy split is a different story and is kept alongside, as a line of text rather
 // than a second chart: fat carries 9 Cal a gram against 4 for the other two, so a meal
 // that is a fifth fat by weight can be half fat by calories.
-// What a meal is worth, judged from what is in it rather than from what it is called.
-// Everything is weighed as a share of that meal's own calories, so a 200 Cal snack and a
-// 900 Cal dinner are held to the same standard — otherwise every big meal scores badly
-// for being big.
-//
-// Only the calorie-weight test depends on the goal. Sugar and saturated fat are about the
-// food, not the arithmetic, so they cost the same whatever someone is aiming at.
-// The wash is a third of the soft tint, not the tint itself: a list of fully coloured
-// cards shouts, and the row still has to be read for what is in it rather than for its
-// colour. Where color-mix is unsupported the declaration is dropped and the card stays
-// white, which is a fine place to land — the edge and the label still carry the verdict.
-const MEAL_GRADES={
-  good: {label:"Solid", color:"var(--good)", wash:"color-mix(in oklch, var(--good-soft) 35%, var(--card-bg))"},
-  mixed:{label:"Mixed", color:"var(--warn)", wash:"color-mix(in oklch, var(--warn-soft) 35%, var(--card-bg))"},
-  poor: {label:"Heavy", color:"var(--bad)",  wash:"color-mix(in oklch, var(--bad-soft) 35%, var(--card-bg))"},
-};
-function gradeMeal(m,DT,goal){
-  // Sugar is the whole downside of a carb-heavy meal. Without it there is nothing to set
-  // against the protein, and the grade would be flattering rather than wrong-ish, so
-  // meals analysed before sugar was tracked are left unrated instead.
-  if(!m||m.sugar===undefined)return null;
-  const cal=Math.max(0,Number(m.calories)||0);
-  if(cal<40)return null;                       // a coffee or a supplement is not a meal
-  const share=(g,perG)=>(Math.max(0,Number(g)||0)*perG)/cal;
-  const pct=f=>Math.round(f*100);
-  const reasons=[];let score=0;
-  const add=(pts,good,text)=>{score+=pts;reasons.push({good,text})};
-
-  const pShare=share(m.protein,4);
-  if(pShare>=0.35)add(2,true,`Protein is ${pct(pShare)}% of its calories`);
-  else if(pShare>=0.25)add(1,true,`Protein is ${pct(pShare)}% of its calories`);
-
-  const fiber=Math.max(0,Number(m.fiber)||0);
-  if(fiber>=3*(cal/200))add(1,true,`${Math.round(fiber*10)/10}g of fiber`);
-
-  const sShare=share(m.sugar,4);
-  if(sShare>=0.35)add(-2,false,`Sugar is ${pct(sShare)}% of its calories`);
-  else if(sShare>=0.20)add(-1,false,`Sugar is ${pct(sShare)}% of its calories`);
-
-  if(m.satFat!==undefined){
-    const satShare=share(m.satFat,9);
-    if(satShare>=0.20)add(-2,false,`Saturated fat is ${pct(satShare)}% of its calories`);
-    else if(satShare>=0.12)add(-1,false,`Saturated fat is ${pct(satShare)}% of its calories`);
-  }
-
-  const ofDay=cal/Math.max(1,Number(DT&&DT.calories)||0);
-  const proteinPoor=pShare<0.25;
-  if((goal==="lose_weight"||goal==="lose_fat")&&ofDay>=0.35&&proteinPoor)
-    add(-1,false,`${pct(ofDay)}% of a day's calories with little protein, which is what works against losing weight`);
-  else if((goal==="gain_weight"||goal==="gain_muscle")&&ofDay<0.15&&proteinPoor)
-    add(-1,false,`Small and low in protein — a thin meal for a week spent trying to gain`);
-
-  const grade=score>=1?"good":score<=-2?"poor":"mixed";
-  return {score,grade,reasons,...MEAL_GRADES[grade]};
-}
-
 // The components each macro is made of, where the analysis recorded them. A meal logged
 // before sugar or the fat split existed has none, and is drawn as the three whole macros
 // instead of being shown as carbs that are entirely starch.
@@ -2134,7 +2078,7 @@ function PieIcon({size=22}){
   </svg>;
 }
 
-function MacroPieModal({meal,onClose,grade}){
+function MacroPieModal({meal,onClose}){
   const split=macroSplit(meal);
   const stated=Math.round(Number(meal.calories)||0);
   return<div onClick={onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -2192,18 +2136,6 @@ function MacroPieModal({meal,onClose,grade}){
                 </div>)}
           </div>;
         })()}
-        {/* Why the row is the colour it is. A verdict without its reasons is just a
-            colour, and the first thing anyone wants from one is to argue with it. */}
-        {grade&&<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--border-soft)"}}>
-          <div style={{fontSize:10.5,fontWeight:600,letterSpacing:.4,color:"var(--gray)",textTransform:"uppercase",marginBottom:6}}>
-            Rated {grade.label.toLowerCase()}
-          </div>
-          {grade.reasons.length===0&&<div style={{fontSize:12,color:"var(--gray)",lineHeight:1.45}}>Nothing notable either way — no run of protein or fiber to speak of, and nothing that counts against it.</div>}
-          {grade.reasons.map((r,i)=><div key={i} style={{display:"flex",gap:7,alignItems:"flex-start",fontSize:12,padding:"2px 0",lineHeight:1.45}}>
-            <span style={{color:r.good?"var(--good)":"var(--bad)",flexShrink:0,fontWeight:700}}>{r.good?"+":"−"}</span>
-            <span style={{color:"var(--ink-soft)"}}>{r.text}</span>
-          </div>)}
-        </div>}
         {/* What the analysis assumed, at the bottom where it belongs: the row only carries
             a mark, and this is where someone comes to find out what it meant. */}
         {meal.note&&<div style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--border-soft)",display:"flex",gap:8,alignItems:"flex-start"}}>
@@ -3516,15 +3448,14 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
       {editMealErr&&<div className="err">{editMealErr}</div>}
       {meals.map((m,i)=>editMealIdx===i?
         <div key={"m"+i} className="panel" style={{padding:14}}><textarea value={editMealTxt} onChange={e=>setEditMealTxt(e.target.value)} style={{minHeight:60,marginBottom:8}}/><div className="fr"><button className="btn btn-rose btn-s" onClick={()=>handleEditMeal(i)} disabled={editMealLd}>{editMealLd?"Saving…":"Save"}</button><button className="btn btn-o btn-s" onClick={()=>{setEditMealIdx(null);setEditMealTxt("")}}>Cancel</button></div></div>
-        :(()=>{const gr=gradeMeal(m,DT,profile&&profile.goal);
-        return<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,...(gr?{borderLeft:`4px solid ${gr.color}`,background:gr.wash}:{})}}>
+        :(()=>{
+        return<div key={"m"+i} className="panel" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
           {/* The row itself opens the meal, not only the chart glyph — tapping the thing
               you want to know about is the first thing anyone tries. */}
           <div onClick={()=>setPieMeal(m)} title="See the ingredient breakdown" style={{flex:1,minWidth:0,cursor:"pointer"}}>
             <div style={{fontSize:15,fontWeight:600,color:"var(--ink)"}}>{m.mealName}</div>
             <div style={{fontSize:12,color:"var(--ink-soft)",display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
               <span>{Math.round(m.calories)} Cal</span>
-              {gr&&<span style={{fontSize:10,fontWeight:700,letterSpacing:.3,color:gr.color,textTransform:"uppercase"}}>{gr.label}</span>}
             </div>
             {/* Flagged only when the analysis thinks the numbers could be materially off,
                 and as a mark rather than a sentence — the row is a list, not a place to
@@ -3590,7 +3521,7 @@ function SummaryPage({meals,setMeals,sunlight,templates,setTemplates,skipped,tog
 
     <h3 className="stit">Micronutrients today</h3>
     <div className="gm">{MICROS.map(m=><MC key={m.key} name={m.name} value={tot[m.key]||0} target={DT[m.key]} unit={m.unit} infoKey={m.key}/>)}</div>
-    {pieMeal&&<MacroPieModal meal={pieMeal} onClose={()=>setPieMeal(null)} grade={gradeMeal(pieMeal,DT,profile&&profile.goal)}/>}
+    {pieMeal&&<MacroPieModal meal={pieMeal} onClose={()=>setPieMeal(null)}/>}
   </div>
 }
 
