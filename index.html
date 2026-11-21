@@ -2616,6 +2616,20 @@ async function cloudGet(key){try{const r=await fetch(`${API_URL}/sync?key=${enco
 // Returns whether the write actually landed, so the caller can tell a synced device from
 // one that only tried. Silently swallowing this is how local changes got overwritten.
 async function cloudPut(key,data,opts={}){try{const r=await fetch(`${API_URL}/sync`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,data}),...opts});return!!(r&&r.ok)}catch{return false}}
+// Every localStorage key that holds one account's data. Logging out has to remove all of
+// them: leaving them behind is how a new account on the same phone inherited the previous
+// account's history (the first sync pushed this device's leftovers into the new account).
+const USER_DATA_KEYS=["nt-user-key","nt-profile","nt-meals","nt-templates","nt-history","nt-sunlight","nt-gi","nt-rpp","nt-skipped","nt-hydration","nt-sleep","nt-custom-types","nt-last-report-window","nt-report-banner-seen","nt-pending-meal","nt-pending-text"];
+function clearUserData(){USER_DATA_KEYS.forEach(k=>{try{localStorage.removeItem(k)}catch{}})}
+// Mirror a whole cloud record into localStorage. Writing only some fields (as login used
+// to) left the rest empty, and the next sync then pushed those empty fields to the cloud.
+function writeLocalFromCloud(key,data){
+  clearUserData();
+  lss("nt-user-key",key);lss("nt-profile",data.profile);lss("nt-meals",data.meals||{});lss("nt-templates",data.templates||[]);
+  lss("nt-history",data.history||{});lss("nt-sunlight",data.sunlight||{});lss("nt-gi",data.gi||{});lss("nt-rpp",data.rpp||{});
+  lss("nt-skipped",data.skipped||{});lss("nt-hydration",data.hydration||{});lss("nt-sleep",data.sleep||{});
+  lss("nt-custom-types",data.customTypes||[]);lss("nt-last-report-window",data.lastReportWindow||null);
+}
 
 function cleanUrl(text){
   return text.replace(/https?:\/\/www\.amazon\.[a-z.]+\/[^\s]*?(\/dp\/[A-Z0-9]+)[^\s]*/g,"https://www.amazon.it$1");
@@ -2890,8 +2904,13 @@ function LoginScreen({onLogin,onCreate,onAdmin}){
     // Admin check
     if(fn.trim().toLowerCase()==="admin"&&ln.trim().toLowerCase()==="admin123"&&pin==="0000"){onAdmin();return}
     setLoading(true);setErr(null);
-    const key=userKey(fn,ln,pin);const data=await cloudGet(key);
-    if(data){lss("nt-user-key",key);lss("nt-profile",data.profile);lss("nt-meals",data.meals||{});lss("nt-templates",data.templates||[]);lss("nt-history",data.history||{});lss("nt-sunlight",data.sunlight||{});onLogin(key,data)}
+    const key=userKey(fn,ln,pin);
+    // A failed request must not look like "no such account": that would send an existing
+    // user to account creation, which writes an empty record over their data.
+    let data;
+    try{const r=await fetch(`${API_URL}/sync?key=${encodeURIComponent(key)}`);if(!r.ok)throw new Error("HTTP "+r.status);data=await r.json()}
+    catch(e){setErr("Couldn't reach the server — check your connection and try again.");setLoading(false);return}
+    if(data&&data.profile){writeLocalFromCloud(key,data);onLogin(key,data)}
     else{onCreate(fn.trim(),ln.trim(),pin,key)}
     setLoading(false);
   };
@@ -4036,6 +4055,17 @@ function App(){
       // This device has changes the cloud has not accepted yet, so the cloud copy is the
       // older one. Applying it would undo them; push instead and keep what is here.
       if(dirty.current){setSyncing(false);syncToCloud();return}
+      // One-time repair, once per device: an earlier bug let a freshly logged-in device push
+      // empty sleep / performance / check-in fields over the cloud copy. A device that still
+      // holds those days locally fills them back in for any date the cloud has lost. Only
+      // dates the cloud is missing (or holds an empty entry for) are taken; nothing is replaced.
+      if(data&&data.profile&&!ls("nt-recovered-v1",false)){
+        const isEmpty=v=>v===undefined||v===null||(Array.isArray(v)&&v.length===0);
+        const fill=(cloud,local)=>{const out={...(cloud||{})};Object.entries(local||{}).forEach(([d,v])=>{if(isEmpty(out[d])&&!isEmpty(v))out[d]=v});return out};
+        data={...data,sunlight:fill(data.sunlight,ls("nt-sunlight",{})),gi:fill(data.gi,ls("nt-gi",{})),rpp:fill(data.rpp,ls("nt-rpp",{})),
+          skipped:fill(data.skipped,ls("nt-skipped",{})),hydration:fill(data.hydration,ls("nt-hydration",{})),sleep:fill(data.sleep,ls("nt-sleep",{}))};
+        lss("nt-recovered-v1",true);
+      }
       if(data&&data.profile){
         setProfile(data.profile);lss("nt-profile",data.profile);
         const m=data.meals||{};
@@ -4147,8 +4177,26 @@ function App(){
 
   const update=(nm)=>{const t=today();setMeals_(nm);lss("nt-meals",{meals:nm,date:t});setHistory_(p=>{const u={...p,[t]:nm};const k=last180();const tr={};k.forEach(d=>{if(u[d])tr[d]=u[d]});lss("nt-history",tr);scheduleSync();return tr})};
   const wrap=fn=>{const nm=typeof fn==="function"?fn(meals):fn;update(nm)};
-  useEffect(()=>{lss("nt-templates",templates);scheduleSync()},[templates]);
-  useEffect(()=>{if(profile){lss("nt-profile",profile);scheduleSync()}},[profile]);
+  // Only a change this device made should mark it dirty. These effects also run on startup
+  // and whenever the cloud copy is applied; marking dirty then made the next refetch skip
+  // the cloud and push this device's local copy over it instead — wiping sleep and
+  // performance data on a newly logged-in phone. Local storage already matching the state
+  // means the value came from storage or the cloud, so there is nothing to push.
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  useEffect(()=>{if(!same(templates,ls("nt-templates",[]))){lss("nt-templates",templates);scheduleSync()}},[templates]);
+  useEffect(()=>{if(profile&&!same(profile,ls("nt-profile",null))){lss("nt-profile",profile);scheduleSync()}},[profile]);
+  // Push anything still pending, then wipe this account's local data and restart the app,
+  // so the next account on this device starts from nothing — not from leftovers in memory
+  // or storage.
+  const logout=async()=>{
+    if(syncTimer.current){clearTimeout(syncTimer.current);syncTimer.current=null}
+    if(dirty.current){
+      const ok=await syncToCloud();
+      if(!ok&&!confirm("Your latest changes haven't reached the cloud yet (no connection?). Log out anyway and lose them?"))return;
+    }
+    clearUserData();
+    location.reload();
+  };
   // Setting the same level again clears it, which is how the box gets back to "none".
   const setSun=(date,level)=>{setSunlight_(p=>{const u={...p};if(!level||sunLevel(p[date])===level)delete u[date];else u[date]=level;lss("nt-sunlight",u);scheduleSync();return u})};
   const toggleGi=(date)=>{setGiDistress_(p=>{const u={...p};if(u[date]){delete u[date]}else{u[date]=nowTime()}lss("nt-gi",u);scheduleSync();return u})};
@@ -4211,7 +4259,15 @@ function App(){
   if(!userKey_||!profile){
     if(isAdmin)return<AdminPage onLogout={()=>setIsAdmin(false)}/>;
     if(newKey&&!onboardingDone)return<OnboardingSlides onDone={()=>setOnboardingDone(true)}/>;
-    if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={p=>{setProfile(p);lss("nt-profile",p);setUserKey(newKey);lss("nt-user-key",newKey);cloudPut(newKey,{profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{},skipped:{},hydration:{}})}}/>;
+    if(newKey)return<ProfileSetup firstName={newFirstName} lastName={newLastName} onSave={async p=>{
+      // A new account starts empty: write its record first, clear anything an earlier
+      // account left on this device, then restart so no in-memory state carries over.
+      const empty={profile:p,meals:{},templates:[],history:{},sunlight:{},gi:{},rpp:{},skipped:{},hydration:{},sleep:{},customTypes:[],lastReportWindow:null};
+      const ok=await cloudPut(newKey,empty);
+      if(!ok){alert("Couldn't reach the server to create your account — check your connection and try again.");return}
+      writeLocalFromCloud(newKey,empty);
+      location.reload();
+    }}/>;
     return<LoginScreen onLogin={(key,data)=>{setUserKey(key);lss("nt-user-key",key);if(data&&data.profile){setProfile(data.profile);lss("nt-profile",data.profile)}}} onCreate={(fn,ln,pin,key)=>{setNewFirstName(fn);setNewLastName(ln);setNewKey(key)}} onAdmin={()=>setIsAdmin(true)}/>;
   }
 
@@ -4225,7 +4281,7 @@ function App(){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,marginBottom:20}}>
       <h1 className="h-page">{TAB_TITLES[tab]}</h1>
       <div style={{display:"flex",gap:16,flexShrink:0}}>
-        <button onClick={()=>{setUserKey(null);lss("nt-user-key",null);setProfile(null)}} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Log out">🚪</button>
+        <button onClick={logout} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Log out">🚪</button>
         <button onClick={()=>setEditProfile(true)} style={{background:"none",border:"none",fontSize:21,lineHeight:1,cursor:"pointer",padding:2}} title="Edit profile">✏️</button>
       </div>
     </div>
